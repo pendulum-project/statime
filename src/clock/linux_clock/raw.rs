@@ -184,7 +184,7 @@ impl RawLinuxClock {
         self.quality
     }
 
-    pub fn set_leap_seconds(&self, leap_61: bool, leap_59: bool) -> Result<(), i32> {
+    pub fn set_leap_seconds(&mut self, leap_61: bool, leap_59: bool) -> Result<(), i32> {
         let (mut clock, _) = self.get_clock_state()?;
 
         let mut status = clock.get_status();
@@ -201,6 +201,25 @@ impl RawLinuxClock {
         }
 
         clock.set_status(status);
+
+        // Adjust the clock time and handle its errors
+        let error = unsafe { libc::clock_adjtime(self.id, clock.deref_mut() as *mut _) };
+        match error {
+            -1 => Err(unsafe { *libc::__errno_location() }),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn set_tai_offset(&mut self, offset: i32) -> Result<(), i32> {
+        let (mut clock, _) = self.get_clock_state()?;
+
+        // Set the flag to adjust the TAI value
+        let mut mode = clock.get_mode();
+        mode |= AdjustFlags::TAI;
+        clock.set_mode(mode);
+
+        // The TAI value is taken from the constant field
+        clock.constant = offset as Int;
 
         // Adjust the clock time and handle its errors
         let error = unsafe { libc::clock_adjtime(self.id, clock.deref_mut() as *mut _) };

@@ -52,6 +52,8 @@ pub enum TimeProperties {
     /// The time is synchronized as a UTC time
     PtpTime {
         /// The amount of seconds the time is away from UTC
+        /// 
+        /// The value is `<current_utc_offset> = TAI - UTC`
         current_utc_offset: Option<u16>,
         /// Indicates that the last minute of this day will have 61 seconds
         leap_61: bool,
