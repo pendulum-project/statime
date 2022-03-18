@@ -70,7 +70,10 @@ impl Clock for LinuxClock {
         time_properties: TimeProperties,
     ) -> Result<bool, Self::E> {
         if let TimeProperties::PtpTime {
-            leap_61, leap_59, current_utc_offset, ..
+            leap_61,
+            leap_59,
+            current_utc_offset,
+            ..
         } = time_properties
         {
             self.clock
@@ -79,13 +82,15 @@ impl Clock for LinuxClock {
 
             if let Some(current_utc_offset) = current_utc_offset {
                 // From PTP: `current_utc_offset = TAI - UTC`
-                // 
+                //
                 // From Linux: `UTC + tai_offset = TAI`
                 // `tai_offset = TAI - UTC`
                 //
                 // Thus, tai_offset = current_utc_offset
 
-                self.clock.set_tai_offset(current_utc_offset as _).map_err(|e| Error::LinuxError(e))?;
+                self.clock
+                    .set_tai_offset(current_utc_offset as _)
+                    .map_err(|e| Error::LinuxError(e))?;
             }
         }
 
