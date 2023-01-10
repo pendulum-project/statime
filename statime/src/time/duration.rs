@@ -53,7 +53,7 @@ impl Duration {
     }
 
     pub fn from_log_interval(log_interval: i8) -> Self {
-        let seconds = 2.0f64.powi(log_interval as i32);
+        let seconds = 2.0f64.powf(log_interval as f64);
         let nanos = seconds * 1_000_000_000.0;
         Self::from_fixed_nanos(nanos)
     }
