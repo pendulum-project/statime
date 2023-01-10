@@ -1,6 +1,6 @@
 use crate::datastructures::common::TimeInterval;
 use fixed::{traits::ToFixed, types::I96F32};
-use std::{
+use core::{
     fmt::Display,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
 };
@@ -144,7 +144,7 @@ impl RemAssign for Duration {
 }
 
 impl Display for Duration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
