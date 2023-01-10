@@ -1,10 +1,10 @@
 use super::duration::Duration;
 use crate::datastructures::common::Timestamp;
-use fixed::{traits::ToFixed, types::U96F32};
 use core::{
     fmt::Display,
     ops::{Add, AddAssign, Sub, SubAssign},
 };
+use fixed::{traits::ToFixed, types::U96F32};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Instant {
