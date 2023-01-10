@@ -13,7 +13,7 @@ pub trait NetworkRuntime: Clone {
     /// Can be useful to select between e.g. ethernet and wifi if both are present on the machine
     /// or to select between IPv4 and IPv6.
     type InterfaceDescriptor: Clone;
-    type PortType: NetworkPort;
+    type NetworkPort: NetworkPort;
     type Error: std::error::Error + std::fmt::Display;
 
     /// Open a port on the given network interface.
@@ -25,7 +25,7 @@ pub trait NetworkRuntime: Clone {
     async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
-    ) -> Result<Self::PortType, Self::Error>;
+    ) -> Result<Self::NetworkPort, Self::Error>;
 }
 
 /// The representation of a network packet
@@ -36,9 +36,9 @@ pub struct NetworkPacket {
     /// The timestamp at which the packet was received. This is preferrably a timestamp
     /// that has been reported by the network hardware.
     ///
-    /// The timestamp must be Some when the packet comes from a time-critical port.
-    /// The timestamp will be ignored when it comes from a non-time-critical port, so it may as well be None.
-    pub timestamp: Option<Instant>,
+    /// If the packet was received by a non-time-critical port, then this instant doesn't have to be very precise.
+    /// Just requesting the timestamp in software is good enough.
+    pub timestamp: Instant,
 }
 
 /// Abstraction for a port or socket

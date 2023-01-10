@@ -6,7 +6,7 @@ use crate::{
     filters::Filter,
     network::{NetworkPacket, NetworkRuntime},
     port::{Port, PortConfig},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 pub struct Config<NR: NetworkRuntime> {
@@ -34,7 +34,7 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
     /// - `runtime`: The network runtime with which sockets can be opened
     /// - `clock`: The clock that will be adjusted and provides the watches
     /// - `filter`: A filter for time measurements because those are always a bit wrong and need some processing
-    pub fn new(config: Config<NR>, runtime: NR, mut clock: C, filter: F) -> Self {
+    pub async fn new(config: Config<NR>, runtime: NR, clock: C, filter: F) -> Self {
         PtpInstance {
             port: Port::new(
                 PortIdentity {
@@ -47,7 +47,8 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
                 runtime,
                 config.interface,
                 clock.quality(),
-            ),
+            )
+            .await,
             clock,
             filter,
         }
@@ -67,7 +68,7 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
         }
     }
 
-    async fn run_bmca(&mut self) {
+    fn run_bmca(&mut self) {
         // Currently we only have one port, so erbest is also automatically our ebest
         let current_time = self.clock.now();
         let erbest = self
@@ -78,27 +79,20 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
             .as_ref()
             .map(|(message, identity)| (message, identity));
 
-        // Run the state decision        
+        // Run the state decision
         self.port.perform_state_decision(erbest, erbest);
     }
 
     /// Let the instance handle a received network packet.
     ///
     /// This should be called for any and all packets that were received on the opened sockets of the network runtime.
-    pub fn handle_network(&mut self, packet: NetworkPacket) {
-        self.port.handle_network(packet, self.bmca_watch.now());
+    pub async fn handle_network(&mut self, packet: NetworkPacket) {
+        self.port.handle_network(packet).await;
         if let Some((data, time_properties)) = self.port.extract_measurement() {
             let (offset, freq_corr) = self.filter.absorb(data);
             self.clock
                 .adjust(offset, freq_corr, time_properties)
                 .expect("Unexpected error adjusting clock");
         }
-    }
-
-    /// Let the instance know what the TX or send timestamp was of a packet that was recently sent.
-    ///
-    /// When sending a time critical message we need to know exactly when it was sent to do all of the arithmetic.
-    pub fn handle_send_timestamp(&mut self, id: usize, timestamp: Instant) {
-        self.port.handle_send_timestamp(id, timestamp);
     }
 }

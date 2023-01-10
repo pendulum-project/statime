@@ -39,14 +39,14 @@ impl TestRuntime {
 
 impl NetworkRuntime for TestRuntime {
     type InterfaceDescriptor = String;
-    type PortType = TestRuntimePort;
+    type NetworkPort = TestRuntimePort;
     type Error = TestError;
 
     fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
         time_critical: bool,
-    ) -> Result<Self::PortType, Self::Error> {
+    ) -> Result<Self::NetworkPort, Self::Error> {
         Ok(TestRuntimePort {
             data: Rc::clone(&self.data),
             interface,

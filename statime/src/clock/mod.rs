@@ -30,8 +30,6 @@ pub trait Clock {
 
 /// A timer let's you get the current time and wait for durations
 pub trait Timer {
-    /// Get the current time. This doesn't have to be a precise time, but should correspond with the clock time
-    async fn now(&self) -> Instant;
     /// Wait for the given amount of time
     async fn after(&self, duration: Duration);
 }

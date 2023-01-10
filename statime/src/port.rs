@@ -33,8 +33,7 @@ impl IdSequencer {
 /// Object containing all non-state specific data
 pub struct PortData<NR: NetworkRuntime> {
     _runtime: NR,
-    tc_port: NR::PortType,
-    _nc_port: NR::PortType,
+    network_port: NR::NetworkPort,
 
     delay_req_ids: IdSequencer,
 
@@ -52,8 +51,7 @@ pub struct PortData<NR: NetworkRuntime> {
 impl<NR: NetworkRuntime> PortData<NR> {
     pub fn new(
         _runtime: NR,
-        tc_port: NR::PortType,
-        _nc_port: NR::PortType,
+        network_port: NR::NetworkPort,
         identity: PortIdentity,
         sdo: u16,
         domain: u8,
@@ -67,8 +65,7 @@ impl<NR: NetworkRuntime> PortData<NR> {
 
         Self {
             _runtime,
-            tc_port,
-            _nc_port,
+            network_port,
             delay_req_ids: IdSequencer::default(),
             identity,
             sdo,
@@ -107,7 +104,6 @@ pub struct StateSlave {
     mean_delay: Option<Duration>,
     sync_id: Option<u16>,
     delay_id: Option<u16>,
-    delay_send_id: Option<usize>,
     sync_correction: Option<Duration>,
     sync_send_time: Option<Instant>,
     sync_recv_time: Option<Instant>,
@@ -118,7 +114,7 @@ pub struct StateSlave {
 }
 
 impl StateSlave {
-    fn handle_sync<NR: NetworkRuntime>(
+    async fn handle_sync<NR: NetworkRuntime>(
         &mut self,
         port: &mut PortData<NR>,
         message: SyncMessage,
@@ -147,11 +143,14 @@ impl StateSlave {
                 .log_message_interval(0x7F)
                 .delay_req_message(Timestamp::default());
             let delay_req_encode = delay_req.serialize_vec().unwrap();
-            self.delay_send_id = Some(
-                port.tc_port
-                    .send(&delay_req_encode)
+            self.delay_send_time = Some(
+                port.network_port
+                    .send_time_critical(&delay_req_encode)
+                    .await
                     .expect("Program error: missing timestamp id"),
             );
+            self.finish_delay_measurement();
+
             self.delay_id = Some(delay_id);
             self.mean_delay = None;
         } else {
@@ -212,32 +211,21 @@ impl StateSlave {
         Some(())
     }
 
-    fn handle_message<NR: NetworkRuntime>(
+    async fn handle_message<NR: NetworkRuntime>(
         &mut self,
         port: &mut PortData<NR>,
         message: Message,
-        timestamp: Option<Instant>,
+        message_timestamp: Instant,
     ) -> Option<()> {
         if message.header().source_port_identity() != self.remote_master {
             return None;
         }
 
         match message {
-            Message::Sync(message) => self.handle_sync(port, message, timestamp?),
+            Message::Sync(message) => self.handle_sync(port, message, message_timestamp).await,
             Message::FollowUp(message) => self.handle_followup(message),
             Message::DelayResp(message) => self.handle_delayresp(message),
             _ => None,
-        }
-    }
-
-    fn handle_send_timestamp(&mut self, id: usize, timestamp: Instant) -> Option<()> {
-        if self.delay_send_id? == id {
-            self.delay_send_time = Some(timestamp);
-            self.delay_send_id = None;
-            self.finish_delay_measurement();
-            Some(())
-        } else {
-            None
         }
     }
 
@@ -276,21 +264,14 @@ pub enum State {
 }
 
 impl State {
-    fn handle_message<NR: NetworkRuntime>(
+    async fn handle_message<NR: NetworkRuntime>(
         &mut self,
         port: &mut PortData<NR>,
         message: Message,
-        timestamp: Option<Instant>,
+        timestamp: Instant,
     ) -> Option<()> {
         match self {
-            State::Slave(state) => state.handle_message(port, message, timestamp),
-            _ => None,
-        }
-    }
-
-    fn handle_send_timestamp(&mut self, id: usize, timestamp: Instant) -> Option<()> {
-        match self {
-            State::Slave(state) => state.handle_send_timestamp(id, timestamp),
+            State::Slave(state) => state.handle_message(port, message, timestamp).await,
             _ => None,
         }
     }
@@ -315,7 +296,7 @@ impl State {
 }
 
 impl<NR: NetworkRuntime> Port<NR> {
-    pub fn new(
+    pub async fn new(
         identity: PortIdentity,
         sdo: u16,
         domain: u8,
@@ -325,18 +306,15 @@ impl<NR: NetworkRuntime> Port<NR> {
         clock_quality: ClockQuality,
     ) -> Self {
         // Ptp needs two ports, 1 time critical one and 1 general port
-        let tc_port = runtime
-            .open(interface.clone(), true)
+        let network_port = runtime
+            .open(interface.clone())
+            .await
             .expect("Could not create time critical port");
-        let nc_port = runtime
-            .open(interface, false)
-            .expect("Could not create non time critical port");
 
         Port {
             portdata: PortData::new(
                 runtime,
-                tc_port,
-                nc_port,
+                network_port,
                 identity,
                 sdo,
                 domain,
@@ -347,15 +325,7 @@ impl<NR: NetworkRuntime> Port<NR> {
         }
     }
 
-    pub fn handle_network(&mut self, packet: NetworkPacket, current_time: Instant) {
-        self.process_message(packet, current_time);
-    }
-
-    pub fn handle_send_timestamp(&mut self, id: usize, timestamp: Instant) {
-        self.state.handle_send_timestamp(id, timestamp);
-    }
-
-    fn process_message(&mut self, packet: NetworkPacket, current_time: Instant) -> Option<()> {
+    pub async fn handle_network(&mut self, packet: NetworkPacket) -> Option<()> {
         let message = Message::deserialize(&packet.data).ok()?;
         if message.header().sdo_id() != self.portdata.sdo
             || message.header().domain_number() != self.portdata.domain
@@ -364,14 +334,14 @@ impl<NR: NetworkRuntime> Port<NR> {
         }
 
         self.state
-            .handle_message(&mut self.portdata, message, packet.timestamp);
+            .handle_message(&mut self.portdata, message, packet.timestamp).await;
 
         #[allow(clippy::single_match)]
         match message {
             Message::Announce(announce) => self
                 .portdata
                 .bmca
-                .register_announce_message(&announce, current_time.into()),
+                .register_announce_message(&announce, packet.timestamp.into()),
             _ => {}
         };
 
@@ -447,8 +417,8 @@ mod tests {
     };
     use fixed::traits::ToFixed;
 
-    #[test]
-    fn test_measurement_flow() {
+    #[futures_test::test]
+    async fn test_measurement_flow() {
         let mut network_runtime = TestRuntime::default();
 
         let master_id = PortIdentity::default();
@@ -462,8 +432,7 @@ mod tests {
 
         let mut test_port_data = PortData {
             _runtime: network_runtime.clone(),
-            tc_port: network_runtime.open("".to_owned(), true).unwrap(),
-            _nc_port: network_runtime.open("".to_owned(), false).unwrap(),
+            network_port: network_runtime.open("".to_owned()).await.unwrap(),
             delay_req_ids: IdSequencer::default(),
             identity: test_id,
             sdo: 0,
@@ -492,13 +461,8 @@ mod tests {
                     seconds: 0,
                     nanos: 0,
                 }),
-            Some(Instant::from_nanos(5)),
+            Instant::from_nanos(5),
         );
-
-        assert_eq!(test_state.extract_measurement(), None);
-
-        let delay_req = network_runtime.get_sent().unwrap();
-        test_state.handle_send_timestamp(delay_req.index, Instant::from_nanos(7));
 
         assert_eq!(test_state.extract_measurement(), None);
 
@@ -516,7 +480,7 @@ mod tests {
                     },
                     test_id,
                 ),
-            None,
+            Instant::from_nanos(10),
         );
 
         assert_eq!(
@@ -528,8 +492,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_measurement_flow_timestamps_out_of_order() {
+    #[futures_test::test]
+    async fn test_measurement_flow_timestamps_out_of_order() {
         let mut network_runtime = TestRuntime::default();
 
         let master_id = PortIdentity::default();
@@ -543,8 +507,7 @@ mod tests {
 
         let mut test_port_data = PortData {
             _runtime: network_runtime.clone(),
-            tc_port: network_runtime.open("".to_owned(), true).unwrap(),
-            _nc_port: network_runtime.open("".to_owned(), false).unwrap(),
+            network_port: network_runtime.open("".to_owned()).unwrap(),
             delay_req_ids: IdSequencer::default(),
             identity: test_id,
             sdo: 0,
@@ -573,12 +536,10 @@ mod tests {
                     seconds: 0,
                     nanos: 0,
                 }),
-            Some(Instant::from_nanos(5)),
+            Instant::from_nanos(5),
         );
 
         assert_eq!(test_state.extract_measurement(), None);
-
-        let delay_req = network_runtime.get_sent().unwrap();
 
         test_state.handle_message(
             &mut test_port_data,
@@ -594,12 +555,10 @@ mod tests {
                     },
                     test_id,
                 ),
-            None,
+            Instant::from_nanos(10),
         );
 
         assert_eq!(test_state.extract_measurement(), None);
-
-        test_state.handle_send_timestamp(delay_req.index, Instant::from_nanos(7));
 
         assert_eq!(
             test_state.extract_measurement(),
@@ -610,8 +569,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_measurement_flow_followup() {
+    #[futures_test::test]
+    async fn test_measurement_flow_followup() {
         let mut network_runtime = TestRuntime::default();
 
         let master_id = PortIdentity::default();
@@ -625,8 +584,7 @@ mod tests {
 
         let mut test_port_data = PortData {
             _runtime: network_runtime.clone(),
-            tc_port: network_runtime.open("".to_owned(), true).unwrap(),
-            _nc_port: network_runtime.open("".to_owned(), false).unwrap(),
+            network_port: network_runtime.open("".to_owned()).unwrap(),
             delay_req_ids: IdSequencer::default(),
             identity: test_id,
             sdo: 0,
@@ -656,7 +614,7 @@ mod tests {
                     seconds: 0,
                     nanos: 0,
                 }),
-            Some(Instant::from_nanos(5)),
+            Instant::from_nanos(5),
         );
 
         assert_eq!(test_state.extract_measurement(), None);
@@ -673,13 +631,8 @@ mod tests {
                     seconds: 0,
                     nanos: 1,
                 }),
-            None,
+            Instant::from_nanos(5),
         );
-
-        assert_eq!(test_state.extract_measurement(), None);
-
-        let delay_req = network_runtime.get_sent().unwrap();
-        test_state.handle_send_timestamp(delay_req.index, Instant::from_nanos(7));
 
         assert_eq!(test_state.extract_measurement(), None);
 
@@ -697,7 +650,7 @@ mod tests {
                     },
                     test_id,
                 ),
-            None,
+            Instant::from_nanos(5),
         );
 
         assert_eq!(
@@ -709,8 +662,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_measurement_flow_followup_out_of_order() {
+    #[futures_test::test]
+    async fn test_measurement_flow_followup_out_of_order() {
         let mut network_runtime = TestRuntime::default();
 
         let master_id = PortIdentity::default();
@@ -724,8 +677,7 @@ mod tests {
 
         let mut test_port_data = PortData {
             _runtime: network_runtime.clone(),
-            tc_port: network_runtime.open("".to_owned(), true).unwrap(),
-            _nc_port: network_runtime.open("".to_owned(), false).unwrap(),
+            network_port: network_runtime.open("".to_owned()).unwrap(),
             delay_req_ids: IdSequencer::default(),
             identity: test_id,
             sdo: 0,
@@ -755,7 +707,7 @@ mod tests {
                     seconds: 0,
                     nanos: 1,
                 }),
-            None,
+            Instant::from_nanos(4),
         );
 
         assert_eq!(test_state.extract_measurement(), None);
@@ -772,13 +724,8 @@ mod tests {
                     seconds: 0,
                     nanos: 0,
                 }),
-            Some(Instant::from_nanos(5)),
+            Instant::from_nanos(5),
         );
-
-        assert_eq!(test_state.extract_measurement(), None);
-
-        let delay_req = network_runtime.get_sent().unwrap();
-        test_state.handle_send_timestamp(delay_req.index, Instant::from_nanos(7));
 
         assert_eq!(test_state.extract_measurement(), None);
 
@@ -796,7 +743,7 @@ mod tests {
                     },
                     test_id,
                 ),
-            None,
+            Instant::from_nanos(10),
         );
 
         assert_eq!(

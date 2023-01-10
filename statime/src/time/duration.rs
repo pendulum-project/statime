@@ -1,7 +1,7 @@
 //! Implementation of the [Duration] type
 
 use crate::datastructures::common::TimeInterval;
-use fixed::{traits::ToFixed, types::I96F32};
+use fixed::{traits::{ToFixed, LossyInto, Fixed}, types::I96F32};
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign},
@@ -72,6 +72,12 @@ impl Duration {
 impl From<TimeInterval> for Duration {
     fn from(interval: TimeInterval) -> Self {
         Self::from_fixed_nanos(interval.0)
+    }
+}
+
+impl From<Duration> for core::time::Duration {
+    fn from(value: Duration) -> Self {
+        core::time::Duration::from_nanos(value.nanos().saturating_to_num())
     }
 }
 
