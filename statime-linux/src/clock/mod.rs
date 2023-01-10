@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::mpsc};
 use fixed::traits::LossyInto;
 pub use raw::RawLinuxClock;
 use statime::{
-    clock::{Clock, TimeProperties, Watch},
+    clock::{Clock, TimeProperties, Timer},
     datastructures::common::ClockQuality,
     time::{Duration, Instant},
 };
@@ -21,7 +21,7 @@ pub enum Error {
 pub struct LinuxClock {
     clock: RawLinuxClock,
     next_watch_id: u32,
-    alarm_sender: mpsc::Sender<(<<Self as Clock>::W as Watch>::WatchId, Instant)>,
+    alarm_sender: mpsc::Sender<(<<Self as Clock>::W as Timer>::WatchId, Instant)>,
 }
 
 impl LinuxClock {
@@ -96,10 +96,10 @@ impl Clock for LinuxClock {
 pub struct LinuxWatch {
     clock: RawLinuxClock,
     id: u32,
-    alarm_sender: mpsc::Sender<(<Self as Watch>::WatchId, Instant)>,
+    alarm_sender: mpsc::Sender<(<Self as Timer>::WatchId, Instant)>,
 }
 
-impl Watch for LinuxWatch {
+impl Timer for LinuxWatch {
     type WatchId = u32;
 
     fn now(&self) -> Instant {

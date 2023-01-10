@@ -17,19 +17,15 @@ pub trait NetworkRuntime: Clone {
     type Error: std::error::Error + std::fmt::Display;
 
     /// Open a port on the given network interface.
+    /// 
+    /// This port has a time-critical and non-time-critical component.
     ///
-    /// It is only given whether or not this should be the time critical port.
-    /// It is up to the implementation to use the right network setup.
-    ///
-    /// For example, when using IPv4, the socket should connect to the multicast address 244.0.1.129.
-    /// If time_critical is true, then port 319 must be used. If not, then port 320 is to be used.
-    fn open(
+    /// For example, when using IPv4, there must be a connection to the multicast address 244.0.1.129.
+    /// It needs two sockets. For the time-critical component port 319 must be used. For the other one port 320 is to be used.
+    async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
-        time_critical: bool,
     ) -> Result<Self::PortType, Self::Error>;
-
-    fn recv(&mut self) -> Result<NetworkPacket, Self::Error>;
 }
 
 /// The representation of a network packet
@@ -50,9 +46,17 @@ pub struct NetworkPacket {
 /// This object only has to be able to send a message because if a message is received, it must be
 /// reported to the instance using the [PtpInstance::handle_network](crate::ptp_instance::PtpInstance::handle_network) function.
 pub trait NetworkPort {
-    /// Send the given data.
+    type Error: std::error::Error + std::fmt::Display;
+
+    /// Send the given non-time-critical data.
+    async fn send(&mut self, data: &[u8]) -> Result<(), Self::Error>;
+
+    /// Send the given time-critical data.
     ///
     /// If this is on a time-critical port, then the function must return an id and the TX timestamp must be
     /// reported to the instance using the [PtpInstance::handle_send_timestamp](crate::ptp_instance::PtpInstance::handle_send_timestamp) function using the same id that was returned.
-    fn send(&mut self, data: &[u8]) -> Option<usize>;
+    async fn send_time_critical(&mut self, data: &[u8]) -> Result<Instant, Self::Error>;
+
+    /// Wait until a message is received
+    async fn recv(&mut self) -> Result<NetworkPacket, Self::Error>;
 }

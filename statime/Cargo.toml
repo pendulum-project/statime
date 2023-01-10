@@ -16,6 +16,7 @@ fixed = "1.11.0"
 getset = "0.1.2"
 log = "0.4.14"
 num_enum = { version = "0.5.1", default-features = false }
+futures = { version = "0.3", default-features = false, features = ["async-await"] }
 
 [dev-dependencies]
 thiserror = "1.0.30"

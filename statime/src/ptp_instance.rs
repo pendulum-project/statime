@@ -1,5 +1,7 @@
+use futures::FutureExt;
+
 use crate::{
-    clock::{Clock, Watch},
+    clock::{Clock, Timer},
     datastructures::common::{ClockIdentity, PortIdentity},
     filters::Filter,
     network::{NetworkPacket, NetworkRuntime},
@@ -22,7 +24,6 @@ pub struct Config<NR: NetworkRuntime> {
 pub struct PtpInstance<NR: NetworkRuntime, C: Clock, F: Filter> {
     port: Port<NR>,
     clock: C,
-    bmca_watch: C::W,
     filter: F,
 }
 
@@ -34,12 +35,6 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
     /// - `clock`: The clock that will be adjusted and provides the watches
     /// - `filter`: A filter for time measurements because those are always a bit wrong and need some processing
     pub fn new(config: Config<NR>, runtime: NR, mut clock: C, filter: F) -> Self {
-        // We always need a loop for the BMCA, so we create a watch immediately and set the alarm
-        let mut bmca_watch = clock.get_watch();
-        bmca_watch.set_alarm(Duration::from_log_interval(
-            config.port_config.log_announce_interval,
-        ));
-
         PtpInstance {
             port: Port::new(
                 PortIdentity {
@@ -54,9 +49,37 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
                 clock.quality(),
             ),
             clock,
-            bmca_watch,
             filter,
         }
+    }
+
+    pub async fn run(&mut self, timer: &impl Timer) {
+        let bmca_timeout = timer.after(Duration::from_secs(1)).fuse();
+        futures::pin_mut!(bmca_timeout);
+
+        loop {
+            futures::select_biased!(
+                _ = bmca_timeout => {
+                    bmca_timeout.set(timer.after(Duration::from_secs(1)).fuse());
+                    self.run_bmca();
+                }
+            )
+        }
+    }
+
+    async fn run_bmca(&mut self) {
+        // Currently we only have one port, so erbest is also automatically our ebest
+        let current_time = self.clock.now();
+        let erbest = self
+            .port
+            .take_best_port_announce_message(current_time)
+            .map(|v| (v.0, v.2));
+        let erbest = erbest
+            .as_ref()
+            .map(|(message, identity)| (message, identity));
+
+        // Run the state decision        
+        self.port.perform_state_decision(erbest, erbest);
     }
 
     /// Let the instance handle a received network packet.
@@ -77,30 +100,5 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
     /// When sending a time critical message we need to know exactly when it was sent to do all of the arithmetic.
     pub fn handle_send_timestamp(&mut self, id: usize, timestamp: Instant) {
         self.port.handle_send_timestamp(id, timestamp);
-    }
-
-    /// When a watch alarm goes off, this function must be called with the id of the watch.
-    /// There is no strict timing requirement, but it should not be called before the alarm time and should not be called
-    /// more than 10ms after the alarm time.
-    pub fn handle_alarm(&mut self, id: <<C as Clock>::W as Watch>::WatchId) {
-        if id == self.bmca_watch.id() {
-            // The bmca watch triggered, we must run the bmca
-            // But first set a new alarm
-            self.bmca_watch.set_alarm(self.port.get_announce_interval());
-
-            // Currently we only have one port, so erbest is also automatically our ebest
-            let current_time = self.clock.now();
-            let erbest = self
-                .port
-                .take_best_port_announce_message(current_time)
-                .map(|v| (v.0, v.2));
-            let erbest = erbest
-                .as_ref()
-                .map(|(message, identity)| (message, identity));
-
-            self.port.perform_state_decision(erbest, erbest);
-
-            // Run the state decision
-        }
     }
 }
