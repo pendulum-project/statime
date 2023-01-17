@@ -9,31 +9,36 @@ use nix::{
     ifaddrs::{getifaddrs, InterfaceAddress, InterfaceAddressIterator},
     net::if_::if_nametoindex,
     sys::socket::{
-        recvmsg, sendmsg, setsockopt, socket,
-        sockopt::{BindToDevice, ReuseAddr, Timestamping},
-        AddressFamily, ControlMessageOwned, MsgFlags, SetSockOpt, SockFlag, SockType,
-        TimestampingFlag, Timestamps,
+        recvmsg, setsockopt,
+        sockopt::{ReuseAddr, Timestamping},
+        ControlMessageOwned, MsgFlags, SetSockOpt, SockaddrStorage, TimestampingFlag, Timestamps,
     },
 };
-use statime::network::{NetworkPacket, NetworkPort, NetworkRuntime};
+use statime::{
+    clock::Clock,
+    network::{NetworkPacket, NetworkPort, NetworkRuntime},
+    time::Instant,
+};
 use std::{
+    io::IoSliceMut,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     os::{fd::AsRawFd, unix::prelude::RawFd},
     str::FromStr,
-    sync::mpsc::Sender,
-    thread::JoinHandle,
+    time::Duration,
 };
-use tokio::net::UdpSocket;
+use tokio::{io::Interest, net::UdpSocket};
 
 #[derive(Clone)]
-pub struct LinuxRuntime {
+pub struct LinuxRuntime<'c, C: Clock> {
     hardware_timestamping: bool,
+    clock: &'c C,
 }
 
-impl LinuxRuntime {
-    pub fn new(hardware_timestamping: bool) -> Self {
+impl<'c, C: Clock> LinuxRuntime<'c, C> {
+    pub fn new(hardware_timestamping: bool, clock: &'c C) -> Self {
         LinuxRuntime {
             hardware_timestamping,
+            clock,
         }
     }
 
@@ -94,11 +99,11 @@ impl LinuxInterfaceDescriptor {
             for i in interfaces {
                 if name == &i.interface_name {
                     if self.mode == LinuxNetworkMode::Ipv6 {
-                        if let Some(a) = i.address.map(|a| a.as_sockaddr_in6()).flatten() {
-                            return Ok(a.ip().into());
+                        if let Some(ip) = i.address.map(|a| a.as_sockaddr_in6().map(|a| a.ip().into())).flatten().flatten() {
+                            return Ok(ip.into());
                         }
-                    } else if let Some(a) = i.address.map(|a| a.as_sockaddr_in()).flatten() {
-                        return Ok(Ipv4Addr::from(a.ip()).into());
+                    } else if let Some(ip) = i.address.map(|a| a.as_sockaddr_in().map(|a| a.ip().into())).flatten().flatten() {
+                        return Ok(Ipv4Addr::from(ip).into());
                     }
                 }
             }
@@ -162,8 +167,8 @@ impl FromStr for LinuxInterfaceDescriptor {
 fn if_has_address(ifaddr: &InterfaceAddress, address: IpAddr) -> bool {
     match (
         address,
-        ifaddr.address.map(|a| a.as_sockaddr_in()).flatten(),
-        ifaddr.address.map(|a| a.as_sockaddr_in6()).flatten(),
+        ifaddr.address.map(|a| a.as_sockaddr_in().cloned()).flatten(),
+        ifaddr.address.map(|a| a.as_sockaddr_in6().cloned()).flatten(),
     ) {
         (_, None, None) => false,
 
@@ -267,15 +272,15 @@ impl SetSockOpt for Ipv6AddMembership {
     }
 }
 
-impl NetworkRuntime for LinuxRuntime {
+impl<'c, C: Clock> NetworkRuntime for LinuxRuntime<'c, C> {
     type InterfaceDescriptor = LinuxInterfaceDescriptor;
-    type NetworkPort = LinuxNetworkPort;
+    type NetworkPort = LinuxNetworkPort<'c, C>;
     type Error = NetworkError;
 
     async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
-    ) -> Result<Self::NetworkPort, NetworkError> {
+    ) -> Result<<LinuxRuntime<'c, C> as NetworkRuntime>::NetworkPort, NetworkError> {
         let bind_ip = if interface.mode == LinuxNetworkMode::Ipv6 {
             IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
         } else {
@@ -292,17 +297,32 @@ impl NetworkRuntime for LinuxRuntime {
             .map_err(|_| NetworkError::UnknownError)?;
 
         // Bind device to specified interface
-        tc_socket.bind_device(interface.interface_name.map(|string| string.as_bytes()));
-        ntc_socket.bind_device(interface.interface_name.map(|string| string.as_bytes()));
+        tc_socket.bind_device(
+            interface
+                .interface_name
+                .as_ref()
+                .map(|string| string.as_bytes()),
+        );
+        ntc_socket.bind_device(
+            interface
+                .interface_name
+                .as_ref()
+                .map(|string| string.as_bytes()),
+        );
 
         // TODO: multicast ttl limit for ipv4/multicast hops limit for ipv6
 
-        match interface.get_address()? {
+        let (tc_address, ntc_address) = match interface.get_address()? {
             IpAddr::V4(ip) => {
                 tc_socket.join_multicast_v4(Self::IPV4_PRIMARY_MULTICAST, ip)?;
                 ntc_socket.join_multicast_v4(Self::IPV4_PRIMARY_MULTICAST, ip)?;
                 tc_socket.join_multicast_v4(Self::IPV4_PDELAY_MULTICAST, ip)?;
                 ntc_socket.join_multicast_v4(Self::IPV4_PDELAY_MULTICAST, ip)?;
+
+                (
+                    (Self::IPV4_PRIMARY_MULTICAST, 319).into(),
+                    (Self::IPV4_PRIMARY_MULTICAST, 320).into(),
+                )
             }
             IpAddr::V6(ip) => {
                 tc_socket.join_multicast_v6(
@@ -321,112 +341,221 @@ impl NetworkRuntime for LinuxRuntime {
                     &Self::IPV6_PDELAY_MULTICAST,
                     interface.get_index().unwrap_or(0),
                 )?;
-            }
-        }
 
-        // Setup timestamping if needed
-        if time_critical {
-            if self.hardware_timestamping {
-                driver_enable_hardware_timestamping(
-                    socket,
-                    &interface
-                        .interface_name
-                        .ok_or(NetworkError::InterfaceDoesNotExist)?,
-                );
-                setsockopt(
-                    socket,
-                    Timestamping,
-                    &(TimestampingFlag::SOF_TIMESTAMPING_RAW_HARDWARE
-                        | TimestampingFlag::SOF_TIMESTAMPING_RX_HARDWARE
-                        | TimestampingFlag::SOF_TIMESTAMPING_TX_HARDWARE),
+                (
+                    (Self::IPV6_PRIMARY_MULTICAST, 319).into(),
+                    (Self::IPV6_PRIMARY_MULTICAST, 320).into(),
                 )
-                .map_err(|_| NetworkError::UnknownError)?;
-            } else {
-                setsockopt(
-                    socket,
-                    Timestamping,
-                    &(TimestampingFlag::SOF_TIMESTAMPING_SOFTWARE
-                        | TimestampingFlag::SOF_TIMESTAMPING_RX_SOFTWARE
-                        | TimestampingFlag::SOF_TIMESTAMPING_TX_SOFTWARE),
-                )
-                .map_err(|_| NetworkError::UnknownError)?;
             }
-        }
+        };
 
-        // TODO: replace recv thread with select
-        let tx = self.tx.clone();
-        let hardware_timestamping = self.hardware_timestamping;
-        let recv_thread = std::thread::Builder::new()
-            .name(format!("ptp {}", port))
-            .spawn(move || LinuxNetworkPort::recv_thread(socket, tx, hardware_timestamping))
-            .unwrap();
+        // Setup timestamping
+        if self.hardware_timestamping {
+            driver_enable_hardware_timestamping(
+                tc_socket.as_raw_fd(),
+                interface
+                    .interface_name
+                    .as_ref()
+                    .ok_or(NetworkError::InterfaceDoesNotExist)?,
+            );
+            setsockopt(
+                tc_socket.as_raw_fd(),
+                Timestamping,
+                &(TimestampingFlag::SOF_TIMESTAMPING_RAW_HARDWARE
+                    | TimestampingFlag::SOF_TIMESTAMPING_RX_HARDWARE
+                    | TimestampingFlag::SOF_TIMESTAMPING_TX_HARDWARE),
+            )
+            .map_err(|_| NetworkError::UnknownError)?;
+        } else {
+            setsockopt(
+                tc_socket.as_raw_fd(),
+                Timestamping,
+                &(TimestampingFlag::SOF_TIMESTAMPING_SOFTWARE
+                    | TimestampingFlag::SOF_TIMESTAMPING_RX_SOFTWARE
+                    | TimestampingFlag::SOF_TIMESTAMPING_TX_SOFTWARE),
+            )
+            .map_err(|_| NetworkError::UnknownError)?;
+        }
 
         Ok(LinuxNetworkPort {
             tc_socket,
             ntc_socket,
+            tc_address,
+            ntc_address,
+            hardware_timestamping: self.hardware_timestamping,
+            clock: self.clock,
         })
     }
 }
 
-pub struct LinuxNetworkPort {
+pub struct LinuxNetworkPort<'c, C: Clock> {
     tc_socket: UdpSocket,
     ntc_socket: UdpSocket,
+    tc_address: SocketAddr,
+    ntc_address: SocketAddr,
+    hardware_timestamping: bool,
+    clock: &'c C,
 }
 
-impl NetworkPort for LinuxNetworkPort {
-    fn send(&mut self, data: &[u8]) -> Option<usize> {
-        let io_vec = [IoVec::from_slice(data)];
-        sendmsg(
-            self.socket,
-            &io_vec,
-            &[],
-            MsgFlags::empty(),
-            Some(&self.addr),
-        )
-        .unwrap();
+impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
+    type Error = std::io::Error;
 
-        // TODO: Implement better method for send timestamps
-        Some(u16::from_be_bytes(data[30..32].try_into().unwrap()) as usize)
+    async fn send(
+        &mut self,
+        data: &[u8],
+    ) -> Result<(), <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
+        self.ntc_socket.send_to(data, self.ntc_address).await?;
+        Ok(())
+    }
+
+    async fn send_time_critical(
+        &mut self,
+        data: &[u8],
+    ) -> Result<statime::time::Instant, <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
+        self.tc_socket.send_to(data, self.tc_address).await?;
+
+        loop {
+            self.tc_socket.readable().await?;
+
+            if let Some(ts) =
+                Self::try_recv_tx_timestamp(&mut self.tc_socket, self.hardware_timestamping)?
+            {
+                return Ok(ts);
+            }
+        }
+    }
+
+    async fn recv(
+        &mut self,
+    ) -> Result<NetworkPacket, <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
+        let clock = self.clock;
+        let time_critical_future = async {
+            loop {
+                self.tc_socket.readable().await?;
+
+                if let Some(packet) = Self::try_recv_message_with_timestamp(
+                    &mut self.tc_socket,
+                    self.clock,
+                    self.hardware_timestamping,
+                )? {
+                    break Ok(packet);
+                }
+            }
+        };
+        let non_time_critical_future = async {
+            let mut buffer = [0; 2048];
+            let (received_len, _) = self.ntc_socket.recv_from(&mut buffer).await?;
+            Ok(NetworkPacket {
+                data: buffer[..received_len].into(),
+                timestamp: clock.now(),
+            })
+        };
+
+        tokio::select! {
+            packet = time_critical_future => { packet }
+            packet = non_time_critical_future => { packet }
+        }
     }
 }
 
-impl LinuxNetworkPort {
-    fn recv_thread(socket: i32, tx: Sender<NetworkPacket>, hardware_timestamping: bool) {
+impl<'c, C: Clock> LinuxNetworkPort<'c, C> {
+    /// Do a manual receive on the time critical socket so we can get the hardware timestamps.
+    /// Tokio doesn't have the capability to get the timestamp.
+    ///
+    /// This returns an option because there may not be a message
+    fn try_recv_message_with_timestamp(
+        tc_socket: &mut UdpSocket,
+        clock: &C,
+        hardware_timestamping: bool,
+    ) -> Result<Option<NetworkPacket>, std::io::Error> {
         let mut read_buf = [0u8; 2048];
-        let io_vec = [IoVec::from_mut_slice(&mut read_buf)];
+        let mut io_vec = [IoSliceMut::new(&mut read_buf)];
         let mut cmsg = cmsg_space!(Timestamps);
-        let flags = MsgFlags::empty();
-        loop {
-            let recv = recvmsg(socket, &io_vec, Some(&mut cmsg), flags).unwrap();
-            let mut ts = None;
-            for c in recv.cmsgs() {
-                if let ControlMessageOwned::ScmTimestampsns(timestamps) = c {
-                    let spec = if hardware_timestamping {
-                        timestamps.hw_raw
-                    } else {
-                        timestamps.system
-                    };
-                    ts = Some(timespec_into_instant(spec));
-                }
-            }
-            tx.send(NetworkPacket {
-                data: io_vec[0].as_slice()[0..recv.bytes].to_vec(),
-                timestamp: ts,
+
+        // Tokio should have put the socket into non-blocking
+        let received = match recvmsg::<SockaddrStorage>(
+            tc_socket.as_raw_fd(),
+            &mut io_vec,
+            Some(&mut cmsg),
+            MsgFlags::empty(),
+        ) {
+            Ok(received) => received,
+            Err(Errno::EWOULDBLOCK) => return Ok(None),
+            Err(e) => return Err(std::io::Error::from_raw_os_error(e as i32)),
+        };
+
+        let timestamp = received
+            .cmsgs()
+            .find_map(|cmsg| match cmsg {
+                ControlMessageOwned::ScmTimestampsns(timestamps) => Some(timestamps),
+                _ => None,
             })
-            .unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
+            .map(|timestamps| {
+                if hardware_timestamping {
+                    timespec_into_instant(timestamps.hw_raw)
+                } else {
+                    timespec_into_instant(timestamps.system)
+                }
+            })
+            .unwrap_or_else(|| clock.now());
+
+        let received_len = received.bytes;
+
+        Ok(Some(NetworkPacket {
+            data: read_buf[..received_len].into(),
+            timestamp,
+        }))
+    }
+
+    fn try_recv_tx_timestamp(
+        tc_socket: &mut UdpSocket,
+        hardware_timestamping: bool,
+    ) -> Result<Option<Instant>, std::io::Error> {
+        // We're not interested in the data, so we create an empty buffer
+        let mut read_buf = [0u8; 0];
+        let mut io_vec = [IoSliceMut::new(&mut read_buf)];
+        let mut cmsg = cmsg_space!(Timestamps);
+
+        let received = match recvmsg::<SockaddrStorage>(
+            tc_socket.as_raw_fd(),
+            &mut io_vec,
+            Some(&mut cmsg),
+            MsgFlags::MSG_ERRQUEUE, // We read from the error queue because that is where the tx timestamps are routed to
+        ) {
+            Ok(received) => received,
+            Err(Errno::EWOULDBLOCK) => return Ok(None),
+            Err(e) => return Err(std::io::Error::from_raw_os_error(e as i32)),
+        };
+
+        Ok(received
+            .cmsgs()
+            .find_map(|cmsg| match cmsg {
+                ControlMessageOwned::ScmTimestampsns(timestamps) => Some(timestamps),
+                _ => None,
+            })
+            .map(|timestamps| {
+                if hardware_timestamping {
+                    timespec_into_instant(timestamps.hw_raw)
+                } else {
+                    timespec_into_instant(timestamps.system)
+                }
+            }))
     }
 }
 
 pub fn get_clock_id() -> Option<[u8; 8]> {
     let candidates = getifaddrs().unwrap();
     for candidate in candidates {
-        if let Some(SockAddr::Link(mac)) = candidate.address {
+        if let Some(mac) = candidate
+            .address
+            .map(|addr| addr.as_link_addr().map(|mac| mac.addr()))
+            .flatten()
+            .flatten()
+        {
             // Ignore multicast and locally administered mac addresses
-            if mac.addr()[0] & 0x3 == 0 && mac.addr().iter().any(|x| *x != 0) {
+            if mac[0] & 0x3 == 0 && mac.iter().any(|x| *x != 0) {
                 let mut result: [u8; 8] = [0; 8];
-                for (i, v) in mac.addr().iter().enumerate() {
+                for (i, v) in mac.iter().enumerate() {
                     result[i] = *v;
                 }
                 return Some(result);
