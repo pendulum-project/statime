@@ -103,6 +103,10 @@ impl Header {
     }
 
     pub fn deserialize_header(buffer: &[u8]) -> Result<DeserializedHeader, WireFormatError> {
+        if buffer.len() < 34 {
+            return Err(WireFormatError::BufferTooShort);
+        }
+
         Ok(DeserializedHeader {
             header: Self {
                 sdo_id: (((buffer[0] & 0xF0) as u16) << 4) | (buffer[5] as u16),
