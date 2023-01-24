@@ -1,7 +1,8 @@
 //! Implementation of the abstract network types for the linux platform
 
 use crate::{
-    clock::timespec_into_instant, network::linux_syscall::driver_enable_hardware_timestamping,
+    clock::{timespec_into_instant, LinuxClock},
+    network::linux_syscall::driver_enable_hardware_timestamping,
 };
 use nix::{
     cmsg_space,
@@ -11,7 +12,7 @@ use nix::{
     sys::socket::{
         recvmsg, setsockopt,
         sockopt::{ReuseAddr, Timestamping},
-        ControlMessageOwned, MsgFlags, SetSockOpt, SockaddrStorage, TimestampingFlag, Timestamps,
+        ControlMessageOwned, MsgFlags, SockaddrStorage, TimestampingFlag, Timestamps,
     },
 };
 use statime::{
@@ -22,23 +23,22 @@ use statime::{
 use std::{
     io::IoSliceMut,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    os::{fd::AsRawFd, unix::prelude::RawFd},
+    os::fd::AsRawFd,
     str::FromStr,
-    time::Duration,
 };
-use tokio::{io::Interest, net::UdpSocket};
+use tokio::net::UdpSocket;
 
 #[derive(Clone)]
-pub struct LinuxRuntime<'c, C: Clock> {
+pub struct LinuxRuntime {
     hardware_timestamping: bool,
-    clock: &'c C,
+    clock: LinuxClock,
 }
 
-impl<'c, C: Clock> LinuxRuntime<'c, C> {
-    pub fn new(hardware_timestamping: bool, clock: &'c C) -> Self {
+impl LinuxRuntime {
+    pub fn new(hardware_timestamping: bool, clock: &LinuxClock) -> Self {
         LinuxRuntime {
             hardware_timestamping,
-            clock,
+            clock: clock.clone(),
         }
     }
 
@@ -99,10 +99,20 @@ impl LinuxInterfaceDescriptor {
             for i in interfaces {
                 if name == &i.interface_name {
                     if self.mode == LinuxNetworkMode::Ipv6 {
-                        if let Some(ip) = i.address.map(|a| a.as_sockaddr_in6().map(|a| a.ip().into())).flatten().flatten() {
+                        if let Some(ip) = i
+                            .address
+                            .map(|a| a.as_sockaddr_in6().map(|a| a.ip().into()))
+                            .flatten()
+                            .flatten()
+                        {
                             return Ok(ip.into());
                         }
-                    } else if let Some(ip) = i.address.map(|a| a.as_sockaddr_in().map(|a| a.ip().into())).flatten().flatten() {
+                    } else if let Some(ip) = i
+                        .address
+                        .map(|a| a.as_sockaddr_in().map(|a| a.ip().into()))
+                        .flatten()
+                        .flatten()
+                    {
                         return Ok(Ipv4Addr::from(ip).into());
                     }
                 }
@@ -167,8 +177,14 @@ impl FromStr for LinuxInterfaceDescriptor {
 fn if_has_address(ifaddr: &InterfaceAddress, address: IpAddr) -> bool {
     match (
         address,
-        ifaddr.address.map(|a| a.as_sockaddr_in().cloned()).flatten(),
-        ifaddr.address.map(|a| a.as_sockaddr_in6().cloned()).flatten(),
+        ifaddr
+            .address
+            .map(|a| a.as_sockaddr_in().cloned())
+            .flatten(),
+        ifaddr
+            .address
+            .map(|a| a.as_sockaddr_in6().cloned())
+            .flatten(),
     ) {
         (_, None, None) => false,
 
@@ -190,97 +206,15 @@ fn if_name_exists(interfaces: InterfaceAddressIterator, name: &str) -> bool {
     false
 }
 
-/// Request for multicast socket operations
-///
-/// This is a wrapper type around `ip_mreqn`.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct IpMembershipRequest(libc::ip_mreqn);
-
-impl IpMembershipRequest {
-    /// Instantiate a new `IpMembershipRequest`
-    ///
-    ///
-    pub fn new(group: Ipv4Addr, interface_idx: Option<u32>) -> Self {
-        IpMembershipRequest(libc::ip_mreqn {
-            imr_multiaddr: libc::in_addr {
-                s_addr: group.into(),
-            },
-            imr_address: libc::in_addr { s_addr: 0 },
-            imr_ifindex: interface_idx.unwrap_or(0) as i32,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct IpAddMembership;
-
-impl SetSockOpt for IpAddMembership {
-    type Val = IpMembershipRequest;
-
-    fn set(&self, fd: RawFd, val: &Self::Val) -> nix::Result<()> {
-        let ptr = val as *const Self::Val as *const libc::c_void;
-        let ptr_len = std::mem::size_of::<Self::Val>() as libc::socklen_t;
-        let res = unsafe {
-            libc::setsockopt(fd, libc::IPPROTO_IP, libc::IP_ADD_MEMBERSHIP, ptr, ptr_len)
-        };
-        Errno::result(res).map(drop)
-    }
-}
-
-/// Request for ipv6 multicast socket operations
-///
-/// This is a wrapper type around `ipv6_mreq`.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Ipv6MembershipRequest(libc::ipv6_mreq);
-
-impl Ipv6MembershipRequest {
-    /// Instantiate a new `Ipv6MembershipRequest`
-    pub const fn new(group: Ipv6Addr, interface_idx: Option<u32>) -> Self {
-        Ipv6MembershipRequest(libc::ipv6_mreq {
-            ipv6mr_multiaddr: libc::in6_addr {
-                s6_addr: group.octets(),
-            },
-            ipv6mr_interface: match interface_idx {
-                Some(v) => v,
-                _ => 0,
-            },
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct Ipv6AddMembership;
-
-impl SetSockOpt for Ipv6AddMembership {
-    type Val = Ipv6MembershipRequest;
-
-    fn set(&self, fd: RawFd, val: &Self::Val) -> nix::Result<()> {
-        let ptr = val as *const Self::Val as *const libc::c_void;
-        let ptr_len = std::mem::size_of::<Self::Val>() as libc::socklen_t;
-        let res = unsafe {
-            libc::setsockopt(
-                fd,
-                libc::IPPROTO_IPV6,
-                libc::IPV6_ADD_MEMBERSHIP,
-                ptr,
-                ptr_len,
-            )
-        };
-        Errno::result(res).map(drop)
-    }
-}
-
-impl<'c, C: Clock> NetworkRuntime for LinuxRuntime<'c, C> {
+impl NetworkRuntime for LinuxRuntime {
     type InterfaceDescriptor = LinuxInterfaceDescriptor;
-    type NetworkPort = LinuxNetworkPort<'c, C>;
+    type NetworkPort = LinuxNetworkPort;
     type Error = NetworkError;
 
     async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
-    ) -> Result<<LinuxRuntime<'c, C> as NetworkRuntime>::NetworkPort, NetworkError> {
+    ) -> Result<<LinuxRuntime as NetworkRuntime>::NetworkPort, NetworkError> {
         let bind_ip = if interface.mode == LinuxNetworkMode::Ipv6 {
             IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
         } else {
@@ -302,13 +236,13 @@ impl<'c, C: Clock> NetworkRuntime for LinuxRuntime<'c, C> {
                 .interface_name
                 .as_ref()
                 .map(|string| string.as_bytes()),
-        );
+        )?;
         ntc_socket.bind_device(
             interface
                 .interface_name
                 .as_ref()
                 .map(|string| string.as_bytes()),
-        );
+        )?;
 
         // TODO: multicast ttl limit for ipv4/multicast hops limit for ipv6
 
@@ -324,7 +258,7 @@ impl<'c, C: Clock> NetworkRuntime for LinuxRuntime<'c, C> {
                     (Self::IPV4_PRIMARY_MULTICAST, 320).into(),
                 )
             }
-            IpAddr::V6(ip) => {
+            IpAddr::V6(_ip) => {
                 tc_socket.join_multicast_v6(
                     &Self::IPV6_PRIMARY_MULTICAST,
                     interface.get_index().unwrap_or(0),
@@ -383,27 +317,26 @@ impl<'c, C: Clock> NetworkRuntime for LinuxRuntime<'c, C> {
             tc_address,
             ntc_address,
             hardware_timestamping: self.hardware_timestamping,
-            clock: self.clock,
+            clock: self.clock.clone(),
         })
     }
 }
 
-pub struct LinuxNetworkPort<'c, C: Clock> {
+pub struct LinuxNetworkPort {
     tc_socket: UdpSocket,
     ntc_socket: UdpSocket,
     tc_address: SocketAddr,
     ntc_address: SocketAddr,
     hardware_timestamping: bool,
-    clock: &'c C,
+    clock: LinuxClock,
 }
 
-impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
+impl NetworkPort for LinuxNetworkPort {
     type Error = std::io::Error;
 
-    async fn send(
-        &mut self,
-        data: &[u8],
-    ) -> Result<(), <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
+    async fn send(&mut self, data: &[u8]) -> Result<(), <LinuxNetworkPort as NetworkPort>::Error> {
+        log::info!("Send NTC");
+
         self.ntc_socket.send_to(data, self.ntc_address).await?;
         Ok(())
     }
@@ -411,7 +344,9 @@ impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
     async fn send_time_critical(
         &mut self,
         data: &[u8],
-    ) -> Result<statime::time::Instant, <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
+    ) -> Result<statime::time::Instant, <LinuxNetworkPort as NetworkPort>::Error> {
+        log::info!("Send TC");
+
         self.tc_socket.send_to(data, self.tc_address).await?;
 
         loop {
@@ -425,17 +360,15 @@ impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
         }
     }
 
-    async fn recv(
-        &mut self,
-    ) -> Result<NetworkPacket, <LinuxNetworkPort<'c, C> as NetworkPort>::Error> {
-        let clock = self.clock;
+    async fn recv(&mut self) -> Result<NetworkPacket, <LinuxNetworkPort as NetworkPort>::Error> {
+        let clock = &self.clock;
         let time_critical_future = async {
             loop {
                 self.tc_socket.readable().await?;
-
+                log::info!("TC recv");
                 if let Some(packet) = Self::try_recv_message_with_timestamp(
                     &mut self.tc_socket,
-                    self.clock,
+                    &self.clock,
                     self.hardware_timestamping,
                 )? {
                     break Ok(packet);
@@ -445,6 +378,7 @@ impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
         let non_time_critical_future = async {
             let mut buffer = [0; 2048];
             let (received_len, _) = self.ntc_socket.recv_from(&mut buffer).await?;
+            log::info!("ntc receive");
             Ok(NetworkPacket {
                 data: buffer[..received_len].into(),
                 timestamp: clock.now(),
@@ -458,14 +392,14 @@ impl<'c, C: Clock> NetworkPort for LinuxNetworkPort<'c, C> {
     }
 }
 
-impl<'c, C: Clock> LinuxNetworkPort<'c, C> {
+impl LinuxNetworkPort {
     /// Do a manual receive on the time critical socket so we can get the hardware timestamps.
     /// Tokio doesn't have the capability to get the timestamp.
     ///
     /// This returns an option because there may not be a message
     fn try_recv_message_with_timestamp(
         tc_socket: &mut UdpSocket,
-        clock: &C,
+        clock: &LinuxClock,
         hardware_timestamping: bool,
     ) -> Result<Option<NetworkPacket>, std::io::Error> {
         let mut read_buf = [0u8; 2048];

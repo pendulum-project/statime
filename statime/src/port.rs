@@ -309,7 +309,7 @@ impl<NR: NetworkRuntime> Port<NR> {
         let network_port = runtime
             .open(interface.clone())
             .await
-            .expect("Could not create time critical port");
+            .expect("Could not create network port");
 
         Port {
             portdata: PortData::new(
@@ -322,6 +322,16 @@ impl<NR: NetworkRuntime> Port<NR> {
                 clock_quality,
             ),
             state: State::Listening,
+        }
+    }
+
+    pub async fn run_port(&mut self) -> (Measurement, TimeProperties) {
+        loop {
+            let packet = self.portdata.network_port.recv().await.unwrap();
+            self.handle_network(packet).await;
+            if let Some(measurement) = self.extract_measurement() {
+                return measurement;
+            }
         }
     }
 

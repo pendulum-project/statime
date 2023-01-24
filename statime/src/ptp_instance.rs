@@ -1,10 +1,10 @@
-use futures::FutureExt;
+use futures::pin_mut;
 
 use crate::{
     clock::{Clock, Timer},
     datastructures::common::{ClockIdentity, PortIdentity},
     filters::Filter,
-    network::{NetworkPacket, NetworkRuntime},
+    network::NetworkRuntime,
     port::{Port, PortConfig},
     time::Duration,
 };
@@ -54,17 +54,27 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
         }
     }
 
-    pub async fn run(&mut self, timer: &impl Timer) {
-        let bmca_timeout = timer.after(Duration::from_secs(1)).fuse();
-        futures::pin_mut!(bmca_timeout);
+    pub async fn run(&mut self, timer: &impl Timer) -> ! {
+        log::info!("Running!");
+
+        let bmca_timeout = timer.after(Duration::from_secs(1));
+        pin_mut!(bmca_timeout);
 
         loop {
-            futures::select_biased!(
-                _ = bmca_timeout => {
-                    bmca_timeout.set(timer.after(Duration::from_secs(1)).fuse());
+            let run_port = self.port.run_port();
+
+            match embassy_futures::select::select(&mut bmca_timeout, run_port).await {
+                embassy_futures::select::Either::First(_) => {
                     self.run_bmca();
+                    bmca_timeout.set(timer.after(Duration::from_secs(1)));
                 }
-            )
+                embassy_futures::select::Either::Second((data, time_properties)) => {
+                    let (offset, freq_corr) = self.filter.absorb(data);
+                    self.clock
+                        .adjust(offset, freq_corr, time_properties)
+                        .expect("Unexpected error adjusting clock");
+                }
+            }
         }
     }
 
@@ -81,18 +91,5 @@ impl<NR: NetworkRuntime, C: Clock, F: Filter> PtpInstance<NR, C, F> {
 
         // Run the state decision
         self.port.perform_state_decision(erbest, erbest);
-    }
-
-    /// Let the instance handle a received network packet.
-    ///
-    /// This should be called for any and all packets that were received on the opened sockets of the network runtime.
-    pub async fn handle_network(&mut self, packet: NetworkPacket) {
-        self.port.handle_network(packet).await;
-        if let Some((data, time_properties)) = self.port.extract_measurement() {
-            let (offset, freq_corr) = self.filter.absorb(data);
-            self.clock
-                .adjust(offset, freq_corr, time_properties)
-                .expect("Unexpected error adjusting clock");
-        }
     }
 }

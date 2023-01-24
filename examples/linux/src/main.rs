@@ -1,14 +1,11 @@
-use std::sync::mpsc;
-
 use clap::{AppSettings, Parser};
-
 use statime::{
-    datastructures::{common::ClockIdentity, messages::Message},
+    datastructures::common::ClockIdentity,
     filters::basic::BasicFilter,
     ptp_instance::{Config, PtpInstance},
 };
 use statime_linux::{
-    clock::{LinuxClock, RawLinuxClock},
+    clock::{LinuxClock, LinuxTimer, RawLinuxClock},
     network::linux::{get_clock_id, LinuxInterfaceDescriptor, LinuxRuntime},
 };
 
@@ -65,10 +62,14 @@ fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
     setup_logger(args.loglevel).expect("Could not setup logging");
+
+    println!("Starting PTP");
+
     let clock = if let Some(hardware_clock) = &args.hardware_clock {
         LinuxClock::new(
             RawLinuxClock::get_from_file(hardware_clock).expect("Could not open hardware clock"),
@@ -91,40 +92,7 @@ fn main() {
         },
     };
 
-    let mut instance = PtpInstance::new(config, network_runtime, clock, BasicFilter::new(0.25));
-
-    loop {
-        let packet = if let Some(timeout) = clock_runtime.interval_to_next_alarm() {
-            match rx.recv_timeout(std::time::Duration::from_nanos(timeout.nanos().to_num())) {
-                Ok(data) => Some(data),
-                Err(mpsc::RecvTimeoutError::Timeout) => None,
-                Err(e) => Err(e).expect("Could not get further network packets"),
-            }
-        } else {
-            Some(rx.recv().expect("Could not get further network packets"))
-        };
-        if let Some(packet) = packet {
-            // TODO: Implement better mechanism for send timestamps
-            let parsed_message = Message::deserialize(&packet.data).unwrap();
-            if parsed_message
-                .header()
-                .source_port_identity()
-                .clock_identity
-                == clock_id
-            {
-                if let Some(timestamp) = packet.timestamp {
-                    instance.handle_send_timestamp(
-                        parsed_message.header().sequence_id() as usize,
-                        timestamp,
-                    );
-                }
-            } else {
-                instance.handle_network(packet);
-            }
-        }
-
-        while let Some(timer_id) = clock_runtime.check() {
-            instance.handle_alarm(timer_id);
-        }
-    }
+    let mut instance =
+        PtpInstance::new(config, network_runtime, clock, BasicFilter::new(0.25)).await;
+    instance.run(&LinuxTimer).await;
 }

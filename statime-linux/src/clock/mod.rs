@@ -16,6 +16,7 @@ pub enum Error {
     LinuxError(i32),
 }
 
+#[derive(Debug, Clone)]
 pub struct LinuxClock {
     clock: RawLinuxClock,
 }
