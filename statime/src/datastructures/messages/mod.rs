@@ -187,11 +187,11 @@ impl Message {
                 header_data.header,
                 content_buffer,
             )?),
-            MessageType::Signaling => Message::Signaling(Signaling::deserialize_content(
+            MessageType::Signaling => Message::Signaling(SignalingMessage::deserialize_content(
                 header_data.header,
                 content_buffer,
             )?),
-            MessageType::Management => Message::Management(Management::deserialize_content(
+            MessageType::Management => Message::Management(ManagementMessage::deserialize_content(
                 header_data.header,
                 content_buffer,
             )?),
