@@ -1,4 +1,5 @@
-use crate::datastructures::{common::Timestamp, WireFormat};
+use crate::datastructures::{common::Timestamp, WireFormat, WireFormatError};
+
 use getset::CopyGetters;
 
 use super::Header;
@@ -19,6 +20,10 @@ impl DelayReqMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
+        if buffer.len() < 11 {
+            return Err(WireFormatError::BufferTooShort);
+        }
+
         self.origin_timestamp.serialize(&mut buffer[0..10])?;
 
         Ok(())
@@ -28,6 +33,11 @@ impl DelayReqMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
+
+        if buffer.len() < 11 {
+            return Err(WireFormatError::BufferTooShort);
+        }
+
         Ok(Self {
             header,
             origin_timestamp: Timestamp::deserialize(&buffer[0..10])?,

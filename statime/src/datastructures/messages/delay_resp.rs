@@ -1,6 +1,6 @@
 use crate::datastructures::{
     common::{PortIdentity, Timestamp},
-    WireFormat,
+    WireFormat, WireFormatError
 };
 use getset::CopyGetters;
 
@@ -23,6 +23,9 @@ impl DelayRespMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
+        if buffer.len() < 21 {
+            return Err(WireFormatError::BufferTooShort);
+        }
         self.receive_timestamp.serialize(&mut buffer[0..10])?;
         self.requesting_port_identity
             .serialize(&mut buffer[10..20])?;
@@ -34,6 +37,9 @@ impl DelayRespMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
+        if buffer.len() < 21 {
+            return Err(WireFormatError::BufferTooShort);
+        }
         Ok(Self {
             header,
             receive_timestamp: Timestamp::deserialize(&buffer[0..10])?,

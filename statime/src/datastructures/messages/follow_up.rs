@@ -1,4 +1,4 @@
-use crate::datastructures::{common::Timestamp, WireFormat};
+use crate::datastructures::{common::Timestamp, WireFormat, WireFormatError};
 use getset::CopyGetters;
 
 use super::Header;
@@ -19,6 +19,10 @@ impl FollowUpMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
+        if buffer.len() < 11 {
+            return Err(WireFormatError::BufferTooShort);
+        }
+
         self.precise_origin_timestamp
             .serialize(&mut buffer[0..10])?;
 
@@ -29,6 +33,9 @@ impl FollowUpMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
+        if buffer.len() < 11 {
+            return Err(WireFormatError::BufferTooShort);
+        }
         Ok(Self {
             header,
             precise_origin_timestamp: Timestamp::deserialize(&buffer[0..10])?,

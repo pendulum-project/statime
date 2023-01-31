@@ -2,7 +2,7 @@ use crate::{
     clock::TimeProperties,
     datastructures::{
         common::{ClockIdentity, ClockQuality, TimeSource, Timestamp},
-        WireFormat,
+        WireFormat, WireFormatError
     },
 };
 use getset::CopyGetters;
@@ -32,6 +32,10 @@ impl AnnounceMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
+        if buffer.len() < 30 {
+            return Err(WireFormatError::BufferTooShort);
+        }
+
         self.origin_timestamp.serialize(&mut buffer[0..10])?;
         buffer[10..12].copy_from_slice(&self.current_utc_offset.to_be_bytes());
         buffer[13] = self.grandmaster_priority_1;
@@ -49,6 +53,9 @@ impl AnnounceMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
+        if buffer.len() < 30 {
+            return Err(WireFormatError::BufferTooShort);
+        }
         Ok(Self {
             header,
             origin_timestamp: Timestamp::deserialize(&buffer[0..10])?,

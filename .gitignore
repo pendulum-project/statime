@@ -10,3 +10,4 @@ validation-ht/measurement_report.log
 statime/fuzz/artifacts
 statime/fuzz/corpus
 statime/fuzz/target
+statime/target
