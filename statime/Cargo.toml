@@ -21,4 +21,4 @@ embassy-futures = "0.1.0"
 
 [dev-dependencies]
 thiserror = "1.0.30"
-futures-test = "0.3"
+tokio = { version = "1.25", features = ["test-util", "macros"] }
