@@ -215,17 +215,31 @@ impl NetworkRuntime for LinuxRuntime {
         &mut self,
         interface: Self::InterfaceDescriptor,
     ) -> Result<<LinuxRuntime as NetworkRuntime>::NetworkPort, NetworkError> {
+        log::info!(
+            "Opening network port on '{}'",
+            interface
+                .interface_name
+                .as_ref()
+                .unwrap_or(&"Unknown".to_string())
+        );
+
         let bind_ip = if interface.mode == LinuxNetworkMode::Ipv6 {
             IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
         } else {
             IpAddr::V4(Ipv4Addr::UNSPECIFIED)
         };
 
-        let tc_socket = tokio::net::UdpSocket::bind(SocketAddr::new(bind_ip, 319)).await?;
+        let tc_addr = SocketAddr::new(bind_ip, 319);
+        let ntc_addr = SocketAddr::new(bind_ip, 320);
+
+        log::info!("Binding time critical socket on {tc_addr}");
+        log::info!("Binding non time critical socket on {ntc_addr}");
+
+        let tc_socket = tokio::net::UdpSocket::bind(tc_addr).await?;
         // We want to allow multiple listening sockets, as we bind to a specific interface later
         setsockopt(tc_socket.as_raw_fd(), ReuseAddr, &true)
             .map_err(|_| NetworkError::UnknownError)?;
-        let ntc_socket = tokio::net::UdpSocket::bind(SocketAddr::new(bind_ip, 320)).await?;
+        let ntc_socket = tokio::net::UdpSocket::bind(ntc_addr).await?;
         // We want to allow multiple listening sockets, as we bind to a specific interface later
         setsockopt(ntc_socket.as_raw_fd(), ReuseAddr, &true)
             .map_err(|_| NetworkError::UnknownError)?;
@@ -361,11 +375,13 @@ impl NetworkPort for LinuxNetworkPort {
     }
 
     async fn recv(&mut self) -> Result<NetworkPacket, <LinuxNetworkPort as NetworkPort>::Error> {
+        log::trace!("Starting receive on network port");
+
         let clock = &self.clock;
         let time_critical_future = async {
             loop {
                 self.tc_socket.readable().await?;
-                log::info!("TC recv");
+                log::trace!("TC recv");
                 if let Some(packet) = Self::try_recv_message_with_timestamp(
                     &mut self.tc_socket,
                     &self.clock,
@@ -378,7 +394,7 @@ impl NetworkPort for LinuxNetworkPort {
         let non_time_critical_future = async {
             let mut buffer = [0; 2048];
             let (received_len, _) = self.ntc_socket.recv_from(&mut buffer).await?;
-            log::info!("ntc receive");
+            log::trace!("ntc receive");
             Ok(NetworkPacket {
                 data: buffer[..received_len].into(),
                 timestamp: clock.now(),
