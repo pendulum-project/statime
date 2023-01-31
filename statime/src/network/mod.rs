@@ -17,7 +17,7 @@ pub trait NetworkRuntime {
     type Error: std::fmt::Debug;
 
     /// Open a port on the given network interface.
-    /// 
+    ///
     /// This port has a time-critical and non-time-critical component.
     ///
     /// For example, when using IPv4, there must be a connection to the multicast address 244.0.1.129.

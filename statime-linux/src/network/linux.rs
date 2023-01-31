@@ -21,12 +21,12 @@ use statime::{
     time::Instant,
 };
 use std::{
-    io::IoSliceMut,
+    io::{ErrorKind, IoSliceMut},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     os::fd::AsRawFd,
     str::FromStr,
 };
-use tokio::net::UdpSocket;
+use tokio::{io::Interest, net::UdpSocket};
 
 #[derive(Clone)]
 pub struct LinuxRuntime {
@@ -375,26 +375,26 @@ impl NetworkPort for LinuxNetworkPort {
     }
 
     async fn recv(&mut self) -> Result<NetworkPacket, <LinuxNetworkPort as NetworkPort>::Error> {
-        log::trace!("Starting receive on network port");
-
         let clock = &self.clock;
         let time_critical_future = async {
             loop {
                 self.tc_socket.readable().await?;
-                log::trace!("TC recv");
-                if let Some(packet) = Self::try_recv_message_with_timestamp(
-                    &mut self.tc_socket,
-                    &self.clock,
-                    self.hardware_timestamping,
-                )? {
-                    break Ok(packet);
+                match self.tc_socket.try_io(Interest::READABLE, || {
+                    Self::try_recv_message_with_timestamp(
+                        &self.tc_socket,
+                        &self.clock,
+                        self.hardware_timestamping,
+                    )
+                }) {
+                    Ok(packet) => break Ok(packet),
+                    Err(e) if e.kind() == ErrorKind::WouldBlock => continue,
+                    Err(e) => break Err(e),
                 }
             }
         };
         let non_time_critical_future = async {
             let mut buffer = [0; 2048];
             let (received_len, _) = self.ntc_socket.recv_from(&mut buffer).await?;
-            log::trace!("ntc receive");
             Ok(NetworkPacket {
                 data: buffer[..received_len].into(),
                 timestamp: clock.now(),
@@ -414,10 +414,10 @@ impl LinuxNetworkPort {
     ///
     /// This returns an option because there may not be a message
     fn try_recv_message_with_timestamp(
-        tc_socket: &mut UdpSocket,
+        tc_socket: &UdpSocket,
         clock: &LinuxClock,
         hardware_timestamping: bool,
-    ) -> Result<Option<NetworkPacket>, std::io::Error> {
+    ) -> Result<NetworkPacket, std::io::Error> {
         let mut read_buf = [0u8; 2048];
         let mut io_vec = [IoSliceMut::new(&mut read_buf)];
         let mut cmsg = cmsg_space!(Timestamps);
@@ -430,7 +430,6 @@ impl LinuxNetworkPort {
             MsgFlags::empty(),
         ) {
             Ok(received) => received,
-            Err(Errno::EWOULDBLOCK) => return Ok(None),
             Err(e) => return Err(std::io::Error::from_raw_os_error(e as i32)),
         };
 
@@ -451,10 +450,10 @@ impl LinuxNetworkPort {
 
         let received_len = received.bytes;
 
-        Ok(Some(NetworkPacket {
+        Ok(NetworkPacket {
             data: read_buf[..received_len].into(),
             timestamp,
-        }))
+        })
     }
 
     fn try_recv_tx_timestamp(

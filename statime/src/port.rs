@@ -344,7 +344,8 @@ impl<NR: NetworkRuntime> Port<NR> {
         }
 
         self.state
-            .handle_message(&mut self.portdata, message, packet.timestamp).await;
+            .handle_message(&mut self.portdata, message, packet.timestamp)
+            .await;
 
         #[allow(clippy::single_match)]
         match message {

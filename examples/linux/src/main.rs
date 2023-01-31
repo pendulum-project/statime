@@ -1,4 +1,5 @@
 use clap::{AppSettings, Parser};
+use fern::colors::Color;
 use statime::{
     datastructures::common::ClockIdentity,
     filters::basic::BasicFilter,
@@ -46,13 +47,20 @@ struct Args {
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
+    let colors = fern::colors::ColoredLevelConfig::new()
+        .error(Color::Red)
+        .warn(Color::Yellow)
+        .info(Color::BrightGreen)
+        .debug(Color::BrightBlue)
+        .trace(Color::BrightBlack);
+
     fern::Dispatch::new()
-        .format(|out, message, record| {
+        .format(move |out, message, record| {
             out.finish(format_args!(
                 "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                chrono::Local::now().format("[%H:%M:%S.%f]"),
                 record.target(),
-                record.level(),
+                colors.color(record.level()),
                 message
             ))
         })
