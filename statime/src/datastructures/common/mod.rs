@@ -9,6 +9,8 @@ mod port_identity;
 mod time_interval;
 mod time_source;
 mod timestamp;
+mod tlv;
+mod tlv_type;
 
 pub use clock_accuracy::*;
 pub use clock_identity::*;
@@ -19,3 +21,5 @@ pub use port_identity::*;
 pub use time_interval::*;
 pub use time_source::*;
 pub use timestamp::*;
+pub use tlv::*;
+pub use tlv_type::*;

@@ -1,13 +1,16 @@
-use crate::datastructures::{common::{PortIdentity, Timestamp}, WireFormat, WireFormatError};
-use getset::CopyGetters;
+use crate::datastructures::{common::{PortIdentity, TLV}, WireFormat, WireFormatError};
 
+use arrayvec::ArrayVec;
+use getset::CopyGetters;
 use super::Header;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, CopyGetters)]
-#[getset(get_copy = "pub")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignalingMessage {
     pub(super) header: Header,
     pub(super) target_port_identity: PortIdentity,
+
+    // TODO: determine the best max length value
+    pub(super) value: ArrayVec<TLV, 256>,
 }
 
 impl SignalingMessage {
@@ -26,6 +29,8 @@ impl SignalingMessage {
         self.target_port_identity
             .serialize(&mut buffer[0..10])?;
 
+        // TODO: value
+
         Ok(())
     }
 
@@ -36,9 +41,37 @@ impl SignalingMessage {
         if buffer.len() < 11 {
             return Err(WireFormatError::BufferTooShort);
         }
+
+        let mut index = 11;
+        let mut tlvs = ArrayVec::<TLV, 256>::new();
+        while buffer.len() > index + 4 {
+
+            // Parse length
+            let lengthBytes: Result<[u8; 2],_> = buffer[(index + 2)..(index + 4)].try_into();
+            if lengthBytes.is_err() {
+                return Err(WireFormatError::SliceError);
+            }
+            let length = u16::from_be_bytes(lengthBytes.unwrap()) as usize;
+
+            if buffer.len() < index + 4 + length {
+                return Err(WireFormatError::BufferTooShort);
+            }
+
+            // Parse TLV
+            let tlv = TLV::deserialize(&buffer[index..(index + 4 + length)]);
+            if tlv.is_err() {
+                return Err(WireFormatError::SliceError);
+            }
+
+            tlvs.push(tlv.unwrap());
+
+            index = index + 4 + length;
+        }
+
         Ok(Self {
             header,
             target_port_identity: PortIdentity::deserialize(&buffer[0..10])?,
+            value: tlvs,
         })
     }
 }

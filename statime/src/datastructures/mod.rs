@@ -9,6 +9,9 @@ pub mod messages;
 pub enum WireFormatError {
     EnumConversionError,
     BufferTooShort,
+    CapacityError,
+    LengthError,
+    SliceError,
 }
 
 impl<Enum: num_enum::TryFromPrimitive> From<num_enum::TryFromPrimitiveError<Enum>>

@@ -681,7 +681,7 @@ impl<NR: NetworkRuntime, W: Watch> Port<NR, W> {
         }
 
         self.state
-            .handle_message(&mut self.portdata, message, packet.timestamp);
+            .handle_message(&mut self.portdata, message.clone(), packet.timestamp);
 
         #[allow(clippy::single_match)]
         match message {

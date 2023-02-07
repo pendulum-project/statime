@@ -9,6 +9,7 @@ mod delay_resp;
 mod follow_up;
 mod header;
 mod management;
+mod management_action;
 mod message_builder;
 mod p_delay_req;
 mod p_delay_resp;
@@ -22,6 +23,7 @@ pub use delay_resp::*;
 pub use follow_up::*;
 pub use header::*;
 pub use management::*;
+pub use management_action::*;
 pub use message_builder::*;
 pub use p_delay_req::*;
 pub use p_delay_resp_follow_up::*;
@@ -44,7 +46,7 @@ pub enum MessageType {
     Management = 0xD,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
     Sync(SyncMessage),
     DelayReq(DelayReqMessage),
