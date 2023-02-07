@@ -1,4 +1,4 @@
-#![cfg(feature = "std")]
+#![cfg(test)]
 
 use std::string::String;
 use std::{cell::RefCell, rc::Rc};

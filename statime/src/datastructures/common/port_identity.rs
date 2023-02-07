@@ -1,3 +1,5 @@
+use core::fmt::Display;
+
 use super::clock_identity::ClockIdentity;
 use crate::datastructures::{WireFormat, WireFormatError};
 
@@ -23,6 +25,12 @@ impl WireFormat for PortIdentity {
             clock_identity: ClockIdentity::deserialize(&buffer[0..8])?,
             port_number: u16::from_be_bytes(buffer[8..10].try_into().unwrap()),
         })
+    }
+}
+
+impl Display for PortIdentity {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}:{}", self.clock_identity, self.port_number)
     }
 }
 
@@ -61,5 +69,17 @@ mod tests {
             let deserialized_data = PortIdentity::deserialize(&byte_representation).unwrap();
             assert_eq!(deserialized_data, object_representation);
         }
+    }
+
+    #[test]
+    fn format() {
+        assert_eq!(
+            PortIdentity {
+                clock_identity: ClockIdentity([64, 109, 22, 54, 196, 36, 14, 56]),
+                port_number: 1234,
+            }
+            .to_string(),
+            "406D1636C4240E38:1234"
+        )
     }
 }
