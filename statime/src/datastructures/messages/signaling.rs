@@ -1,7 +1,6 @@
 use crate::datastructures::{common::{PortIdentity, TLV}, WireFormat, WireFormatError};
 
 use arrayvec::ArrayVec;
-use getset::CopyGetters;
 use super::Header;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,11 +46,11 @@ impl SignalingMessage {
         while buffer.len() > index + 4 {
 
             // Parse length
-            let lengthBytes: Result<[u8; 2],_> = buffer[(index + 2)..(index + 4)].try_into();
-            if lengthBytes.is_err() {
+            let length_bytes: Result<[u8; 2],_> = buffer[(index + 2)..(index + 4)].try_into();
+            if length_bytes.is_err() {
                 return Err(WireFormatError::SliceError);
             }
-            let length = u16::from_be_bytes(lengthBytes.unwrap()) as usize;
+            let length = u16::from_be_bytes(length_bytes.unwrap()) as usize;
 
             if buffer.len() < index + 4 + length {
                 return Err(WireFormatError::BufferTooShort);
@@ -64,7 +63,6 @@ impl SignalingMessage {
             }
 
             tlvs.push(tlv.unwrap());
-
             index = index + 4 + length;
         }
 

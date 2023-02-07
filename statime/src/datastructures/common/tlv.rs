@@ -32,11 +32,11 @@ impl WireFormat for TLV {
         }
 
         // Parse length
-        let lengthBytes: Result<[u8; 2],_> = buffer[2..3].try_into();
-        if lengthBytes.is_err() {
+        let length_bytes: Result<[u8; 2],_> = buffer[2..3].try_into();
+        if length_bytes.is_err() {
             return Err(WireFormatError::SliceError);
         }
-        let length = u16::from_be_bytes(lengthBytes.unwrap());
+        let length = u16::from_be_bytes(length_bytes.unwrap());
 
         // Parse TLV content / value
         if buffer.len() < (5 + length) as usize {
@@ -51,14 +51,14 @@ impl WireFormat for TLV {
         }
 
         // Parse TLV type
-        let typeBytes = buffer[0..1].try_into();
-        if typeBytes.is_err() {
+        let type_bytes = buffer[0..1].try_into();
+        if type_bytes.is_err() {
             return Err(WireFormatError::SliceError);
         }
 
         Ok(Self {
             tlv_type: TlvType::from_primitive(
-                u16::from_be_bytes(typeBytes.unwrap())
+                u16::from_be_bytes(type_bytes.unwrap())
             ),
             length: length,
             value: vec,
