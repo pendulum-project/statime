@@ -33,7 +33,6 @@ impl DelayReqMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-
         if buffer.len() < 11 {
             return Err(WireFormatError::BufferTooShort);
         }

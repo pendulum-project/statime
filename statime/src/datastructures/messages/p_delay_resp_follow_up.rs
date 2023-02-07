@@ -1,4 +1,7 @@
-use crate::datastructures::{common::{PortIdentity, Timestamp}, WireFormat, WireFormatError};
+use crate::datastructures::{
+    common::{PortIdentity, Timestamp},
+    WireFormat, WireFormatError,
+};
 use getset::CopyGetters;
 
 use super::Header;
@@ -46,4 +49,3 @@ impl PDelayRespFollowUpMessage {
         })
     }
 }
-

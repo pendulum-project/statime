@@ -1,6 +1,6 @@
 use crate::datastructures::{
     common::{PortIdentity, Timestamp},
-    WireFormat, WireFormatError
+    WireFormat, WireFormatError,
 };
 use getset::CopyGetters;
 

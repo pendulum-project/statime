@@ -1,7 +1,10 @@
-use crate::datastructures::{common::{PortIdentity, TLV}, WireFormat, WireFormatError};
+use crate::datastructures::{
+    common::{PortIdentity, TLV},
+    WireFormat, WireFormatError,
+};
 
-use arrayvec::ArrayVec;
 use super::Header;
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignalingMessage {
@@ -25,8 +28,7 @@ impl SignalingMessage {
             return Err(WireFormatError::BufferTooShort);
         }
 
-        self.target_port_identity
-            .serialize(&mut buffer[0..10])?;
+        self.target_port_identity.serialize(&mut buffer[0..10])?;
 
         // TODO: value
 
@@ -44,9 +46,8 @@ impl SignalingMessage {
         let mut index = 11;
         let mut tlvs = ArrayVec::<TLV, 256>::new();
         while buffer.len() > index + 4 {
-
             // Parse length
-            let length_bytes: Result<[u8; 2],_> = buffer[(index + 2)..(index + 4)].try_into();
+            let length_bytes: Result<[u8; 2], _> = buffer[(index + 2)..(index + 4)].try_into();
             if length_bytes.is_err() {
                 return Err(WireFormatError::SliceError);
             }

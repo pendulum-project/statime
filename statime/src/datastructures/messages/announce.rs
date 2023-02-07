@@ -2,7 +2,7 @@ use crate::{
     clock::TimeProperties,
     datastructures::{
         common::{ClockIdentity, ClockQuality, TimeSource, Timestamp},
-        WireFormat, WireFormatError
+        WireFormat, WireFormatError,
     },
 };
 use getset::CopyGetters;

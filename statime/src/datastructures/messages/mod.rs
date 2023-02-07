@@ -26,8 +26,8 @@ pub use management::*;
 pub use management_action::*;
 pub use message_builder::*;
 pub use p_delay_req::*;
-pub use p_delay_resp_follow_up::*;
 pub use p_delay_resp::*;
+pub use p_delay_resp_follow_up::*;
 pub use signaling::*;
 pub use sync::*;
 
@@ -133,7 +133,7 @@ impl Message {
             Message::DelayResp(m) => m.serialize_content(&mut buffer[34..]),
             Message::PDelayRespFollowUp(m) => m.serialize_content(&mut buffer[34..]),
             Message::Announce(m) => m.serialize_content(&mut buffer[34..]),
-            Message::Signaling(m) =>m.serialize_content(&mut buffer[34..]),
+            Message::Signaling(m) => m.serialize_content(&mut buffer[34..]),
             Message::Management(m) => m.serialize_content(&mut buffer[34..]),
         }
     }
@@ -181,10 +181,9 @@ impl Message {
                 header_data.header,
                 content_buffer,
             )?),
-            MessageType::PDelayRespFollowUp => Message::PDelayRespFollowUp(PDelayRespFollowUpMessage::deserialize_content(
-                header_data.header,
-                content_buffer,
-            )?),
+            MessageType::PDelayRespFollowUp => Message::PDelayRespFollowUp(
+                PDelayRespFollowUpMessage::deserialize_content(header_data.header, content_buffer)?,
+            ),
             MessageType::Announce => Message::Announce(AnnounceMessage::deserialize_content(
                 header_data.header,
                 content_buffer,

@@ -28,7 +28,6 @@ pub enum TlvType {
 }
 
 impl TlvType {
-
     pub fn to_primitive(&self) -> u16 {
         match self {
             Self::Reserved => 0x0000,
@@ -60,7 +59,12 @@ impl TlvType {
 
     pub fn from_primitive(value: u16) -> Self {
         match value {
-            0x0000 | 0x000A..=0x1FFF | 0x2030..=0x3FFF | 0x4002..=0x7EFF | 0x800A..=0xFFEF | 0xFFF0..=0xFFFF => Self::Reserved,
+            0x0000
+            | 0x000A..=0x1FFF
+            | 0x2030..=0x3FFF
+            | 0x4002..=0x7EFF
+            | 0x800A..=0xFFEF
+            | 0xFFF0..=0xFFFF => Self::Reserved,
             0x2000..=0x2003 => Self::Legacy,
             0x2004..=0x202F | 0x7F00..=0x7FFF => Self::Experimental,
             0x0001 => Self::Management,
@@ -89,5 +93,7 @@ impl TlvType {
 }
 
 impl Default for TlvType {
-    fn default() -> Self { Self::Management }
+    fn default() -> Self {
+        Self::Management
+    }
 }

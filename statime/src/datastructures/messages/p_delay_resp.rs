@@ -1,6 +1,6 @@
 use crate::datastructures::{
     common::{PortIdentity, Timestamp},
-    WireFormat, WireFormatError
+    WireFormat, WireFormatError,
 };
 use getset::CopyGetters;
 
@@ -26,7 +26,8 @@ impl PDelayRespMessage {
         if buffer.len() < 21 {
             return Err(WireFormatError::BufferTooShort);
         }
-        self.request_receive_timestamp.serialize(&mut buffer[0..10])?;
+        self.request_receive_timestamp
+            .serialize(&mut buffer[0..10])?;
         self.requesting_port_identity
             .serialize(&mut buffer[10..20])?;
 
@@ -48,7 +49,6 @@ impl PDelayRespMessage {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,7 +61,7 @@ mod tests {
                 0x00, 0x00, 0x45, 0xb1, 0x11, 0x5a, 0x0a, 0x64, 0xfa, 0xb0, 0x01, 0x02, 0x03, 0x04,
                 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
             ],
-            DelayRespMessage {
+            PDelayRespMessage {
                 header: Header::default(),
                 request_receive_timestamp: Timestamp {
                     seconds: 1169232218,
@@ -84,7 +84,7 @@ mod tests {
 
             // Test the deserialization output
             let deserialized_data =
-                DelayRespMessage::deserialize_content(Header::default(), &byte_representation)
+                PDelayRespMessage::deserialize_content(Header::default(), &byte_representation)
                     .unwrap();
             assert_eq!(deserialized_data, object_representation);
         }

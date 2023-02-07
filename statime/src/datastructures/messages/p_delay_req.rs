@@ -33,7 +33,6 @@ impl PDelayReqMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-
         if buffer.len() < 11 {
             return Err(WireFormatError::BufferTooShort);
         }
@@ -72,7 +71,7 @@ mod tests {
 
             // Test the deserialization output
             let deserialized_data =
-                DelayReqMessage::deserialize_content(Header::default(), &byte_representation)
+                PDelayReqMessage::deserialize_content(Header::default(), &byte_representation)
                     .unwrap();
             assert_eq!(deserialized_data, object_representation);
         }

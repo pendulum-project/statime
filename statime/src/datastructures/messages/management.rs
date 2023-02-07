@@ -1,4 +1,7 @@
-use crate::datastructures::{common::{PortIdentity, TLV}, WireFormat, WireFormatError};
+use crate::datastructures::{
+    common::{PortIdentity, TLV},
+    WireFormat, WireFormatError,
+};
 
 use super::{Header, ManagementAction};
 
@@ -21,8 +24,7 @@ impl ManagementMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
-        self.target_port_identity
-            .serialize(&mut buffer[0..10])?;
+        self.target_port_identity.serialize(&mut buffer[0..10])?;
         buffer[11] = self.starting_boundary_hops;
         buffer[12] = self.boundary_hops;
         buffer[13] = self.action.to_primitive();
