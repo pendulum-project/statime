@@ -11,3 +11,4 @@ statime/fuzz/artifacts
 statime/fuzz/corpus
 statime/fuzz/target
 statime/target
+*swp
