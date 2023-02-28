@@ -115,11 +115,11 @@ impl Bmca {
     /// - `port_state`: The current state of the port we are doing the calculation for.
     ///
     /// If None is returned, then the port should remain in the same state as it is now.
-    pub fn calculate_recommended_state(
+    pub fn calculate_recommended_state<UC>(
         own_data: &DefaultDS,
         best_global_announce_message: Option<BestAnnounceMessage>,
         best_port_announce_message: Option<BestAnnounceMessage>,
-        port_state: &PortState,
+        port_state: &PortState<UC>,
     ) -> Option<RecommendedState> {
         let d0 = ComparisonDataset::from_own_data(own_data);
         let ebest = best_global_announce_message

@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 
 pub use master::{MasterError, MasterState};
 pub use slave::{SlaveError, SlaveState};
+pub use uncalibrated::{Calibrate, DefaultUncalibratedState};
 
 use crate::datastructures::common::PortIdentity;
 use crate::datastructures::messages::Message;
@@ -11,9 +12,10 @@ use crate::time::Instant;
 
 mod master;
 mod slave;
+mod uncalibrated;
 
 #[derive(Debug, Default)]
-pub enum PortState {
+pub enum PortState<UC> {
     #[default]
     Initializing,
     Faulty,
@@ -22,11 +24,11 @@ pub enum PortState {
     PreMaster,
     Master(MasterState),
     Passive,
-    Uncalibrated,
+    Uncalibrated(UC),
     Slave(SlaveState),
 }
 
-impl PortState {
+impl<UC> PortState<UC> {
     pub async fn handle_message(
         &mut self,
         message: Message,
@@ -53,7 +55,7 @@ impl PortState {
     }
 }
 
-impl Display for PortState {
+impl<UC> Display for PortState<UC> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PortState::Initializing => write!(f, "Initializing"),
@@ -63,7 +65,7 @@ impl Display for PortState {
             PortState::PreMaster => write!(f, "Pre-Master"),
             PortState::Master(_) => write!(f, "Master"),
             PortState::Passive => write!(f, "Passive"),
-            PortState::Uncalibrated => write!(f, "Uncalibrated"),
+            PortState::Uncalibrated(_) => write!(f, "Uncalibrated"),
             PortState::Slave(_) => write!(f, "Slave"),
         }
     }

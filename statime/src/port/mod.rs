@@ -104,13 +104,16 @@ impl<P: NetworkPort> Port<P> {
                 Either::First(timeout) => match timeout {
                     Either4::First(_) => {
                         // Run best master clock algorithm
-                        if let Err(error) = self.run_bmca(
-                            local_clock,
-                            announce_messages,
-                            &mut announce_receipt_timeout,
-                            default_ds,
-                            time_properties_ds,
-                        ) {
+                        if let Err(error) = self
+                            .run_bmca(
+                                local_clock,
+                                announce_messages,
+                                &mut announce_receipt_timeout,
+                                default_ds,
+                                time_properties_ds,
+                            )
+                            .await
+                        {
                             log::error!("{:?}", error);
                         }
                     }
@@ -157,7 +160,7 @@ impl<P: NetworkPort> Port<P> {
         }
     }
 
-    fn run_bmca<T: Future, const N: usize>(
+    async fn run_bmca<T: Future, const N: usize>(
         &mut self,
         local_clock: &RefCell<impl Clock>,
         announce_messages: &RefCell<[Option<BestAnnounceMessage>; N]>,
@@ -193,7 +196,8 @@ impl<P: NetworkPort> Port<P> {
 
         if let Some(recommended_state) = recommended_state {
             self.port_ds
-                .set_recommended_port_state(&recommended_state, announce_receipt_timeout);
+                .set_recommended_port_state(&recommended_state, announce_receipt_timeout)
+                .await;
 
             // TODO: Discuss if we should change the clock's own time properties, or keep the master's time properties separately
             if let RecommendedState::S1(announce_message) = &recommended_state {

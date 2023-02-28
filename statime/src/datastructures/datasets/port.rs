@@ -3,14 +3,14 @@ use std::pin::Pin;
 
 use crate::bmc::bmca::RecommendedState;
 use crate::datastructures::common::PortIdentity;
-use crate::port::state::{MasterState, PortState, SlaveState};
+use crate::port::state::{Calibrate, DefaultUncalibratedState, MasterState, PortState};
 use crate::port::Ticker;
 use crate::time::Duration;
 
 #[derive(Debug)]
-pub struct PortDS {
+pub struct PortDS<UC = DefaultUncalibratedState> {
     pub(crate) port_identity: PortIdentity,
-    pub(crate) port_state: PortState,
+    pub(crate) port_state: PortState<UC>,
     log_min_delay_req_interval: i8,
     mean_link_delay: Duration,
     log_announce_interval: i8,
@@ -25,7 +25,7 @@ pub struct PortDS {
     master_only: bool,
 }
 
-impl PortDS {
+impl<UC: Calibrate> PortDS<UC> {
     pub fn new(
         port_identity: PortIdentity,
         log_min_delay_req_interval: i8,
@@ -97,12 +97,17 @@ impl PortDS {
         }
     }
 
-    pub fn set_forced_port_state(&mut self, state: PortState) {
-        log::info!("new state for port: {} -> {}", self.port_state, state);
+    pub fn set_forced_port_state(&mut self, state: PortState<UC>) {
+        log::info!(
+            "new state for port {}: {} -> {}",
+            self.port_identity.port_number,
+            self.port_state,
+            state
+        );
         self.port_state = state;
     }
 
-    pub fn set_recommended_port_state<T: Future>(
+    pub async fn set_recommended_port_state<T: Future>(
         &mut self,
         recommended_state: &RecommendedState,
         announce_receipt_timeout: &mut Pin<&mut Ticker<T, impl FnMut(Duration) -> T>>,
@@ -112,11 +117,11 @@ impl PortDS {
             // TODO make sure states are complete
             RecommendedState::S1(announce_message) => {
                 let remote_master = announce_message.header().source_port_identity();
-                let state = PortState::Slave(SlaveState::new(remote_master));
+                let state = UC::calibrate(remote_master).await;
 
                 match &self.port_state {
                     PortState::Listening
-                    | PortState::Uncalibrated
+                    | PortState::Uncalibrated(_)
                     | PortState::PreMaster
                     | PortState::Master(_)
                     | PortState::Passive => {
@@ -138,7 +143,7 @@ impl PortDS {
             RecommendedState::M1(_) | RecommendedState::M2(_) | RecommendedState::M3(_) => {
                 match self.port_state {
                     PortState::Listening
-                    | PortState::Uncalibrated
+                    | PortState::Uncalibrated(_)
                     | PortState::Slave(_)
                     | PortState::Passive => {
                         self.set_forced_port_state(PortState::Master(MasterState::new()))
@@ -151,7 +156,7 @@ impl PortDS {
             }
             RecommendedState::P1(_) | RecommendedState::P2(_) => match self.port_state {
                 PortState::Listening
-                | PortState::Uncalibrated
+                | PortState::Uncalibrated(_)
                 | PortState::Slave(_)
                 | PortState::PreMaster
                 | PortState::Master(_) => self.set_forced_port_state(PortState::Passive),
