@@ -84,9 +84,11 @@ mod tests {
             assert_eq!(serialization_buffer, byte_representation);
 
             // Test the deserialization output
-            let deserialized_data =
-                PDelayRespFollowUpMessage::deserialize_content(Header::default(), &byte_representation)
-                    .unwrap();
+            let deserialized_data = PDelayRespFollowUpMessage::deserialize_content(
+                Header::default(),
+                &byte_representation,
+            )
+            .unwrap();
             assert_eq!(deserialized_data, object_representation);
         }
     }
