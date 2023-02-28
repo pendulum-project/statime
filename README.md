@@ -46,6 +46,16 @@ ptpd -V -n -M -i <INTERFACE>
 ```
 where `<INTERFACE>` is the netwerk interface you want ptpd to use. Here `-n` disables clock adjustment by ptpd, and `-M` ensures that it runs in master mode only.
 
+## Running the fuzzer
+
+To start fuzzing, change to the statime directory and run:
+
+```bash
+cargo fuzz run message_parse
+```
+
+Note: [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) is required.
+
 # Support our work
 
 The development of Statime is kindly supported by the [NLnet Foundation](https://nlnet.nl).
