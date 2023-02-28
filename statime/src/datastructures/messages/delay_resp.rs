@@ -23,7 +23,7 @@ impl DelayRespMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
-        if buffer.len() < 21 {
+        if buffer.len() < 20 {
             return Err(WireFormatError::BufferTooShort);
         }
         self.receive_timestamp.serialize(&mut buffer[0..10])?;
@@ -37,7 +37,7 @@ impl DelayRespMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-        if buffer.len() < 21 {
+        if buffer.len() < 20 {
             return Err(WireFormatError::BufferTooShort);
         }
         Ok(Self {

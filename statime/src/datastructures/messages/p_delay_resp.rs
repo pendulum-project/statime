@@ -23,7 +23,7 @@ impl PDelayRespMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
-        if buffer.len() < 21 {
+        if buffer.len() < 20 {
             return Err(WireFormatError::BufferTooShort);
         }
         self.request_receive_timestamp
@@ -38,7 +38,7 @@ impl PDelayRespMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-        if buffer.len() < 21 {
+        if buffer.len() < 20 {
             return Err(WireFormatError::BufferTooShort);
         }
         Ok(Self {

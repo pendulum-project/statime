@@ -19,7 +19,7 @@ impl FollowUpMessage {
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
-        if buffer.len() < 11 {
+        if buffer.len() < 10 {
             return Err(WireFormatError::BufferTooShort);
         }
 
@@ -33,7 +33,7 @@ impl FollowUpMessage {
         header: Header,
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-        if buffer.len() < 11 {
+        if buffer.len() < 10 {
             return Err(WireFormatError::BufferTooShort);
         }
         Ok(Self {
