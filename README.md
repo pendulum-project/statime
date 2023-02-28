@@ -1,6 +1,11 @@
-# Rust implementation of PTP
+# Statime
 
-This repository is work in progress for a rust implementation of PTP version 2.1 (IEEE 1588-2019). It is far from complete and not yet usable in any capacity.
+Statime is a work in progress Rust implementation of PTP version 2.1 (IEEE 1588-2019). 
+It is currently highly in flux and not yet usable.
+
+<p align="center">
+<img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
+</p>
 
 The current state of the project is such that the main binary, when compiled, measures and outputs the time difference to any ptp master clock happening to be sending in the network it listens to.
 
@@ -43,6 +48,8 @@ where `<INTERFACE>` is the netwerk interface you want ptpd to use. Here `-n` dis
 
 # Support our work
 
-The first phase of our project is kindly support by the [NLnet Foundation](https://nlnet.nl/project/PTP-Rust/).
+The development of Statime is kindly supported by the [NLnet Foundation](https://nlnet.nl).
+
+[SIDN Fonds](https://www.sidnfonds.nl/excerpt) is supporting us with a grant to develop clock devices running Statime and ntpd-rs, in collaboration with SIDN Labs' [TimeNL](https://www.sidnlabs.nl/en/news-and-blogs/timenl-comes-of-age).
 
 We seek involvement and/or sponsoring of interested parties, see the announcement [here](https://twitter.com/tweedegolfbv/status/1504439532971827208).
