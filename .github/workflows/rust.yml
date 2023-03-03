@@ -15,41 +15,40 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install latest nightly
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@nightly
       with:
           toolchain: nightly
-          override: true
           components: rustfmt, clippy
           target: "thumbv7em-none-eabihf"
 
     - name: Run cargo check
-      uses: actions-rs/cargo@v1
+      uses: ClementTsang/cargo-action@v0.0.3
       with:
         command: check
         args: --all-features
 
     - name: Run cargo check
-      uses: actions-rs/cargo@v1
-      working-directory: examples/stm
+      uses: ClementTsang/cargo-action@v0.0.3
       with:
         command: check
         args: --all-features
+        directory: examples/stm
 
     - name: Run cargo fmt
-      uses: actions-rs/cargo@v1
+      uses: ClementTsang/cargo-action@v0.0.3
       with:
         command: fmt
         args: -- --check
 
     - name: Run cargo fmt embedded
-      uses: actions-rs/cargo@v1
-      working-directory: examples/stm
+      uses: ClementTsang/cargo-action@v0.0.3
       with:
         command: fmt
         args: -- --check
+        directory: examples/stm
 
     - name: Run cargo test
-      uses: actions-rs/cargo@v1
+      uses: ClementTsang/cargo-action@v0.0.3
       with:
         command: test
         args: --all-features
