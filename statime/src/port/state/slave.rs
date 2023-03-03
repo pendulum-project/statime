@@ -283,9 +283,15 @@ impl SlaveState {
 #[derive(Debug)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum SlaveError {
-    #[cfg_attr(feature = "std", error("received a message that a port in the slave state can never process"))]
+    #[cfg_attr(
+        feature = "std",
+        error("received a message that a port in the slave state can never process")
+    )]
     UnexpectedMessage,
-    #[cfg_attr(feature = "std", error("received a message that can usually be processed, but not right now"))]
+    #[cfg_attr(
+        feature = "std",
+        error("received a message that can usually be processed, but not right now")
+    )]
     OutOfSequence,
 }
 
