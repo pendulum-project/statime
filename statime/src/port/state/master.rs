@@ -75,6 +75,9 @@ impl MasterState {
 #[derive(Debug)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum MasterError {
-    #[cfg_attr(feature = "std", error("received a message that a port in the master state can never process"))]
+    #[cfg_attr(
+        feature = "std",
+        error("received a message that a port in the master state can never process")
+    )]
     UnexpectedMessage,
 }

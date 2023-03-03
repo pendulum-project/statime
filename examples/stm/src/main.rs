@@ -77,7 +77,12 @@ async fn main(spawner: Spawner) -> ! {
     //});
 
     // Init network stack
-    let stack = &*singleton!(Stack::new(device, config, singleton!(StackResources::<2>::new()), seed));
+    let stack = &*singleton!(Stack::new(
+        device,
+        config,
+        singleton!(StackResources::<2>::new()),
+        seed
+    ));
 
     // Launch network task
     unwrap!(spawner.spawn(net_task(&stack)));
