@@ -1,15 +1,19 @@
-use core::cell::RefCell;
-use std::fmt::Debug;
-use thiserror::Error;
+use core::{cell::RefCell, fmt::Debug};
 
-use crate::clock::Clock;
-use crate::datastructures::common::{PortIdentity, TimeSource, Timestamp};
-use crate::datastructures::datasets::DefaultDS;
-use crate::datastructures::messages::{DelayReqMessage, Message, MessageBuilder};
-use crate::network::NetworkPort;
-use crate::port::error::{PortError, Result};
-use crate::port::sequence_id::SequenceIdGenerator;
-use crate::time::Instant;
+use crate::{
+    clock::Clock,
+    datastructures::{
+        common::{PortIdentity, TimeSource, Timestamp},
+        datasets::DefaultDS,
+        messages::{DelayReqMessage, Message, MessageBuilder},
+    },
+    network::NetworkPort,
+    port::{
+        error::{PortError, Result},
+        sequence_id::SequenceIdGenerator,
+    },
+    time::Instant,
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct MasterState {
@@ -88,12 +92,12 @@ impl MasterState {
             .sequence_id(self.announce_seq_ids.generate())
             .source_port_identity(port_identity)
             .announce_message(
-                current_time.into(),              //origin_timestamp: Timestamp,
+                current_time.into(),              // origin_timestamp: Timestamp,
                 0,                                // TODO implement current_utc_offset: u16,
-                default_ds.priority_1,            //grandmaster_priority_1: u8,
-                default_ds.clock_quality,         //grandmaster_clock_quality: ClockQuality,
-                default_ds.priority_2,            //grandmaster_priority_2: u8,
-                default_ds.clock_identity,        //grandmaster_identity: ClockIdentity,
+                default_ds.priority_1,            // grandmaster_priority_1: u8,
+                default_ds.clock_quality,         // grandmaster_clock_quality: ClockQuality,
+                default_ds.priority_2,            // grandmaster_priority_2: u8,
+                default_ds.clock_identity,        // grandmaster_identity: ClockIdentity,
                 0,                                // TODO implement steps_removed: u16,
                 TimeSource::from_primitive(0xa0), // TODO implement time_source: TimeSource,
             )
@@ -165,9 +169,13 @@ impl MasterState {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum MasterError {
-    #[error("received a message that a port in the master state can never process")]
+    #[cfg_attr(
+        feature = "std",
+        error("received a message that a port in the master state can never process")
+    )]
     UnexpectedMessage,
 }
 
@@ -177,12 +185,11 @@ mod tests {
 
     use fixed::types::{I48F16, U96F32};
 
+    use super::*;
     use crate::datastructures::{
         common::{ClockIdentity, TimeInterval},
         messages::Header,
     };
-
-    use super::*;
 
     #[derive(Debug, Default)]
     struct TestNetworkPort {

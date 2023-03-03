@@ -1,9 +1,6 @@
-#![no_std]
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
-
-#[cfg(feature = "std")]
-extern crate std;
 
 pub mod bmc;
 pub mod clock;

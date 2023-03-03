@@ -6,7 +6,6 @@ use crate::network::NetworkPort;
 use crate::port::sequence_id::SequenceIdGenerator;
 use crate::port::Measurement;
 use crate::time::{Duration, Instant};
-use thiserror::Error;
 
 type Result<T, E = SlaveError> = core::result::Result<T, E>;
 
@@ -281,11 +280,12 @@ impl SlaveState {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum SlaveError {
-    #[error("received a message that a port in the slave state can never process")]
+    #[cfg_attr(feature = "std", error("received a message that a port in the slave state can never process"))]
     UnexpectedMessage,
-    #[error("received a message that can usually be processed, but not right now")]
+    #[cfg_attr(feature = "std", error("received a message that can usually be processed, but not right now"))]
     OutOfSequence,
 }
 

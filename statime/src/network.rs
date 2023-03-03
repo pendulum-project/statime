@@ -46,7 +46,7 @@ pub struct NetworkPacket {
 /// This object only has to be able to send a message because if a message is received, it must be
 /// reported to the instance using the [PtpInstance::handle_network](crate::ptp_instance::PtpInstance::handle_network) function.
 pub trait NetworkPort {
-    type Error: std::fmt::Debug;
+    type Error: core::fmt::Debug;
 
     /// Send the given non-time-critical data.
     async fn send(&mut self, data: &[u8]) -> Result<(), Self::Error>;
