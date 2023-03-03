@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter};
+use core::fmt::{Display, Formatter};
 
 pub use master::{MasterError, MasterState};
 pub use slave::{SlaveError, SlaveState};
@@ -54,7 +54,7 @@ impl PortState {
 }
 
 impl Display for PortState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             PortState::Initializing => write!(f, "Initializing"),
             PortState::Faulty => write!(f, "Faulty"),

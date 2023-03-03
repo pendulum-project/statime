@@ -1,5 +1,5 @@
-use std::cell::RefCell;
-use std::convert::Infallible;
+use core::cell::RefCell;
+use core::convert::Infallible;
 
 use crate::bmc::bmca::BestAnnounceMessage;
 use crate::clock::{Clock, Timer};

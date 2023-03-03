@@ -1,7 +1,7 @@
 use core::cell::RefCell;
 use core::convert::Infallible;
-use std::future::Future;
-use std::pin::Pin;
+use core::future::Future;
+use core::pin::Pin;
 
 use embassy_futures::select;
 use embassy_futures::select::{Either, Either4};

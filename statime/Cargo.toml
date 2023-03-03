@@ -18,7 +18,7 @@ repository = "https://github.com/tweedegolf/statime"
 
 [features]
 default = ["std"]
-std = []
+std = ["dep:thiserror"]
 
 [dependencies]
 arrayvec = { version = "0.7.2", default-features = false }
@@ -26,11 +26,11 @@ embassy-futures = "0.1.0"
 fixed = "1.11"
 futures = { version = "0.3", default-features = false, features = ["async-await"] }
 getset = "0.1.2"
-libm = "0.1.2"
+libm = "0.2.6"
 log = { version = "0.4.14", default-features = false }
 num_enum = { version = "0.5.1", default-features = false }
 pin-project = "1.0"
-thiserror = "1.0"
+thiserror = { version = "1.0", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.25", features = ["test-util", "macros"] }

@@ -20,6 +20,7 @@ jobs:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+          target: "thumbv7em-none-eabihf"
 
     - name: Run cargo check
       uses: actions-rs/cargo@v1
@@ -27,8 +28,22 @@ jobs:
         command: check
         args: --all-features
 
+    - name: Run cargo check
+      uses: actions-rs/cargo@v1
+      working-directory: "./examples/stm"
+      with:
+        command: check
+        args: --all-features
+
     - name: Run cargo fmt
       uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: -- --check
+
+    - name: Run cargo fmt embedded
+      uses: actions-rs/cargo@v1
+      working-directory: "./examples/stm"
       with:
         command: fmt
         args: -- --check

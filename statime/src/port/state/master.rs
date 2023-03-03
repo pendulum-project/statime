@@ -1,5 +1,4 @@
-use std::fmt::Debug;
-use thiserror::Error;
+use core::fmt::Debug;
 
 use crate::datastructures::common::{PortIdentity, Timestamp};
 use crate::datastructures::messages::{DelayReqMessage, Message, MessageBuilder};
@@ -73,8 +72,9 @@ impl MasterState {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum MasterError {
-    #[error("received a message that a port in the master state can never process")]
+    #[cfg_attr(feature = "std", error("received a message that a port in the master state can never process"))]
     UnexpectedMessage,
 }
