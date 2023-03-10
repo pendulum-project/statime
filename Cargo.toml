@@ -2,8 +2,14 @@
 members = [
     "statime",
     "statime-linux",
+    "statime-stm-embassy",
     "examples/*"
 ]
 exclude = [
     "examples/stm"
 ]
+
+[patch.crates-io]
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }

@@ -1,0 +1,19 @@
+[package]
+name = "statime-stm-embassy"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+defmt = ["dep:defmt", "embassy-net/defmt", "embassy-stm32/defmt", "embassy-time/defmt", "embassy-time/defmt-timestamp-uptime"]
+
+[dependencies]
+defmt = { version = "0.3.2", optional = true }
+embassy-net = { version = "0.1.0", features = ["nightly", "tcp", "dhcpv4", "medium-ethernet"] }
+embassy-stm32 = { version = "0.1.0", features = ["nightly", "stm32f767zi", "unstable-pac", "time-driver-any", "exti"]  }
+embassy-time = { version = "0.1.0", features = ["tick-hz-32_768"] }
+stm32f7 = { version = "0.15.1", features = ["stm32f7x9"] }
+
+statime = { path = "../statime", default-features = false }
