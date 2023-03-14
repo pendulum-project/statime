@@ -121,23 +121,9 @@ impl Timestamp {
 
     /// Create a timestamp from the given descriptor
     pub fn from_descriptor(desc: &Descriptor) -> Option<Self> {
-        #[cfg(not(feature = "stm32f1xx-hal"))]
         {
             let (high, low) = { (desc.read(7), desc.read(6)) };
             Some(Self::from_parts(high, low))
-        }
-
-        #[cfg(feature = "stm32f1xx-hal")]
-        {
-            let (high, low) = { (desc.read(3), desc.read(2)) };
-
-            // The timestamp registers are written to all-ones if
-            // timestamping was no succesfull
-            if high == 0xFFFF_FFFF && low == 0xFFFF_FFFF {
-                None
-            } else {
-                Some(Self::from_parts(high, low))
-            }
         }
     }
 }

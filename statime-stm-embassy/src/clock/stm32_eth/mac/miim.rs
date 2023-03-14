@@ -1,8 +1,9 @@
-pub use ieee802_3_miim::Miim;
+use stm32f7::stm32f7x9::ethernet_mac::MACMIIAR;
 
+pub use ieee802_3_miim::Miim;
 pub use ieee802_3_miim::*;
 
-use crate::clock::stm32_eth::{peripherals::ETHERNET_MAC, stm32::ethernet_mac::MACMIIAR};
+use crate::clock::stm32_eth::peripherals::ETHERNET_MAC;
 
 use super::EthernetMAC;
 
@@ -119,30 +120,9 @@ where
     }
 }
 
-#[cfg(feature = "stm32f4xx-hal")]
 mod pin_impls {
-    use crate::hal::gpio::{gpioa::PA2, gpioc::PC1, Alternate};
+    use embassy_stm32::peripherals::{PA2, PC1};
 
-    const AF11: u8 = 11;
-
-    unsafe impl super::MdioPin for PA2<Alternate<AF11>> {}
-    unsafe impl super::MdcPin for PC1<Alternate<AF11>> {}
-}
-
-#[cfg(feature = "stm32f7xx-hal")]
-mod pin_impls {
-    use crate::hal::gpio::{gpioa::PA2, gpioc::PC1, Alternate};
-
-    const AF11: u8 = 11;
-
-    unsafe impl super::MdioPin for PA2<Alternate<AF11>> {}
-    unsafe impl super::MdcPin for PC1<Alternate<AF11>> {}
-}
-
-#[cfg(feature = "stm32f1xx-hal")]
-mod pin_impls {
-    use crate::hal::gpio::{gpioa::PA2, gpioc::PC1, Alternate, PushPull};
-
-    unsafe impl super::MdioPin for PA2<Alternate<PushPull>> {}
-    unsafe impl super::MdcPin for PC1<Alternate<PushPull>> {}
+    unsafe impl super::MdioPin for PA2 {}
+    unsafe impl super::MdcPin for PC1 {}
 }

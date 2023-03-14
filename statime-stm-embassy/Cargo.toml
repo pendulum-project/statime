@@ -17,3 +17,9 @@ embassy-time = { version = "0.1.0", features = ["tick-hz-32_768"] }
 stm32f7 = { version = "0.15.1", features = ["stm32f7x9"] }
 
 statime = { path = "../statime", default-features = false }
+
+aligned = "0.4.1"
+volatile-register = "0.2.1"
+ieee802_3_miim = "0.8.0"
+futures = "0.3.27"
+cortex-m = "0.7.7"

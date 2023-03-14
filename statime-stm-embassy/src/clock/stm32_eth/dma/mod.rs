@@ -2,13 +2,12 @@
 
 use cortex_m::peripheral::NVIC;
 
-use crate::clock::stm32_eth::{peripherals::ETHERNET_DMA, stm32::Interrupt};
+use crate::clock::stm32_eth::peripherals::ETHERNET_DMA;
 
-#[cfg(feature = "async-await")]
 use futures::task::AtomicWaker;
 
-#[cfg(any(feature = "ptp", feature = "async-await"))]
 use core::task::Poll;
+use embassy_stm32::pac::Interrupt;
 
 pub(crate) mod desc;
 
@@ -20,8 +19,7 @@ pub use rx::{RunningState as RxRunningState, RxError, RxPacket, RxRing, RxRingEn
 mod tx;
 pub use tx::{RunningState as TxRunningState, TxError, TxPacket, TxRing, TxRingEntry};
 
-#[cfg(feature = "ptp")]
-use crate::ptp::Timestamp;
+use crate::clock::stm32_eth::ptp::Timestamp;
 
 mod packet_id;
 pub use packet_id::PacketId;
@@ -86,7 +84,6 @@ impl<'rx, 'tx> EthernetDMA<'rx, 'tx> {
         eth_dma.dmabmr.modify(|_, w| {
             // For any non-f107 chips, we must use enhanced descriptor format to support checksum
             // offloading and/or timestamps.
-            #[cfg(not(feature = "stm32f1xx-hal"))]
             let w = w.edfe().set_bit();
 
             unsafe {
@@ -135,11 +132,9 @@ impl<'rx, 'tx> EthernetDMA<'rx, 'tx> {
     /// [`EthernetDMA::interrupt_handler()`] or [`stm32_eth::eth_interrupt_handler`](crate::eth_interrupt_handler)
     /// to clear interrupt pending bits. Otherwise the interrupt will reoccur immediately.
     ///
+    /// You must also call [`EthernetPTP::interrupt_handler()`] if you wish to make use of the PTP timestamp trigger feature.
+    ///
     /// [`EthernetPTP::interrupt_handler()`]: crate::ptp::EthernetPTP::interrupt_handler
-    #[cfg_attr(
-        feature = "ptp",
-        doc = "If you have PTP enabled, you must also call [`EthernetPTP::interrupt_handler()`] if you wish to make use of the PTP timestamp trigger feature."
-    )]
     pub fn enable_interrupt(&self) {
         self.eth_dma.dmaier.modify(|_, w| {
             w
@@ -177,7 +172,6 @@ impl<'rx, 'tx> EthernetDMA<'rx, 'tx> {
             .dmasr
             .write(|w| w.nis().set_bit().ts().set_bit().rs().set_bit());
 
-        #[cfg(feature = "async-await")]
         {
             if status.is_tx {
                 EthernetDMA::tx_waker().wake();
@@ -258,7 +252,6 @@ impl Drop for EthernetDMA<'_, '_> {
     }
 }
 
-#[cfg(feature = "async-await")]
 impl<'rx, 'tx> EthernetDMA<'rx, 'tx> {
     pub(crate) fn rx_waker() -> &'static AtomicWaker {
         static WAKER: AtomicWaker = AtomicWaker::new();
@@ -306,7 +299,6 @@ impl<'rx, 'tx> EthernetDMA<'rx, 'tx> {
     }
 }
 
-#[cfg(feature = "ptp")]
 impl EthernetDMA<'_, '_> {
     /// Try to get the timestamp for the given packet ID.
     ///
@@ -354,7 +346,6 @@ impl EthernetDMA<'_, '_> {
     }
 
     /// Get the TX timestamp for the given ID.
-    #[cfg(feature = "async-await")]
     pub async fn tx_timestamp(
         &mut self,
         packet_id: &PacketId,

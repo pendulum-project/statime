@@ -2,21 +2,18 @@
 //!
 //! See [`EthernetPTP`] for a more details.
 
-use crate::clock::stm32_eth::{
-    dma::EthernetDMA, hal::rcc::Clocks, mac::EthernetMAC, peripherals::ETHERNET_PTP,
-};
+use embassy_stm32::rcc::Clocks;
 
-mod timestamp;
+pub use pps_pin::PPSPin;
+pub use subseconds::{Subseconds, NANOS_PER_SECOND, SUBSECONDS_PER_SECOND, SUBSECONDS_TO_SECONDS};
 pub use timestamp::Timestamp;
-
-#[cfg(all(not(feature = "stm32f1xx-hal"), feature = "async-await"))]
 use {core::task::Poll, futures::task::AtomicWaker};
 
-mod subseconds;
-pub use subseconds::{Subseconds, NANOS_PER_SECOND, SUBSECONDS_PER_SECOND, SUBSECONDS_TO_SECONDS};
+use crate::clock::stm32_eth::{dma::EthernetDMA, mac::EthernetMAC, peripherals::ETHERNET_PTP};
 
 mod pps_pin;
-pub use pps_pin::PPSPin;
+mod subseconds;
+mod timestamp;
 
 /// Access to the IEEE 1508v2 PTP peripheral present on the ethernet peripheral.
 ///
@@ -88,7 +85,6 @@ impl EthernetPTP {
         // Setup PTP timestamping in fine mode.
         eth_ptp.ptptscr.write(|w| {
             // Enable snapshots for all frames.
-            #[cfg(not(feature = "stm32f1xx-hal"))]
             let w = w.tssarfe().set_bit();
 
             w.tse().set_bit().tsfcu().set_bit()
@@ -123,14 +119,6 @@ impl EthernetPTP {
         let ptp = &self.eth_ptp;
         ptp.ptptsar.write(|w| unsafe { w.bits(rate) });
 
-        #[cfg(feature = "stm32f1xx-hal")]
-        {
-            while ptp.ptptscr.read().tsaru().bit_is_set() {}
-            ptp.ptptscr.modify(|_, w| w.tsaru().set_bit());
-            while ptp.ptptscr.read().tsaru().bit_is_set() {}
-        }
-
-        #[cfg(not(feature = "stm32f1xx-hal"))]
         {
             while ptp.ptptscr.read().ttsaru().bit_is_set() {}
             ptp.ptptscr.modify(|_, w| w.ttsaru().set_bit());
@@ -220,9 +208,7 @@ impl EthernetPTP {
 /// Setting and configuring target time interrupts on the STM32F107 does not
 /// make any sense: we can generate the interrupt, but it is impossible to
 /// clear the flag as the register required to do so does not exist.
-#[cfg(not(feature = "stm32f1xx-hal"))]
 impl EthernetPTP {
-    #[cfg(feature = "async-await")]
     fn waker() -> &'static AtomicWaker {
         static WAKER: AtomicWaker = AtomicWaker::new();
         &WAKER
@@ -250,7 +236,6 @@ impl EthernetPTP {
     }
 
     /// Wait until the specified time.
-    #[cfg(feature = "async-await")]
     pub async fn wait_until(&mut self, timestamp: Timestamp) {
         self.configure_target_time_interrupt(timestamp);
         core::future::poll_fn(|ctx| {
@@ -286,15 +271,11 @@ impl EthernetPTP {
             EthernetMAC::mask_timestamp_trigger_interrupt();
         }
 
-        #[cfg(feature = "async-await")]
         if let Some(waker) = EthernetPTP::waker().take() {
             waker.wake();
         } else {
             EthernetPTP::read_and_clear_interrupt_flag();
         }
-
-        #[cfg(not(feature = "async-await"))]
-        EthernetPTP::read_and_clear_interrupt_flag();
 
         is_tsint
     }
@@ -318,7 +299,6 @@ impl EthernetPTP {
 
 #[cfg(all(test, not(target_os = "none")))]
 mod test {
-
     use super::*;
 
     // Test that we get accurate addend and subsecond_increment values

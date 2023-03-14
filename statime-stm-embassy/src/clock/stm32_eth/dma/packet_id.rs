@@ -2,13 +2,7 @@
 ///
 /// This packet ID can be used to obtain information about a specific
 /// ethernet frame (either sent or received) from the DMA.
-///
-#[cfg_attr(
-    feature = "ptp",
-    doc = "
-The main use is obtaining timestamps for frames using [`EthernetDMA::poll_timestamp`](crate::EthernetDMA::poll_timestamp)
-"
-)]
+/// The main use is obtaining timestamps for frames using [`EthernetDMA::poll_timestamp`](crate::EthernetDMA::poll_timestamp)
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct PacketId(pub u32);

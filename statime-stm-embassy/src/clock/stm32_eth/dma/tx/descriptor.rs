@@ -4,8 +4,7 @@ use crate::clock::stm32_eth::dma::{
     PacketId,
 };
 
-#[cfg(feature = "ptp")]
-use crate::ptp::Timestamp;
+use crate::clock::stm32_eth::ptp::Timestamp;
 
 /// Owned by DMA engine
 const TXDESC_0_OWN: u32 = 1 << 31;
@@ -98,7 +97,6 @@ impl TxDescriptor {
         }
 
         // "Preceding reads and writes cannot be moved past subsequent writes."
-        #[cfg(feature = "fence")]
         core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
         core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::Release);
 
@@ -128,7 +126,6 @@ impl TxDescriptor {
 
         // Used to flush the store buffer as fast as possible to make the buffer available for the
         // DMA.
-        #[cfg(feature = "fence")]
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
 
@@ -140,7 +137,6 @@ impl TxDescriptor {
         }
     }
 
-    #[cfg(feature = "ptp")]
     fn timestamp(&self) -> Option<Timestamp> {
         let tdes0 = self.desc.read(0);
 
@@ -193,7 +189,6 @@ impl TxRingEntry {
     }
 }
 
-#[cfg(feature = "ptp")]
 impl TxRingEntry {
     pub fn has_packet_id(&self, packet_id: &PacketId) -> bool {
         self.desc().packet_id.as_ref() == Some(packet_id)

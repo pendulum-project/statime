@@ -81,7 +81,6 @@ impl RxDescriptor {
         self.write_buffer2();
 
         // "Preceding reads and writes cannot be moved past subsequent writes."
-        #[cfg(feature = "fence")]
         core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
         core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::Release);
 
@@ -91,7 +90,6 @@ impl RxDescriptor {
 
         // Used to flush the store buffer as fast as possible to make the buffer available for the
         // DMA.
-        #[cfg(feature = "fence")]
         core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
     }
 
@@ -111,13 +109,7 @@ impl RxDescriptor {
 
     /// Get PTP timestamps if available
     pub fn timestamp(&self) -> Option<Timestamp> {
-        #[cfg(not(feature = "stm32f1xx-hal"))]
         let is_valid = { self.desc.read(0) & RXDESC_0_TIMESTAMP_VALID == RXDESC_0_TIMESTAMP_VALID };
-
-        #[cfg(feature = "stm32f1xx-hal")]
-        // There is no "timestamp valid" indicator bit
-        // on STM32F1XX
-        let is_valid = true;
 
         let timestamp = Timestamp::from_descriptor(&self.desc);
 

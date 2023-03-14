@@ -1,12 +1,12 @@
 use super::PacketId;
 use crate::clock::stm32_eth::peripherals::ETHERNET_DMA;
+use core::future::Future;
 
 use super::{PacketIdNotFound, Timestamp};
 
 mod descriptor;
 pub use descriptor::{TxDescriptor, TxRingEntry};
 
-#[cfg(any(feature = "ptp", feature = "async-await"))]
 use core::task::Poll;
 
 /// Errors that can occur during Ethernet TX
@@ -57,7 +57,6 @@ impl<'ring> TxRing<'ring> {
             .write(|w| unsafe { w.stl().bits(ring_ptr as u32) });
 
         // "Preceding reads and writes cannot be moved past subsequent writes."
-        #[cfg(feature = "fence")]
         core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
 
         // We don't need a compiler fence here because all interactions with `Descriptor` are
@@ -134,7 +133,6 @@ impl<'ring> TxRing<'ring> {
     ///
     /// When all data is copied into the TX buffer, use [`TxPacket::send()`]
     /// to transmit it.
-    #[cfg(feature = "async-await")]
     pub async fn prepare_packet<'borrow>(
         &'borrow mut self,
         length: usize,
@@ -143,7 +141,7 @@ impl<'ring> TxRing<'ring> {
         let entry = core::future::poll_fn(|ctx| match self.send_next_impl() {
             Ok(packet) => Poll::Ready(packet),
             Err(_) => {
-                crate::dma::EthernetDMA::tx_waker().register(ctx.waker());
+                crate::clock::stm32_eth::dma::EthernetDMA::tx_waker().register(ctx.waker());
                 Poll::Pending
             }
         })
@@ -165,17 +163,7 @@ impl<'ring> TxRing<'ring> {
     pub(crate) fn demand_poll(&self) {
         // SAFETY: we only perform an atomic write to `dmatpdr`
         let eth_dma = unsafe { &*ETHERNET_DMA::ptr() };
-        eth_dma.dmatpdr.write(|w| {
-            #[cfg(any(feature = "stm32f4xx-hal", feature = "stm32f7xx-hal"))]
-            {
-                w.tpd().poll()
-            }
-            #[cfg(feature = "stm32f1xx-hal")]
-            unsafe {
-                // TODO: There is no nice `poll` method for `stm32f107`?
-                w.tpd().bits(0)
-            }
-        });
+        eth_dma.dmatpdr.write(|w| w.tpd().poll());
     }
 
     /// Is the Tx DMA engine running?
@@ -204,7 +192,6 @@ impl<'ring> TxRing<'ring> {
     }
 }
 
-#[cfg(feature = "ptp")]
 impl TxRing<'_> {
     fn entry_for_id(&self, id: &PacketId) -> Option<usize> {
         self.entries.iter().enumerate().find_map(
@@ -259,7 +246,6 @@ impl TxRing<'_> {
     }
 
     /// Wait until the timestamp for the given ID is available.
-    #[cfg(feature = "async-await")]
     pub async fn timestamp(
         &mut self,
         packet_id: &PacketId,
@@ -267,7 +253,7 @@ impl TxRing<'_> {
         core::future::poll_fn(move |ctx| {
             let res = self.poll_timestamp(packet_id);
             if res.is_pending() {
-                crate::dma::EthernetDMA::tx_waker().register(ctx.waker());
+                crate::clock::stm32_eth::dma::EthernetDMA::tx_waker().register(ctx.waker());
             }
             res
         })

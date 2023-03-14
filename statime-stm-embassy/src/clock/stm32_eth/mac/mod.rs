@@ -1,12 +1,17 @@
 //! Ethernet MAC access and configuration.
 
 use core::ops::{Deref, DerefMut};
-use embassy_stm32::rcc::Clocks;
 
-use crate::clock::stm32_eth::{dma::EthernetDMA, peripherals::ETHERNET_MAC, stm32::ETHERNET_MMC};
+use embassy_stm32::rcc::Clocks;
+use stm32f7::stm32f7x9::ETHERNET_MMC;
+
+pub use miim::*;
+
+use crate::clock::stm32_eth::{dma::EthernetDMA, peripherals::ETHERNET_MAC};
+
+use self::consts::*;
 
 mod miim;
-pub use miim::*;
 
 /// Speeds at which this MAC can be configured
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -34,7 +39,6 @@ mod consts {
     /* For HCLK over 150 MHz */
     pub const ETH_MACMIIAR_CR_HCLK_DIV_102: u8 = 4;
 }
-use self::consts::*;
 
 /// HCLK must be at least 25MHz to use the ethernet peripheral.
 /// This (empty) struct is returned to indicate that it is not set
@@ -89,7 +93,6 @@ impl EthernetMAC {
         // Configuration Register
         eth_mac.maccr.modify(|_, w| {
             // CRC stripping for Type frames. STM32F1xx do not have this bit.
-            #[cfg(any(feature = "stm32f4xx-hal", feature = "stm32f7xx-hal"))]
             let w = w.cstf().set_bit();
 
             // Fast Ethernet speed
@@ -211,7 +214,6 @@ impl EthernetMAC {
         }
     }
 
-    #[cfg(feature = "ptp")]
     pub(crate) fn mask_timestamp_trigger_interrupt() {
         // SAFETY: MACIMR only receives atomic writes.
         let mac = &unsafe { &*ETHERNET_MAC::ptr() };
