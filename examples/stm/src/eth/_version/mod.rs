@@ -1,13 +1,12 @@
 // The v1c ethernet driver was ported to embassy from the awesome stm32-eth project (https://github.com/stm32-rs/stm32-eth).
 
-mod rx_desc;
-mod tx_desc;
 use core::sync::atomic::{fence, Ordering};
 
+use defmt::info;
 use embassy_stm32::{
     eth::{
         CRSPin, MDCPin, MDIOPin, RXD0Pin, RXD1Pin, RefClkPin, StationManagement, TXD0Pin, TXD1Pin,
-        TXEnPin,
+        TXEnPin, PHY,
     },
     gpio::{
         low_level::{AFType, Pin},
@@ -16,7 +15,9 @@ use embassy_stm32::{
     interrupt::InterruptExt,
     into_ref,
     pac::{
-        eth::vals::{Apcs, Cr, Dm, DmaomrSr, Fes, Ftf, Ifg, MbProgress, Mw, Pbl, Rsf, St, Tsf},
+        eth::vals::{
+            Apcs, Cr, Dm, DmaomrSr, Fes, Ftf, Ifg, MbProgress, Mw, Pbl, Rsf, St, Tsf, Tstim,
+        },
         ETH, RCC, SYSCFG,
     },
     rcc::RccPeripheral,
@@ -29,6 +30,9 @@ pub(crate) use self::{
 };
 use super::*;
 
+mod rx_desc;
+mod tx_desc;
+
 pub struct Ethernet<'d, T: Instance, P: PHY> {
     _peri: PeripheralRef<'d, T>,
     pub(crate) tx: TDesRing<'d>,
@@ -39,6 +43,145 @@ pub struct Ethernet<'d, T: Instance, P: PHY> {
     clock_range: Cr,
     phy_addr: u8,
     pub(crate) mac_addr: [u8; 6],
+}
+
+pub struct PTPClock<'d> {
+    pps_pin: PeripheralRef<'d, AnyPin>,
+    base_addend: u32,
+}
+
+impl<'d> PTPClock<'d> {
+    fn new<T: Instance + RccPeripheral>(pps: impl Peripheral<P = impl PPSPin> + 'd) -> Self {
+        let pps = pps.into_ref();
+
+        let hclk = T::frequency();
+        let half_hclk_hz = hclk.0 / 2;
+        // round to nearest
+        let step = ((1_u32 << 31) + half_hclk_hz / 2) / half_hclk_hz;
+        let stepclk = (step as u64) * (hclk.0 as u64);
+        // round to nearest (note, guaranteed to fit in u32 by previous math)
+        let addend = (((1_u64 << 63) + stepclk / 2) / stepclk) as u32;
+
+        debug_assert!(step <= u8::MAX as u32);
+
+        // Enable timestamping hardware
+        unsafe {
+            ETH.ethernet_mac().macimr().modify(|w| {
+                w.set_tstim(Tstim::MASKED);
+            });
+
+            ETH.ethernet_ptp().ptptscr().modify(|w| {
+                w.set_tssarfe(true);
+                w.set_tse(true);
+                w.set_tsfcu(true);
+            });
+        }
+
+        let pps_af = pps.af_num();
+        let mut this = PTPClock {
+            pps_pin: pps.map_into(),
+            base_addend: addend,
+        };
+
+        // Setup clock frequency
+        unsafe {
+            ETH.ethernet_ptp().ptpssir().modify(|w| {
+                w.set_stssi(step as u8);
+            });
+        }
+        this.set_addend(addend);
+
+        // Set initial time
+        this.set_time(0, 0);
+
+        // And enable pps
+        unsafe {
+            this.pps_pin.set_as_af(
+                pps_af,
+                embassy_stm32::gpio::low_level::AFType::OutputPushPull,
+            );
+            this.pps_pin.set_speed(embassy_stm32::gpio::Speed::VeryHigh);
+
+            let ptpppscr = ETH.ethernet_ptp().ptpppscr().ptr() as *mut u32;
+            let val = core::ptr::read_volatile(ptpppscr) & !15;
+            core::ptr::write_volatile(ptpppscr, val);
+        }
+
+        this
+    }
+
+    pub fn set_time(&mut self, secs: u32, subsecs: u32) {
+        debug_assert!(subsecs < (1 << 31));
+
+        unsafe {
+            critical_section::with(|_| {
+                ETH.ethernet_ptp().ptptshur().modify(|w| {
+                    w.set_tsus(secs);
+                });
+                ETH.ethernet_ptp().ptptslur().modify(|w| {
+                    w.set_tsupns(false);
+                    w.set_tsuss(subsecs)
+                });
+
+                while ETH.ethernet_ptp().ptptscr().read().tssti() {}
+                ETH.ethernet_ptp().ptptscr().modify(|w| {
+                    w.set_tssti(true);
+                });
+                while ETH.ethernet_ptp().ptptscr().read().tssti() {}
+            })
+        }
+    }
+
+    pub fn jump_time(&mut self, substract: bool, secs: u32, subsecs: u32) {
+        debug_assert!(subsecs < (1 << 31));
+
+        unsafe {
+            critical_section::with(|_| {
+                ETH.ethernet_ptp().ptptshur().modify(|w| {
+                    w.set_tsus(secs);
+                });
+                ETH.ethernet_ptp().ptptslur().modify(|w| {
+                    w.set_tsupns(substract);
+                    w.set_tsuss(subsecs)
+                });
+
+                let read_status = || {
+                    let scr = ETH.ethernet_ptp().ptptscr().read();
+                    scr.tssti() || scr.tsstu()
+                };
+
+                while read_status() {}
+                ETH.ethernet_ptp().ptptscr().modify(|w| {
+                    w.set_tsstu(true);
+                });
+                while ETH.ethernet_ptp().ptptscr().read().tsstu() {}
+            })
+        }
+    }
+
+    fn set_addend(&mut self, addend: u32) {
+        unsafe {
+            critical_section::with(|_| {
+                ETH.ethernet_ptp().ptptsar().modify(|w| {
+                    w.set_tsa(addend);
+                });
+                while ETH.ethernet_ptp().ptptscr().read().ttsaru() {}
+                ETH.ethernet_ptp().ptptscr().modify(|w| {
+                    w.set_ttsaru(true);
+                });
+                while ETH.ethernet_ptp().ptptscr().read().ttsaru() {}
+            })
+        }
+    }
+
+    pub fn set_freq(&mut self, ppm_offset: f32) {
+        // casting order is on purpose, this makes negative numbers such that adding
+        // with wrapping results in an effective substraction on
+        // self.base_addend later
+        let offset = (ppm_offset * (self.base_addend as f32)) as i32;
+        debug_assert!((offset.abs() as u32) < self.base_addend);
+        self.set_addend(self.base_addend.wrapping_add(offset as u32));
+    }
 }
 
 macro_rules! config_pins {
@@ -55,7 +198,7 @@ macro_rules! config_pins {
 
 impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {
     /// safety: the returned instance is not leak-safe
-    pub fn new<const TX: usize, const RX: usize>(
+    pub fn new_with_ptp<const TX: usize, const RX: usize>(
         queue: &'d mut PacketQueue<TX, RX>,
         peri: impl Peripheral<P = T> + 'd,
         interrupt: impl Peripheral<P = embassy_stm32::interrupt::ETH> + 'd,
@@ -68,10 +211,11 @@ impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {
         tx_d0: impl Peripheral<P = impl TXD0Pin<T>> + 'd,
         tx_d1: impl Peripheral<P = impl TXD1Pin<T>> + 'd,
         tx_en: impl Peripheral<P = impl TXEnPin<T>> + 'd,
+        pps: impl Peripheral<P = impl PPSPin> + 'd,
         phy: P,
         mac_addr: [u8; 6],
         phy_addr: u8,
-    ) -> Self {
+    ) -> (Self, PTPClock<'d>) {
         into_ref!(peri, interrupt, ref_clk, mdio, mdc, crs, rx_d0, rx_d1, tx_d0, tx_d1, tx_en);
 
         unsafe {
@@ -139,6 +283,7 @@ impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {
             // was called
             let hclk = T::frequency();
             let hclk_mhz = hclk.0 / 1_000_000;
+            info!("Hclk: {}", hclk.0);
 
             // Set the MDC clock frequency in the range 1MHz - 2.5MHz
             let clock_range = match hclk_mhz {
@@ -208,7 +353,7 @@ impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {
             interrupt.set_handler(Self::on_interrupt);
             interrupt.enable();
 
-            this
+            (this, PTPClock::new::<T>(pps))
         }
     }
 
@@ -295,5 +440,21 @@ impl<'d, T: Instance, P: PHY> Drop for Ethernet<'d, T, P> {
                 pin.set_as_disconnected();
             }
         })
+    }
+}
+
+pub trait PPSPin: embassy_stm32::gpio::Pin {
+    fn af_num(&self) -> u8;
+}
+
+impl PPSPin for embassy_stm32::peripherals::PB5 {
+    fn af_num(&self) -> u8 {
+        11
+    }
+}
+
+impl PPSPin for embassy_stm32::peripherals::PG8 {
+    fn af_num(&self) -> u8 {
+        11
     }
 }

@@ -5,17 +5,14 @@
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_net::{tcp::TcpSocket, Ipv4Address, Stack, StackResources};
+use embassy_net::{tcp::TcpSocket, Ipv4Address, Ipv4Cidr, Stack, StackResources};
 use embassy_stm32::{
-    eth::{generic_smi::GenericSMI, Ethernet, PacketQueue},
-    interrupt,
-    peripherals::ETH,
-    rng::Rng,
-    time::mhz,
-    Config,
+    eth::generic_smi::GenericSMI, interrupt, peripherals::ETH, rng::Rng, time::mhz, Config,
 };
 use embassy_time::{Duration, Timer};
 use embedded_io::asynch::Write;
+use eth::{Ethernet, PacketQueue};
+use heapless::Vec;
 use panic_probe as _;
 use rand_core::RngCore;
 use static_cell::StaticCell;
@@ -41,7 +38,7 @@ async fn net_task(stack: &'static Stack<Device>) -> ! {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) -> ! {
     let mut config = Config::default();
-    config.rcc.sys_ck = Some(mhz(200));
+    config.rcc.sys_ck = Some(mhz(216));
     let p = embassy_stm32::init(config);
 
     info!("Hello World!");
@@ -55,7 +52,7 @@ async fn main(spawner: Spawner) -> ! {
     let eth_int = interrupt::take!(ETH);
     let mac_addr = [0x00, 0x00, 0xde, 0xad, 0xbe, 0xef];
 
-    let device = Ethernet::new(
+    let (device, mut ptp) = Ethernet::new_with_ptp(
         singleton!(PacketQueue::<16, 16>::new()),
         p.ETH,
         eth_int,
@@ -68,17 +65,18 @@ async fn main(spawner: Spawner) -> ! {
         p.PG13,
         p.PB13,
         p.PG11,
+        p.PB5,
         GenericSMI,
         mac_addr,
         0,
     );
 
-    let config = embassy_net::Config::Dhcp(Default::default());
-    // let config = embassy_net::Config::Static(embassy_net::StaticConfig {
-    //    address: Ipv4Cidr::new(Ipv4Address::new(10, 42, 0, 61), 24),
-    //    dns_servers: Vec::new(),
-    //    gateway: Some(Ipv4Address::new(10, 42, 0, 1)),
-    //});
+    // let config = embassy_net::Config::Dhcp(Default::default());
+    let config = embassy_net::Config::Static(embassy_net::StaticConfig {
+        address: Ipv4Cidr::new(Ipv4Address::new(10, 42, 0, 61), 24),
+        dns_servers: Vec::new(),
+        gateway: Some(Ipv4Address::new(10, 42, 0, 1)),
+    });
 
     // Init network stack
     let stack = &*singleton!(Stack::new(
@@ -90,6 +88,11 @@ async fn main(spawner: Spawner) -> ! {
 
     // Launch network task
     unwrap!(spawner.spawn(net_task(&stack)));
+
+    ptp.set_freq(-12500e-6);
+
+    ptp.jump_time(false, 1, 0);
+    ptp.jump_time(true, 0, 20);
 
     info!("Network task initialized");
 
