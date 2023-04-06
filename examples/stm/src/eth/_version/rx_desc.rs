@@ -45,6 +45,10 @@ pub(crate) struct RDes {
     rdes1: VolatileCell<u32>,
     rdes2: VolatileCell<u32>,
     rdes3: VolatileCell<u32>,
+    rdes4: VolatileCell<u32>,
+    rdes5: VolatileCell<u32>,
+    rdes6: VolatileCell<u32>,
+    rdes7: VolatileCell<u32>,
 }
 
 impl RDes {
@@ -54,6 +58,10 @@ impl RDes {
             rdes1: VolatileCell::new(0),
             rdes2: VolatileCell::new(0),
             rdes3: VolatileCell::new(0),
+            rdes4: VolatileCell::new(0),
+            rdes5: VolatileCell::new(0),
+            rdes6: VolatileCell::new(0),
+            rdes7: VolatileCell::new(0),
         }
     }
 
@@ -108,6 +116,11 @@ impl RDes {
     #[inline(always)]
     fn packet_len(&self) -> usize {
         ((self.rdes0.get() >> RXDESC_0_FL_SHIFT) & RXDESC_0_FL_MASK) as usize
+    }
+
+    #[inline(always)]
+    fn packet_time(&self) -> (u32, u32) {
+        (self.rdes7.get(), self.rdes6.get())
     }
 
     fn setup(&self, next: Option<&Self>, buf: *mut u8) {
@@ -223,6 +236,8 @@ impl<'a> RDesRing<'a> {
         }
 
         let descriptor = &mut self.descriptors[self.index];
+        let (high, low) = descriptor.packet_time();
+        defmt::info!("Received packet at time {} {}", high, low);
         let len = descriptor.packet_len();
         return Some(&mut self.buffers[self.index].0[..len]);
     }

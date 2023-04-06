@@ -16,7 +16,7 @@ use embassy_stm32::{
     into_ref,
     pac::{
         eth::vals::{
-            Apcs, Cr, Dm, DmaomrSr, Fes, Ftf, Ifg, MbProgress, Mw, Pbl, Rsf, St, Tsf, Tstim,
+            Apcs, Cr, Dm, DmaomrSr, Edfe, Fes, Ftf, Ifg, MbProgress, Mw, Pbl, Rsf, St, Tsf, Tstim,
         },
         ETH, RCC, SYSCFG,
     },
@@ -108,6 +108,26 @@ impl<'d> PTPClock<'d> {
         }
 
         this
+    }
+
+    pub fn time(&self) -> (u32, u32) {
+        // We cant do an atomic read of the entire timestamp.
+        // To deal with this, we read the seconds part twice, once
+        // before and once after reading the subseconds.
+        // Then, if subseconds is low, the after is the accurate
+        // value and returned, and if subseconds is high, before
+        // is accurate.
+
+        // Safety: reads are atomic and have no side effects
+        let before = unsafe { ETH.ethernet_ptp().ptptshr().read().sts() };
+        let sub = unsafe { ETH.ethernet_ptp().ptptslr().read().stss() };
+        let after = unsafe { ETH.ethernet_ptp().ptptshr().read().sts() };
+
+        if sub < (1 << 30) {
+            (after, sub)
+        } else {
+            (before, sub)
+        }
     }
 
     pub fn set_time(&mut self, secs: u32, subsecs: u32) {
@@ -274,7 +294,8 @@ impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {
             });
 
             dma.dmabmr().modify(|w| {
-                w.set_pbl(Pbl::PBL32) // programmable burst length - 32 ?
+                w.set_pbl(Pbl::PBL32); // programmable burst length - 32 ?
+                w.set_edfe(Edfe::ENABLED);
             });
 
             // TODO MTU size setting not found for v1 ethernet, check if correct
