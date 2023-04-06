@@ -1352,6 +1352,7 @@ dependencies = [
  "embedded-hal 0.2.7",
  "embedded-io",
  "embedded-storage",
+ "fixed",
  "futures",
  "heapless",
  "nb 1.0.0",

@@ -13,10 +13,12 @@ use embassy_stm32::time::mhz;
 use embassy_stm32::{interrupt, Config};
 use embassy_time::{Duration, Timer};
 use embedded_io::asynch::Write;
-use eth::{Ethernet, PacketQueue};
+use eth::{Ethernet, PacketQueue, PTPClock};
+use fixed::types::{U96F32, I96F32};
 use heapless::Vec;
 use rand_core::RngCore;
 use static_cell::StaticCell;
+use statime::clock::Clock;
 use {defmt_rtt as _, panic_probe as _};
 
 mod eth;
@@ -31,6 +33,54 @@ macro_rules! singleton {
 }
 
 type Device = Ethernet<'static, ETH, GenericSMI>;
+
+struct StmClock<'d> {
+    ptp: PTPClock<'d>,
+    multiplier: f64,
+}
+
+impl<'d> StmClock<'d> {
+    fn new(mut ptp: PTPClock<'d>) -> Self {
+        ptp.set_freq(0.0);
+        StmClock { ptp, multiplier: 1.0 }
+    }
+}
+
+impl<'d> Clock for StmClock<'d> {
+    type Error = core::convert::Infallible;
+
+    fn now(&self) -> statime::time::Instant {
+        let (sec, subsec) = self.ptp.time();
+        let inter = 1_000_000_000_u128 * ((sec as u128) << 32) + (subsec as u128);
+        statime::time::Instant::from_fixed_nanos(U96F32::from_bits(inter))
+    }
+
+    fn quality(&self) -> statime::datastructures::common::ClockQuality {
+        statime::datastructures::common::ClockQuality {
+            clock_class: 248,
+            clock_accuracy: statime::datastructures::common::ClockAccuracy::NS25,
+            offset_scaled_log_variance: 0xFFFF,
+        }
+    }
+
+    fn adjust(
+        &mut self,
+        time_offset: statime::time::Duration,
+        frequency_multiplier: f64,
+        _time_properties_ds: &statime::datastructures::datasets::TimePropertiesDS,
+    ) -> Result<(), Self::Error> {
+        let offset: I96F32 = time_offset.nanos() * I96F32::from_num(1_000_000_000);
+        let is_negative = offset < 0;
+        let offset_abs: I96F32 = offset.abs();
+        let offset_bits = offset_abs.to_bits() as u128;
+        self.ptp.jump_time(is_negative, (offset_bits >> 32) as _, ((offset_bits >> 31) & 0x8FFFFFF) as _);
+
+        self.multiplier *= frequency_multiplier;
+        self.ptp.set_freq((self.multiplier - 1.0) as _);
+
+        Ok(())
+    }
+}
 
 #[embassy_executor::task]
 async fn net_task(stack: &'static Stack<Device>) -> ! {
@@ -91,10 +141,11 @@ async fn main(spawner: Spawner) -> ! {
     // Launch network task
     unwrap!(spawner.spawn(net_task(&stack)));
 
-    ptp.set_freq(-12500e-6);
+    let mut clock = StmClock::new(ptp);
 
-    ptp.jump_time(false, 1, 0);
-    ptp.jump_time(true, 0, 20);
+    clock.adjust(statime::time::Duration::ZERO, 0.9872, &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(false, false, statime::datastructures::common::TimeSource::Other));
+    clock.adjust(statime::time::Duration::ZERO, 1.0004, &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(false, false, statime::datastructures::common::TimeSource::Other));
+
 
     info!("Network task initialized");
 

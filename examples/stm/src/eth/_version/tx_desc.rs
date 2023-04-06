@@ -14,6 +14,7 @@ mod tx_consts {
     pub const TXDESC_0_FS: u32 = 1 << 28;
     // Last segment of frame
     pub const TXDESC_0_LS: u32 = 1 << 29;
+    pub const TXDESC_0_TTSE: u32 = 1 << 25;
     // Transmit end of ring
     pub const TXDESC_0_TER: u32 = 1 << 21;
     // Second address chained
@@ -41,6 +42,10 @@ pub(crate) struct TDes {
     tdes1: VolatileCell<u32>,
     tdes2: VolatileCell<u32>,
     tdes3: VolatileCell<u32>,
+    tdes4: VolatileCell<u32>,
+    tdes5: VolatileCell<u32>,
+    tdes6: VolatileCell<u32>,
+    tdes7: VolatileCell<u32>,
 }
 
 impl TDes {
@@ -50,6 +55,10 @@ impl TDes {
             tdes1: VolatileCell::new(0),
             tdes2: VolatileCell::new(0),
             tdes3: VolatileCell::new(0),
+            tdes4: VolatileCell::new(0),
+            tdes5: VolatileCell::new(0),
+            tdes6: VolatileCell::new(0),
+            tdes7: VolatileCell::new(0),
         }
     }
 
@@ -89,11 +98,15 @@ impl TDes {
         self.tdes0.set(self.tdes0.get() | TXDESC_0_TER);
     }
 
+    fn timestamp(&self) -> (u32, u32) {
+        (self.tdes7.get(), self.tdes6.get())
+    }
+
     // set up as a part fo the ring buffer - configures the tdes
     fn setup(&self, next: Option<&Self>) {
         // Defer this initialization to this function, so we can have `RingEntry` on bss.
         self.tdes0
-            .set(TXDESC_0_TCH | TXDESC_0_IOC | TXDESC_0_FS | TXDESC_0_LS);
+            .set(TXDESC_0_TCH | TXDESC_0_IOC | TXDESC_0_FS | TXDESC_0_LS | TXDESC_0_TTSE);
         match next {
             Some(next) => self.set_buffer2(next as *const TDes as *const u8),
             None => {
@@ -156,6 +169,9 @@ impl<'a> TDesRing<'a> {
     pub(crate) fn transmit(&mut self, len: usize) {
         let descriptor = &mut self.descriptors[self.index];
         assert!(descriptor.available());
+
+        let (high, low) = descriptor.timestamp();
+        defmt::info!("Previous send ts {} {}", high, low);
 
         descriptor.set_buffer1(self.buffers[self.index].0.as_ptr());
         descriptor.set_buffer1_len(len);
