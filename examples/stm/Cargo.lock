@@ -1281,6 +1281,8 @@ dependencies = [
  "cfg-if",
  "defmt",
  "heapless",
+ "libc",
+ "log",
  "managed",
 ]
 
@@ -1358,6 +1360,7 @@ dependencies = [
  "nb 1.0.0",
  "panic-probe",
  "rand_core",
+ "smoltcp",
  "static_cell",
  "statime",
  "vcell",

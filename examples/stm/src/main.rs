@@ -13,8 +13,8 @@ use embassy_stm32::time::mhz;
 use embassy_stm32::{interrupt, Config};
 use embassy_time::{Duration, Timer};
 use embedded_io::asynch::Write;
-use eth::{Ethernet, PacketQueue, PTPClock};
-use fixed::types::{U96F32, I96F32};
+use eth::{Ethernet, PTPClock, PacketQueue};
+use fixed::types::{I96F32, U96F32};
 use heapless::Vec;
 use rand_core::RngCore;
 use static_cell::StaticCell;
@@ -22,6 +22,7 @@ use statime::clock::Clock;
 use {defmt_rtt as _, panic_probe as _};
 
 mod eth;
+mod runtime;
 
 macro_rules! singleton {
     ($val:expr) => {{
@@ -42,7 +43,10 @@ struct StmClock<'d> {
 impl<'d> StmClock<'d> {
     fn new(mut ptp: PTPClock<'d>) -> Self {
         ptp.set_freq(0.0);
-        StmClock { ptp, multiplier: 1.0 }
+        StmClock {
+            ptp,
+            multiplier: 1.0,
+        }
     }
 }
 
@@ -73,7 +77,11 @@ impl<'d> Clock for StmClock<'d> {
         let is_negative = offset < 0;
         let offset_abs: I96F32 = offset.abs();
         let offset_bits = offset_abs.to_bits() as u128;
-        self.ptp.jump_time(is_negative, (offset_bits >> 32) as _, ((offset_bits >> 31) & 0x8FFFFFF) as _);
+        self.ptp.jump_time(
+            is_negative,
+            (offset_bits >> 32) as _,
+            ((offset_bits >> 31) & 0x8FFFFFF) as _,
+        );
 
         self.multiplier *= frequency_multiplier;
         self.ptp.set_freq((self.multiplier - 1.0) as _);
@@ -143,9 +151,24 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut clock = StmClock::new(ptp);
 
-    clock.adjust(statime::time::Duration::ZERO, 0.9872, &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(false, false, statime::datastructures::common::TimeSource::Other));
-    clock.adjust(statime::time::Duration::ZERO, 1.0004, &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(false, false, statime::datastructures::common::TimeSource::Other));
-
+    clock.adjust(
+        statime::time::Duration::ZERO,
+        0.9872,
+        &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(
+            false,
+            false,
+            statime::datastructures::common::TimeSource::Other,
+        ),
+    );
+    clock.adjust(
+        statime::time::Duration::ZERO,
+        1.0004,
+        &statime::datastructures::datasets::TimePropertiesDS::new_arbitrary_time(
+            false,
+            false,
+            statime::datastructures::common::TimeSource::Other,
+        ),
+    );
 
     info!("Network task initialized");
 
