@@ -1,25 +1,25 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+#![allow(incomplete_features)]
+#![feature(async_fn_in_trait)]
 
 use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
-use embassy_net::tcp::TcpSocket;
-use embassy_net::{Ipv4Address, Ipv4Cidr, Stack, StackResources};
-use embassy_stm32::eth::generic_smi::GenericSMI;
-use embassy_stm32::peripherals::ETH;
-use embassy_stm32::rng::Rng;
-use embassy_stm32::time::mhz;
-use embassy_stm32::{interrupt, Config};
+use embassy_net::{tcp::TcpSocket, Ipv4Address, Ipv4Cidr, Stack, StackResources};
+use embassy_stm32::{
+    eth::generic_smi::GenericSMI, interrupt, peripherals::ETH, rng::Rng, time::mhz, Config,
+};
 use embassy_time::{Duration, Timer};
 use embedded_io::asynch::Write;
 use eth::{Ethernet, PTPClock, PacketQueue};
 use fixed::types::{I96F32, U96F32};
 use heapless::Vec;
+use panic_probe as _;
 use rand_core::RngCore;
 use static_cell::StaticCell;
 use statime::clock::Clock;
-use {defmt_rtt as _, panic_probe as _};
 
 mod eth;
 mod phy;
@@ -64,7 +64,7 @@ impl<'d> Clock for StmClock<'d> {
         statime::datastructures::common::ClockQuality {
             clock_class: 248,
             clock_accuracy: statime::datastructures::common::ClockAccuracy::NS25,
-            offset_scaled_log_variance: 0xFFFF,
+            offset_scaled_log_variance: 0xffff,
         }
     }
 
@@ -81,7 +81,7 @@ impl<'d> Clock for StmClock<'d> {
         self.ptp.jump_time(
             is_negative,
             (offset_bits >> 32) as _,
-            ((offset_bits >> 31) & 0x8FFFFFF) as _,
+            ((offset_bits >> 31) & 0x8ffffff) as _,
         );
 
         self.multiplier *= frequency_multiplier;
@@ -111,7 +111,7 @@ async fn main(spawner: Spawner) -> ! {
     let seed = u64::from_le_bytes(seed);
 
     let eth_int = interrupt::take!(ETH);
-    let mac_addr = [0x00, 0x00, 0xDE, 0xAD, 0xBE, 0xEF];
+    let mac_addr = [0x00, 0x00, 0xde, 0xad, 0xbe, 0xef];
 
     let (device, mut ptp) = Ethernet::new_with_ptp(
         singleton!(PacketQueue::<16, 16>::new()),
@@ -132,7 +132,7 @@ async fn main(spawner: Spawner) -> ! {
         0,
     );
 
-    //let config = embassy_net::Config::Dhcp(Default::default());
+    // let config = embassy_net::Config::Dhcp(Default::default());
     let config = embassy_net::Config::Static(embassy_net::StaticConfig {
         address: Ipv4Cidr::new(Ipv4Address::new(10, 42, 0, 61), 24),
         dns_servers: Vec::new(),

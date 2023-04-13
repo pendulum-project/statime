@@ -45,7 +45,6 @@ impl<'a, 'd> NetworkRuntime for StmRuntime<'a, 'd> {
         let tx_buffer = PacketBuffer::new((), &mut self.tx_buffer);
         let mut ntc_socket = udp::Socket::new(rx_buffer, tx_buffer);
         let ntc_remote_endpoint = interface.remote_endpoint();
-
         ntc_socket.bind(ntc_remote_endpoint)?;
 
         Ok(StmPort {
@@ -58,7 +57,7 @@ impl<'a, 'd> NetworkRuntime for StmRuntime<'a, 'd> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StmInterfaceDescriptor {}
 
 impl StmInterfaceDescriptor {
@@ -76,7 +75,7 @@ pub struct StmPort<'a, 'd> {
     clock: StmClock<'d>,
 }
 
-impl NetworkPort for StmPort {
+impl<'a, 'd> NetworkPort for StmPort<'a, 'd> {
     type Error = StmError;
 
     async fn send(&mut self, data: &[u8]) -> Result<(), Self::Error> {
