@@ -1,4 +1,4 @@
-use embassy_stm32::{adc::Instance, eth::PHY};
+use embassy_stm32::eth::{Instance, PHY};
 use smoltcp::{
     phy,
     phy::{Device, DeviceCapabilities},
@@ -22,14 +22,12 @@ impl<'d, T: Instance, P: PHY> Device for eth::Ethernet<'d, T, P> {
     }
 
     fn capabilities(&self) -> DeviceCapabilities {
-        let capabilities = <Self as embassy_net_driver::Driver>::capabilities(self);
-
+        let embassy_caps = <Self as embassy_net_driver::Driver>::capabilities(self);
+        let mut caps = DeviceCapabilities::default();
+        caps.max_transmission_unit = embassy_caps.max_transmission_unit;
+        caps.max_burst_size = embassy_caps.max_burst_size;
         // TODO: Complete translation
-        DeviceCapabilities {
-            max_transmission_unit: capabilities.max_transmission_unit,
-            max_burst_size: capabilities.max_burst_size,
-            ..Default::default()
-        }
+        caps
     }
 }
 
