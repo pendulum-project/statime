@@ -22,6 +22,7 @@ use statime::clock::Clock;
 use {defmt_rtt as _, panic_probe as _};
 
 mod eth;
+mod phy;
 mod runtime;
 
 macro_rules! singleton {
