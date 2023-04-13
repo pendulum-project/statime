@@ -1,51 +1,63 @@
+use embassy_stm32::eth::{Instance, PHY};
 use smoltcp::{
+    iface::{Config, Interface},
     socket::{udp, udp::PacketBuffer},
-    wire::IpEndpoint,
+    wire::{EthernetAddress, IpEndpoint},
 };
+use smoltcp::iface::{SocketSet, SocketStorage};
+use smoltcp::wire::IpCidr;
 use statime::{
     network::{NetworkPacket, NetworkPort, NetworkRuntime},
     time::Instant,
 };
 
-use crate::StmClock;
+use crate::{eth::Ethernet, StmClock};
 
-#[derive(Debug)]
-pub struct StmRuntime<'a, 'd> {
-    rx_buffer: &'a mut [u8],
-    tx_buffer: &'a mut [u8],
-    clock: StmClock<'d>,
+pub struct StmRuntime<'dc, 'dd, T: Instance, P: PHY> {
+    clock: StmClock<'dc>,
+    device: Ethernet<'dd, T, P>,
 }
 
-impl<'a, 'd> StmRuntime<'a, 'd> {
-    pub fn new(rx_buffer: &'a mut [u8], tx_buffer: &'a mut [u8], clock: StmClock<'d>) -> Self {
-        StmRuntime {
-            rx_buffer,
-            tx_buffer,
-            clock,
-        }
+impl<'dc, 'dd, T: Instance, P: PHY> StmRuntime<'dc, 'dd, T, P> {
+    pub fn new(clock: StmClock<'dc>, device: Ethernet<'dd, T, P>) -> Self {
+        StmRuntime { clock, device }
     }
 }
 
-impl<'a, 'd> NetworkRuntime for StmRuntime<'a, 'd> {
+impl<'dc, 'dd, T: Instance, P: PHY> NetworkRuntime for StmRuntime<'dc, 'dd, T, P> {
     type InterfaceDescriptor = StmInterfaceDescriptor;
-    type NetworkPort = StmPort<'a, 'd>;
+    type NetworkPort = StmPort<'dc, 'dd>;
     type Error = StmError;
 
     async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
     ) -> Result<Self::NetworkPort, Self::Error> {
-        let rx_buffer = PacketBuffer::new((), &mut self.rx_buffer);
-        let tx_buffer = PacketBuffer::new((), &mut self.tx_buffer);
+        let mut config = Config::new();
+        config.hardware_addr = Some(EthernetAddress(self.device.mac_addr).into());
+
+        let mut iface = Interface::new(config, &mut self.device);
+        iface.update_ip_addrs(|ip_addrs| {
+            ip_addrs.push(IpCidr::new())
+        })
+
+        let rx_buffer = PacketBuffer::new(&mut self.device.rx, &mut self.device.rx);
+        let tx_buffer = PacketBuffer::new(&mut self.device.tx, &mut self.device.tx);
         let mut tc_socket = udp::Socket::new(rx_buffer, tx_buffer);
         let tc_remote_endpoint = interface.remote_endpoint();
         tc_socket.bind(tc_remote_endpoint)?;
 
-        let rx_buffer = PacketBuffer::new((), &mut self.rx_buffer);
-        let tx_buffer = PacketBuffer::new((), &mut self.tx_buffer);
+        let rx_buffer = PacketBuffer::new(&mut self.device.rx, &mut self.device.rx);
+        let tx_buffer = PacketBuffer::new(&mut self.device.tx, &mut self.device.tx);
         let mut ntc_socket = udp::Socket::new(rx_buffer, tx_buffer);
         let ntc_remote_endpoint = interface.remote_endpoint();
         ntc_socket.bind(ntc_remote_endpoint)?;
+
+        // let mut sockets = SocketSet::new(&mut [SocketStorage::EMPTY; 2]);
+        // let tc_handle = sockets.add(tc_socket);
+        // let ntc_handle = sockets.add(ntc_socket);
+        // let tc_socket = sockets.get_mut::<udp::Socket>(tc_handle);
+        // let ntc_socket = sockets.get_mut::<udp::Socket>(ntc_handle);
 
         Ok(StmPort {
             tc_socket,
