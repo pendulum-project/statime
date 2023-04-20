@@ -436,19 +436,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "linux"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "fern",
- "log",
- "statime",
- "statime-linux",
- "tokio",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -735,6 +722,9 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.2.0",
+ "chrono",
+ "clap",
+ "fern",
  "fixed",
  "libc",
  "log",
