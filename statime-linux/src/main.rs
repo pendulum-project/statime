@@ -1,4 +1,4 @@
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use fern::colors::Color;
 use statime::datastructures::common::{PortIdentity, TimeSource};
 use statime::datastructures::datasets::{DefaultDS, DelayMechanism, PortDS, TimePropertiesDS};
@@ -12,7 +12,7 @@ use statime_linux::{
 };
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, setting = AppSettings::DeriveDisplayOrder)]
+#[clap(author, version, about, long_about = None, disable_help_flag=true)]
 struct Args {
     /// Set desired logging level
     #[clap(short, long, default_value_t = log::LevelFilter::Info)]
@@ -57,6 +57,10 @@ struct Args {
     /// Use hardware clock
     #[clap(long, short)]
     hardware_clock: Option<String>,
+
+    /// Print help
+    #[arg(long, action = clap::ArgAction::Help)]
+    help: bool,
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
