@@ -36,10 +36,10 @@ embassy-usb = { version = "0.1.0", features = ["defmt"] }
 statime = { path = "../../statime", default-features = false }
 
 [patch.crates-io]
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-net-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
-embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "78d733f" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-net-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "fb27594" }
