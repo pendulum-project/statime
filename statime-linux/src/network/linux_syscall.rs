@@ -8,7 +8,7 @@ pub fn driver_enable_hardware_timestamping(socket: i32, interface: &str) {
     let mut tstamp_config = libc::hwtstamp_config {
         flags: 0,
         tx_type: libc::HWTSTAMP_TX_ON as _,
-        rx_filter: libc::HWTSTAMP_FILTER_ALL as _,
+        rx_filter: libc::HWTSTAMP_FILTER_PTP_V2_EVENT as _,
     };
 
     let ifname = CString::new(interface).expect("Cannot convert interface name to C string");
