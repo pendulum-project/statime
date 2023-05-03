@@ -31,8 +31,8 @@ impl TimestampedUdpSocket {
         })
     }
 
-    pub async fn recv(&self, clock: &LinuxClock) -> std::io::Result<NetworkPacket> {
-        let receiver = |inner: &std::net::UdpSocket| recv_with_timestamp(inner, clock);
+    pub async fn recv(&self, clock: &LinuxClock, buf: &mut [u8]) -> std::io::Result<RecvResult> {
+        let receiver = |inner: &std::net::UdpSocket| recv_with_timestamp(inner, clock, buf);
         self.io.async_io(Interest::READABLE, receiver).await
     }
 
@@ -67,6 +67,7 @@ impl TimestampedUdpSocket {
             Ok(Some(send_timestamp?))
         } else {
             log::warn!("Packet without timestamp (waiting for timestamp timed out)");
+            eprintln!("Packet without timestamp (waiting for timestamp timed out)");
             Ok(None)
         }
     }
@@ -106,20 +107,22 @@ impl TimestampedUdpSocket {
     }
 }
 
+pub struct RecvResult {
+    pub bytes_read: usize,
+    pub peer_address: SocketAddr,
+    pub timestamp: Instant,
+}
+
 fn recv_with_timestamp(
     tc_socket: &std::net::UdpSocket,
     clock: &LinuxClock,
-) -> std::io::Result<NetworkPacket> {
-    let mut read_buf = [0u8; 2048];
+    read_buf: &mut [u8],
+) -> std::io::Result<RecvResult> {
     let mut control_buf = [0; control_message_space::<[libc::timespec; 3]>()];
 
     // loops for when we receive an interrupt during the recv
-    let (bytes_read, control_messages, _) = receive_message(
-        tc_socket,
-        &mut read_buf,
-        &mut control_buf,
-        MessageQueue::Normal,
-    )?;
+    let (bytes_read, control_messages, peer_address) =
+        receive_message(tc_socket, read_buf, &mut control_buf, MessageQueue::Normal)?;
 
     let mut timestamp = clock.now();
 
@@ -144,11 +147,16 @@ fn recv_with_timestamp(
         }
     }
 
-    let data = read_buf[..bytes_read as usize]
-        .try_into()
-        .map_err(|_| io::Error::new(ErrorKind::InvalidData, "too long"))?;
+    let msg = "We never constructed a non-ip socket";
+    let peer_address = peer_address.unwrap_or_else(|| unreachable!("{}", msg));
 
-    Ok(NetworkPacket { data, timestamp })
+    let result = RecvResult {
+        bytes_read,
+        peer_address,
+        timestamp,
+    };
+
+    Ok(result)
 }
 
 fn fetch_send_timestamp_help(
@@ -212,4 +220,80 @@ fn fetch_send_timestamp_help(
     }
 
     Ok(send_ts.map(|ts| libc_timespec_into_instant(ts)))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, UdpSocket};
+
+    use statime::time::Duration;
+
+    use crate::clock::RawLinuxClock;
+
+    use super::*;
+
+    fn new_timestamped(p1: u16, p2: u16) -> TimestampedUdpSocket {
+        let mode = TimestampingMode::Software;
+
+        let socket = UdpSocket::bind((Ipv4Addr::LOCALHOST, p1)).unwrap();
+        socket.connect((Ipv4Addr::LOCALHOST, p2)).unwrap();
+        socket.set_nonblocking(true).unwrap();
+
+        TimestampedUdpSocket::from_udp_socket(socket, mode).unwrap()
+    }
+
+    async fn timestamping_reasonable(p1: u16, p2: u16) {
+        let (mut a, b) = (new_timestamped(p1, p2), new_timestamped(p2, p1));
+        let target = b.io.get_ref().local_addr().unwrap();
+
+        tokio::spawn(async move {
+            a.send(&[1; 48], target).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            a.send(&[2; 48], target).await.unwrap();
+        });
+
+        let clock = LinuxClock::new(RawLinuxClock::get_realtime_clock());
+
+        let mut buf = [0; 48];
+        let r1 = b.recv(&clock, &mut buf).await.unwrap();
+        let r2 = b.recv(&clock, &mut buf).await.unwrap();
+
+        assert_eq!(r1.bytes_read, 48);
+        assert_eq!(r1.bytes_read, 48);
+
+        let t1 = r1.timestamp;
+        let t2 = r2.timestamp;
+        let delta = t2 - t1;
+
+        let lower = Duration::from_millis(150); // 0.15s
+        let upper = Duration::from_millis(250); // 0.25s
+
+        assert!(delta > lower && delta < upper);
+    }
+
+    #[tokio::test]
+    async fn timestamping_reasonable_so_timestamping() {
+        timestamping_reasonable(8000, 8001).await
+    }
+
+    #[tokio::test]
+    async fn test_software_send_timestamp() {
+        let (p1, p2) = (8002, 8003);
+
+        let (mut a, b) = (new_timestamped(p1, p2), new_timestamped(p2, p1));
+        let target = b.io.get_ref().local_addr().unwrap();
+
+        let clock = LinuxClock::new(RawLinuxClock::get_realtime_clock());
+
+        let tsend = a.send(&[1; 48], target).await.unwrap();
+        let mut buf = [0; 48];
+        let trecv = b.recv(&clock, &mut buf).await.unwrap();
+
+        let tsend = tsend.unwrap();
+        let trecv = trecv.timestamp;
+        let delta = trecv - tsend;
+
+        let tolerance = Duration::from_millis(200); // 0.20s
+        assert!(delta.abs() < tolerance);
+    }
 }
