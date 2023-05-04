@@ -120,7 +120,7 @@ impl TDes {
 
 pub(crate) struct TDesRing<'a> {
     descriptors: &'a mut [TDes],
-    buffers: &'a mut [Packet<TX_BUFFER_SIZE>],
+    pub(crate) buffers: &'a mut [Packet<TX_BUFFER_SIZE>],
     index: usize,
 }
 

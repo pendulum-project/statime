@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 #![feature(type_alias_impl_trait)]
+#![feature(async_fn_in_trait)]
+#![allow(incomplete_features)]
 
 use defmt::*;
 use defmt_rtt as _;
@@ -19,7 +21,9 @@ use rand_core::RngCore;
 use static_cell::StaticCell;
 use statime::clock::Clock;
 
+mod device;
 mod eth;
+mod runtime;
 
 macro_rules! singleton {
     ($val:expr) => {{
@@ -109,7 +113,7 @@ async fn main(spawner: Spawner) -> ! {
     let eth_int = interrupt::take!(ETH);
     let mac_addr = [0x00, 0x00, 0xde, 0xad, 0xbe, 0xef];
 
-    let (device, mut ptp) = Ethernet::new_with_ptp(
+    let (device, ptp) = Ethernet::new_with_ptp(
         singleton!(PacketQueue::<16, 16>::new()),
         p.ETH,
         eth_int,

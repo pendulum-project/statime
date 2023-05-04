@@ -151,7 +151,7 @@ pub enum RunningState {
 /// Rx ring of descriptors and packets
 pub(crate) struct RDesRing<'a> {
     descriptors: &'a mut [RDes],
-    buffers: &'a mut [Packet<RX_BUFFER_SIZE>],
+    pub(crate) buffers: &'a mut [Packet<RX_BUFFER_SIZE>],
     index: usize,
 }
 
