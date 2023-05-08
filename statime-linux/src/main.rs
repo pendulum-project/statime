@@ -7,7 +7,7 @@ use statime::port::Port;
 use statime::{
     datastructures::common::ClockIdentity, filters::basic::BasicFilter, ptp_instance::PtpInstance,
 };
-use statime_linux::network::linux::TimestampingMode;
+use statime_linux::network::linux::{LinuxNetworkPort, Ports, TimestampingMode};
 use statime_linux::{
     clock::{LinuxClock, LinuxTimer, RawLinuxClock},
     network::linux::{get_clock_id, InterfaceDescriptor, LinuxRuntime},
@@ -50,35 +50,8 @@ impl clap::builder::TypedValueParser for SdoIdParser {
     }
 }
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    /// Set desired logging level
-    #[clap(short, long, default_value_t = log::LevelFilter::Info)]
-    loglevel: log::LevelFilter,
-
-    /// Set interface on which to listen to PTP messages
-    #[clap(short, long)]
-    interface: InterfaceDescriptor,
-
-    /// The SDO id of the desired ptp domain
-    #[clap(long, default_value_t = SdoId::default(), value_parser = SdoIdParser)]
-    sdo: SdoId,
-
-    /// The domain number of the desired ptp domain
-    #[clap(long, default_value_t = 0)]
-    domain: u8,
-
-    /// Local clock priority (part 1) used in master clock selection
-    /// Default init value is 128, see: A.9.4.2
-    #[clap(long, default_value_t = 255)]
-    priority_1: u8,
-
-    /// Local clock priority (part 2) used in master clock selection
-    /// Default init value is 128, see: A.9.4.2
-    #[clap(long, default_value_t = 255)]
-    priority_2: u8,
-
+#[derive(clap::Args, Debug, Clone, Copy)]
+struct PortDSConfig {
     /// Log value of interval expected between announce messages, see: 7.7.2.2
     /// Default init value is 1, see: A.9.4.2
     #[clap(long, default_value_t = 1)]
@@ -92,6 +65,48 @@ struct Args {
     /// Default init value is 3, see: A.9.4.2
     #[clap(long, default_value_t = 3)]
     announce_receipt_timeout: u8,
+}
+
+#[derive(clap::Args, Debug, Clone, Copy)]
+struct DefaultDSConfig {
+    /// Local clock priority (part 1) used in master clock selection
+    /// Default init value is 128, see: A.9.4.2
+    #[clap(long, default_value_t = 255)]
+    priority_1: u8,
+
+    /// Local clock priority (part 2) used in master clock selection
+    /// Default init value is 128, see: A.9.4.2
+    #[clap(long, default_value_t = 255)]
+    priority_2: u8,
+
+    /// The SDO id of the desired ptp domain
+    #[clap(long, default_value_t = SdoId::default(), value_parser = SdoIdParser)]
+    sdo: SdoId,
+
+    /// The domain number of the desired ptp domain
+    #[clap(long, default_value_t = 0)]
+    domain: u8,
+
+    #[clap(default_value_t = false)]
+    slave_only: bool,
+}
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Set desired logging level
+    #[clap(short, long, default_value_t = log::LevelFilter::Info)]
+    loglevel: log::LevelFilter,
+
+    /// Set interface on which to listen to PTP messages
+    #[clap(short, long)]
+    interface: InterfaceDescriptor,
+
+    #[command(flatten)]
+    default_ds_config: DefaultDSConfig,
+
+    #[command(flatten)]
+    port_ds_config: PortDSConfig,
 
     /// Use hardware clock
     #[clap(long, short = 'c')]
@@ -130,12 +145,12 @@ async fn main() {
 
     println!("Starting PTP");
 
-    let local_clock = if let Some(hardware_clock) = &args.hardware_clock {
-        let clock =
-            RawLinuxClock::get_from_file(hardware_clock).expect("Could not open hardware clock");
-        LinuxClock::new(clock)
-    } else {
-        LinuxClock::new(RawLinuxClock::get_realtime_clock())
+    let raw_clock = match &args.hardware_clock {
+        Some(hardware_clock) => match RawLinuxClock::get_from_file(hardware_clock) {
+            Ok(clock) => clock,
+            Err(_) => panic!("Could not open hardware clock {hardware_clock}"),
+        },
+        None => RawLinuxClock::get_realtime_clock(),
     };
 
     let timestamping_mode = if args.hardware_clock.is_some() {
@@ -147,39 +162,64 @@ async fn main() {
         TimestampingMode::Software
     };
 
-    let mut network_runtime = LinuxRuntime::new(timestamping_mode, local_clock.clone());
     let clock_identity = ClockIdentity(get_clock_id().expect("Could not get clock identity"));
 
+    let mut instance = build_instance(
+        args.interface,
+        timestamping_mode,
+        LinuxClock::new(raw_clock),
+        clock_identity,
+        args.default_ds_config,
+        args.port_ds_config,
+        Ports::default(),
+    );
+
+    instance.run(&LinuxTimer).await;
+}
+
+fn build_instance(
+    interface: InterfaceDescriptor,
+    timestamping_mode: TimestampingMode,
+    local_clock: LinuxClock,
+    clock_identity: ClockIdentity,
+    default_ds_config: DefaultDSConfig,
+    port_ds_config: PortDSConfig,
+    ports: Ports,
+) -> PtpInstance<LinuxNetworkPort, LinuxClock, BasicFilter, 1> {
     let default_ds = DefaultDS::new_ordinary_clock(
         clock_identity,
-        args.priority_1,
-        args.priority_2,
-        args.domain,
-        false,
-        args.sdo,
+        default_ds_config.priority_1,
+        default_ds_config.priority_2,
+        default_ds_config.domain,
+        default_ds_config.slave_only,
+        default_ds_config.sdo,
     );
+
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
+
     let port_ds = PortDS::new(
         PortIdentity {
             clock_identity,
             port_number: 1,
         },
         1,
-        args.log_announce_interval,
-        args.announce_receipt_timeout,
-        args.log_sync_interval,
+        port_ds_config.log_announce_interval,
+        port_ds_config.announce_receipt_timeout,
+        port_ds_config.log_sync_interval,
         DelayMechanism::E2E,
         1,
     );
-    let port = Port::new(port_ds, &mut network_runtime, args.interface).await;
-    let mut instance = PtpInstance::new_ordinary_clock(
+
+    let mut network_runtime = LinuxRuntime::new(timestamping_mode, local_clock.clone());
+    let network_port = network_runtime.open_with_options(interface, ports).unwrap();
+    let port = Port::new(port_ds, network_port);
+
+    PtpInstance::new_ordinary_clock(
         default_ds,
         time_properties_ds,
         port,
         local_clock,
         BasicFilter::new(0.25),
-    );
-
-    instance.run(&LinuxTimer).await;
+    )
 }

@@ -31,6 +31,21 @@ const TC_PORT: u16 = 319;
 const NTC_PORT: u16 = 320;
 
 #[derive(Debug, Clone, Copy)]
+pub struct Ports {
+    pub tc_port: u16,
+    pub ntc_port: u16,
+}
+
+impl Default for Ports {
+    fn default() -> Self {
+        Self {
+            tc_port: TC_PORT,
+            ntc_port: NTC_PORT,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum TimestampingMode {
     Hardware(InterfaceName),
     Software,
@@ -84,6 +99,45 @@ impl LinuxRuntime {
             }
         }
     }
+
+    pub fn open_with_options(
+        &mut self,
+        interface: InterfaceDescriptor,
+        ports: Ports,
+    ) -> Result<LinuxNetworkPort, NetworkError> {
+        log::info!(
+            "Opening network port on '{}'",
+            interface
+                .interface_name
+                .as_ref()
+                .map(|if_name| if_name.as_str())
+                .unwrap_or("Unknown")
+        );
+
+        let bind_ip = interface.mode.unspecified_ip_addr();
+        let tc_addr = SocketAddr::new(bind_ip, ports.tc_port);
+        let ntc_addr = SocketAddr::new(bind_ip, ports.ntc_port);
+
+        log::info!("Binding time critical socket on {tc_addr}");
+        log::info!("Binding non time critical socket on {ntc_addr}");
+
+        let tc_socket = RawUdpSocket::new_into_std(tc_addr, interface.interface_name)?;
+        let ntc_socket = RawUdpSocket::new_into_std(ntc_addr, interface.interface_name)?;
+
+        let tc_address = Self::join_multicast(&interface, &tc_socket)?;
+        let ntc_address = Self::join_multicast(&interface, &ntc_socket)?;
+
+        let tc_socket = TimestampedUdpSocket::from_udp_socket(tc_socket, self.timestamping_mode)?;
+        let ntc_socket = AsyncFd::new(ntc_socket)?;
+
+        Ok(LinuxNetworkPort {
+            tc_socket,
+            ntc_socket,
+            tc_address,
+            ntc_address,
+            clock: self.clock.clone(),
+        })
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -115,38 +169,7 @@ impl NetworkRuntime for LinuxRuntime {
         &mut self,
         interface: Self::InterfaceDescriptor,
     ) -> Result<<LinuxRuntime as NetworkRuntime>::NetworkPort, NetworkError> {
-        log::info!(
-            "Opening network port on '{}'",
-            interface
-                .interface_name
-                .as_ref()
-                .map(|if_name| if_name.as_str())
-                .unwrap_or("Unknown")
-        );
-
-        let bind_ip = interface.mode.unspecified_ip_addr();
-        let tc_addr = SocketAddr::new(bind_ip, TC_PORT);
-        let ntc_addr = SocketAddr::new(bind_ip, NTC_PORT);
-
-        log::info!("Binding time critical socket on {tc_addr}");
-        log::info!("Binding non time critical socket on {ntc_addr}");
-
-        let tc_socket = RawUdpSocket::new_into_std(tc_addr, interface.interface_name)?;
-        let ntc_socket = RawUdpSocket::new_into_std(ntc_addr, interface.interface_name)?;
-
-        let tc_address = Self::join_multicast(&interface, &tc_socket)?;
-        let ntc_address = Self::join_multicast(&interface, &ntc_socket)?;
-
-        let tc_socket = TimestampedUdpSocket::from_udp_socket(tc_socket, self.timestamping_mode)?;
-        let ntc_socket = AsyncFd::new(ntc_socket)?;
-
-        Ok(LinuxNetworkPort {
-            tc_socket,
-            ntc_socket,
-            tc_address,
-            ntc_address,
-            clock: self.clock.clone(),
-        })
+        self.open_with_options(interface, Ports::default())
     }
 }
 

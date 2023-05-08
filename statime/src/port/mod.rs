@@ -36,7 +36,17 @@ pub struct Port<P> {
 }
 
 impl<P> Port<P> {
-    pub async fn new<NR>(
+    pub fn new(port_ds: PortDS, network_port: P) -> Self {
+        let bmca = Bmca::new(port_ds.announce_interval().into(), port_ds.port_identity);
+
+        Port {
+            port_ds,
+            network_port,
+            bmca,
+        }
+    }
+
+    pub async fn init<NR>(
         port_ds: PortDS,
         runtime: &mut NR,
         interface: NR::InterfaceDescriptor,
@@ -49,13 +59,7 @@ impl<P> Port<P> {
             .await
             .expect("Could not create network port");
 
-        let bmca = Bmca::new(port_ds.announce_interval().into(), port_ds.port_identity);
-
-        Port {
-            port_ds,
-            network_port,
-            bmca,
-        }
+        Self::new(port_ds, network_port)
     }
 
     pub fn identity(&self) -> PortIdentity {
