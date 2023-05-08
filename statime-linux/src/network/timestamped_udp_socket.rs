@@ -220,7 +220,7 @@ fn fetch_send_timestamp_help(
         }
     }
 
-    Ok(send_ts.map(|ts| libc_timespec_into_instant(ts)))
+    Ok(send_ts.map(libc_timespec_into_instant))
 }
 
 #[cfg(test)]
