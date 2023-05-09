@@ -29,6 +29,7 @@ pub mod state;
 mod tests;
 mod ticker;
 
+#[derive(Clone)]
 pub struct Port<P> {
     port_ds: PortDS,
     network_port: P,
@@ -261,6 +262,7 @@ impl<P: NetworkPort> Port<P> {
         if message.header().sdo_id() != default_ds.sdo_id
             || message.header().domain_number() != default_ds.domain_number
         {
+            log::trace!("Ignored message from self {:?}", &message);
             return Ok(());
         }
 

@@ -27,7 +27,7 @@ pub struct PtpInstance<P, C, F, const N: usize> {
     current_ds: CurrentDS,
     parent_ds: ParentDS,
     time_properties_ds: TimePropertiesDS,
-    ports: [Port<P>; N],
+    pub ports: [Port<P>; N],
     local_clock: RefCell<C>,
     filter: RefCell<F>,
 }

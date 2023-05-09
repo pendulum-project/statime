@@ -16,6 +16,16 @@ pub struct TimestampedUdpSocket {
     send_counter: u32,
 }
 
+impl Clone for TimestampedUdpSocket {
+    fn clone(&self) -> Self {
+        Self {
+            io: AsyncFd::new(self.io.get_ref().try_clone().unwrap()).unwrap(),
+            exceptional_condition: exceptional_condition_fd(self.io.get_ref()).unwrap(),
+            send_counter: self.send_counter.clone(),
+        }
+    }
+}
+
 impl TimestampedUdpSocket {
     pub fn from_udp_socket(
         io: std::net::UdpSocket,
@@ -67,8 +77,7 @@ impl TimestampedUdpSocket {
         if let Ok(send_timestamp) = tokio::time::timeout(timeout, fetch).await {
             Ok(Some(send_timestamp?))
         } else {
-            log::warn!("Packet without timestamp (waiting for timestamp timed out)");
-            eprintln!("Packet without timestamp (waiting for timestamp timed out)");
+            log::warn!("Packet without send timestamp (waiting for timestamp timed out)");
             Ok(None)
         }
     }

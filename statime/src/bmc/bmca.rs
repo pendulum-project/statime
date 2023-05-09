@@ -23,6 +23,7 @@ use crate::{
 /// - When it is time to run the algorithm, the ptp runtime has to take all the best announce messages using [Bmca::take_best_port_announce_message]
 /// - Of the resulting set, the best global one needs to be determined. This can be done using [Bmca::find_best_announce_message]
 /// - Then to get the recommended state for each port, [Bmca::calculate_recommended_state] needs to be called
+#[derive(Clone)]
 pub struct Bmca {
     foreign_master_list: ForeignMasterList,
     own_port_identity: PortIdentity,

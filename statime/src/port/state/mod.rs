@@ -22,7 +22,7 @@ use crate::{
 mod master;
 mod slave;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum PortState {
     Disabled,
     #[default]

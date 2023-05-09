@@ -151,6 +151,7 @@ impl MasterState {
                 _ => Err(MasterError::UnexpectedMessage.into()),
             }
         } else {
+            log::trace!("Ignored message from self {:?}", &message);
             Ok(())
         }
     }

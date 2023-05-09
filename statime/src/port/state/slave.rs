@@ -11,7 +11,7 @@ use crate::{
 
 type Result<T, E = SlaveError> = core::result::Result<T, E>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SlaveState {
     remote_master: PortIdentity,
 
@@ -30,7 +30,7 @@ impl SlaveState {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum SyncState {
     Initial,
     AfterSync {
@@ -44,7 +44,7 @@ enum SyncState {
     },
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum DelayState {
     Initial,
     AfterSync {

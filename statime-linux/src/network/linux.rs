@@ -173,6 +173,17 @@ impl NetworkRuntime for LinuxRuntime {
     }
 }
 
+fn libc_timestamp_to_instant(ts: LibcTimestamp) -> Instant {
+    match ts {
+        LibcTimestamp::TimeSpec { seconds, nanos } => {
+            Instant::from_fixed_nanos(seconds as i128 * 1_000_000_000i128 + nanos as i128)
+        }
+        LibcTimestamp::TimeVal { seconds, micros } => {
+            Instant::from_fixed_nanos(seconds as i128 * 1_000_000_000i128 + micros as i128 * 1_000)
+        }
+    }
+}
+
 pub struct LinuxNetworkPort {
     tc_socket: TimestampedUdpSocket,
     ntc_socket: AsyncFd<std::net::UdpSocket>,
@@ -181,13 +192,14 @@ pub struct LinuxNetworkPort {
     clock: LinuxClock,
 }
 
-fn libc_timestamp_to_instant(ts: LibcTimestamp) -> Instant {
-    match ts {
-        LibcTimestamp::TimeSpec { seconds, nanos } => {
-            Instant::from_fixed_nanos(seconds as i128 * 1_000_000_000i128 + nanos as i128)
-        }
-        LibcTimestamp::TimeVal { seconds, micros } => {
-            Instant::from_fixed_nanos(seconds as i128 * 1_000_000_000i128 + micros as i128 * 1_000)
+impl Clone for LinuxNetworkPort {
+    fn clone(&self) -> Self {
+        Self {
+            tc_socket: self.tc_socket.clone(),
+            ntc_socket: AsyncFd::new(self.ntc_socket.get_ref().try_clone().unwrap()).unwrap(),
+            tc_address: self.tc_address.clone(),
+            ntc_address: self.ntc_address.clone(),
+            clock: self.clock.clone(),
         }
     }
 }
@@ -273,7 +285,9 @@ pub fn get_clock_id() -> Option<[u8; 8]> {
 
 #[cfg(test)]
 mod tests {
-    use crate::network::interface::LinuxNetworkMode;
+    use std::str::FromStr;
+
+    use crate::{clock::RawLinuxClock, network::interface::LinuxNetworkMode};
 
     use super::*;
 
@@ -316,5 +330,43 @@ mod tests {
         assert_eq!(address.port(), port);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_software_send_timestamp_on_interface() {
+        let clock = LinuxClock::new(RawLinuxClock::get_realtime_clock());
+        let mut runtime = LinuxRuntime {
+            timestamping_mode: TimestampingMode::Software,
+            clock,
+        };
+
+        let interface_name = InterfaceName::from_str("br-2f64ef4c8839").unwrap();
+        let interface_name = InterfaceName::from_str("lo").unwrap();
+
+        let interface = InterfaceDescriptor {
+            interface_name: Some(interface_name),
+            mode: LinuxNetworkMode::Ipv4,
+        };
+
+        let ports = Ports {
+            ntc_port: 8006,
+            tc_port: 8007,
+        };
+
+        let mut network = runtime.open_with_options(interface, ports).unwrap();
+
+        let instant = network.send_time_critical(&[1; 48]).await.unwrap();
+
+        dbg!(instant);
+
+        //        let mut buf = [0; 48];
+        //        let trecv = b.recv(&clock, &mut buf).await.unwrap();
+        //
+        //        let tsend = tsend.unwrap();
+        //        let trecv = trecv.timestamp;
+        //        let delta = trecv - tsend;
+        //
+        //        let tolerance = Duration::from_millis(200); // 0.20s
+        //        assert!(delta.abs() < tolerance);
     }
 }

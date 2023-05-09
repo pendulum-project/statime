@@ -10,7 +10,7 @@ use crate::{
     time::Duration,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PortDS {
     pub(crate) port_identity: PortIdentity,
     pub(crate) port_state: PortState,
@@ -107,7 +107,7 @@ impl PortDS {
 
     pub fn set_forced_port_state(&mut self, state: PortState) {
         log::info!(
-            "new state for port {}: {} -> {}",
+            "new state for PTP port {}: {} -> {}",
             self.port_identity.port_number,
             self.port_state,
             state

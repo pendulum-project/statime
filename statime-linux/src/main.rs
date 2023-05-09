@@ -177,6 +177,96 @@ async fn main() {
     instance.run(&LinuxTimer).await;
 }
 
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use statime_linux::network::{InterfaceName, LinuxNetworkMode};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn two_ordinary_clocks() {
+        setup_logger(log::LevelFilter::Trace).unwrap();
+
+        // let interface_name_1 = InterfaceName::from_str("enp0s31f6").unwrap();
+        let interface_name_1 = InterfaceName::from_str("br-44f18fce9cc6").unwrap();
+        // let interface_name_2 = InterfaceName::from_str("virbr0").unwrap();
+        let interface_name_2 = InterfaceName::from_str("br-2f64ef4c8839").unwrap();
+
+        let interface_1 = InterfaceDescriptor {
+            interface_name: Some(interface_name_1),
+            mode: LinuxNetworkMode::Ipv4,
+        };
+
+        let interface_2 = InterfaceDescriptor {
+            interface_name: Some(interface_name_2),
+            mode: LinuxNetworkMode::Ipv4,
+        };
+
+        let default_ds_config_high = DefaultDSConfig {
+            priority_1: 128,
+            priority_2: 128,
+            sdo: SdoId::default(),
+            domain: 0,
+            slave_only: false,
+        };
+
+        let default_ds_config_low = DefaultDSConfig {
+            priority_1: 1,
+            priority_2: 1,
+            sdo: SdoId::default(),
+            domain: 0,
+            slave_only: false,
+        };
+
+        let port_ds_config = PortDSConfig {
+            log_announce_interval: 1,
+            log_sync_interval: 0,
+            announce_receipt_timeout: 3,
+        };
+
+        let mut ordinary1 = build_instance(
+            interface_1,
+            TimestampingMode::Software,
+            LinuxClock::new(RawLinuxClock::get_realtime_clock()),
+            ClockIdentity(42u64.to_be_bytes()),
+            default_ds_config_low,
+            port_ds_config,
+            Ports {
+                tc_port: 8007,
+                ntc_port: 8008,
+            },
+        );
+
+        let mut ordinary2 = build_instance(
+            interface_2,
+            TimestampingMode::Software,
+            LinuxClock::new(RawLinuxClock::get_realtime_clock()),
+            ClockIdentity(43u64.to_be_bytes()),
+            default_ds_config_high,
+            port_ds_config,
+            Ports {
+                tc_port: 8007 + 2,
+                ntc_port: 8008 + 2,
+            },
+        );
+
+        let handle1 = async {
+            ordinary1.run(&LinuxTimer).await;
+        };
+
+        let handle2 = async {
+            ordinary2.run(&LinuxTimer).await;
+        };
+
+        tokio::select! {
+            err = handle1 => panic!("{err:?}"),
+            // err = handle2 => panic!("{err:?}"),
+        }
+    }
+}
+
 fn build_instance(
     interface: InterfaceDescriptor,
     timestamping_mode: TimestampingMode,

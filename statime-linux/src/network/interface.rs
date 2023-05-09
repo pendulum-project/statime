@@ -94,7 +94,6 @@ pub struct InterfaceName {
 }
 
 impl InterfaceName {
-    #[cfg(test)]
     pub const LOOPBACK: Self = Self {
         bytes: *b"lo\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
     };
@@ -170,7 +169,7 @@ impl std::str::FromStr for InterfaceName {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct InterfaceDescriptor {
     pub interface_name: Option<InterfaceName>,
     pub mode: LinuxNetworkMode,
