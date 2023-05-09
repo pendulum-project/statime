@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-use statime::{clock::Clock, time::Instant};
+use std::time::Duration;
 use std::{io, net::SocketAddr, os::unix::prelude::RawFd};
 use tokio::io::{unix::AsyncFd, Interest};
 
-use crate::clock::{libc_timespec_into_instant, LinuxClock};
+use crate::clock::LinuxClock;
 
 use super::control_message::{control_message_space, ControlMessage, MessageQueue};
 use super::linux::TimestampingMode;
@@ -41,7 +41,7 @@ impl TimestampedUdpSocket {
         &mut self,
         data: &[u8],
         address: SocketAddr,
-    ) -> std::io::Result<Option<Instant>> {
+    ) -> std::io::Result<Option<LibcTimestamp>> {
         self.send_to(data, address).await?;
 
         let expected_counter = self.send_counter;
@@ -58,10 +58,10 @@ impl TimestampedUdpSocket {
     async fn fetch_send_timestamp(
         &self,
         expected_counter: u32,
-    ) -> std::io::Result<Option<Instant>> {
+    ) -> std::io::Result<Option<LibcTimestamp>> {
         // the send timestamp may never come set a very short timeout to prevent hanging forever.
         // We automatically fall back to a less accurate timestamp when this function returns None
-        let timeout = std::time::Duration::from_millis(10);
+        let timeout = Duration::from_millis(10);
 
         let fetch = self.fetch_send_timestamp_help(expected_counter);
         if let Ok(send_timestamp) = tokio::time::timeout(timeout, fetch).await {
@@ -73,7 +73,10 @@ impl TimestampedUdpSocket {
         }
     }
 
-    async fn fetch_send_timestamp_help(&self, expected_counter: u32) -> std::io::Result<Instant> {
+    async fn fetch_send_timestamp_help(
+        &self,
+        expected_counter: u32,
+    ) -> std::io::Result<LibcTimestamp> {
         log::trace!("waiting for timestamp socket to become readable to fetch a send timestamp");
 
         // Send timestamps are sent to the udp socket's error queue. Sadly, tokio does not
@@ -108,10 +111,58 @@ impl TimestampedUdpSocket {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LibcTimestamp {
+    TimeSpec {
+        seconds: i64,
+        nanos: i64,
+    },
+    #[allow(unused)]
+    TimeVal {
+        seconds: i64,
+        micros: i64,
+    },
+}
+
+impl LibcTimestamp {
+    fn from_timespec(timespec: libc::timespec) -> Self {
+        Self::TimeSpec {
+            seconds: timespec.tv_sec,
+            nanos: timespec.tv_nsec,
+        }
+    }
+
+    #[allow(unused)]
+    fn from_timeval(timespec: libc::timeval) -> Self {
+        Self::TimeVal {
+            seconds: timespec.tv_sec,
+            micros: timespec.tv_usec,
+        }
+    }
+
+    #[cfg(test)]
+    fn to_duration(self) -> Duration {
+        match self {
+            LibcTimestamp::TimeSpec { seconds, nanos } => {
+                let seconds = Duration::from_secs(seconds as u64);
+                let nanos = Duration::from_nanos(nanos as u64);
+
+                seconds + nanos
+            }
+            LibcTimestamp::TimeVal { seconds, micros } => {
+                let seconds = Duration::from_secs(seconds as u64);
+                let micros = Duration::from_micros(micros as u64);
+
+                seconds + micros
+            }
+        }
+    }
+}
+
 pub struct RecvResult {
     pub bytes_read: usize,
     pub peer_address: SocketAddr,
-    pub timestamp: Instant,
+    pub timestamp: LibcTimestamp,
 }
 
 fn recv_with_timestamp(
@@ -125,13 +176,15 @@ fn recv_with_timestamp(
     let (bytes_read, control_messages, peer_address) =
         receive_message(tc_socket, read_buf, &mut control_buf, MessageQueue::Normal)?;
 
-    let mut timestamp = clock.now();
+    // fallback receive timestamp. In practice, on linux, we should always find a more accurate
+    // kernel timestamp below
+    let mut timestamp = LibcTimestamp::from_timespec(clock.timespec()?);
 
     // Loops through the control messages, but we should only get a single message in practice
     for msg in control_messages {
         match msg {
             ControlMessage::Timestamping(timespec) => {
-                timestamp = libc_timespec_into_instant(timespec);
+                timestamp = LibcTimestamp::from_timespec(timespec);
             }
 
             ControlMessage::ReceiveError(_error) => {
@@ -163,7 +216,7 @@ fn recv_with_timestamp(
 fn fetch_send_timestamp_help(
     socket: &std::net::UdpSocket,
     expected_counter: u32,
-) -> io::Result<Option<Instant>> {
+) -> io::Result<Option<LibcTimestamp>> {
     // we get back two control messages: one with the timestamp (just like a receive timestamp),
     // and one error message with no error reason. The payload for this second message is kind of
     // undocumented.
@@ -185,7 +238,7 @@ fn fetch_send_timestamp_help(
     for msg in control_messages {
         match msg {
             ControlMessage::Timestamping(timestamp) => {
-                send_ts = Some(timestamp);
+                send_ts = Some(LibcTimestamp::from_timespec(timestamp));
             }
 
             ControlMessage::ReceiveError(error) => {
@@ -220,14 +273,12 @@ fn fetch_send_timestamp_help(
         }
     }
 
-    Ok(send_ts.map(libc_timespec_into_instant))
+    Ok(send_ts)
 }
 
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, UdpSocket};
-
-    use statime::time::Duration;
 
     use crate::clock::RawLinuxClock;
 
@@ -263,10 +314,10 @@ mod tests {
 
         let t1 = r1.timestamp;
         let t2 = r2.timestamp;
-        let delta = t2 - t1;
+        let delta = t2.to_duration() - t1.to_duration();
 
-        let lower = Duration::from_millis(150); // 0.15s
-        let upper = Duration::from_millis(250); // 0.25s
+        let lower = std::time::Duration::from_millis(150); // 0.15s
+        let upper = std::time::Duration::from_millis(250); // 0.25s
 
         assert!(delta > lower && delta < upper);
     }
@@ -274,6 +325,14 @@ mod tests {
     #[tokio::test]
     async fn timestamping_reasonable_so_timestamping() {
         timestamping_reasonable(8004, 8005).await
+    }
+
+    fn abs_diff(a: std::time::Duration, b: std::time::Duration) -> std::time::Duration {
+        if a > b {
+            a - b
+        } else {
+            b - a
+        }
     }
 
     #[tokio::test]
@@ -291,9 +350,8 @@ mod tests {
 
         let tsend = tsend.unwrap();
         let trecv = trecv.timestamp;
-        let delta = trecv - tsend;
 
-        let tolerance = Duration::from_millis(200); // 0.20s
-        assert!(delta.abs() < tolerance);
+        let tolerance = std::time::Duration::from_millis(200); // 0.20s
+        assert!((abs_diff(trecv.to_duration(), tsend.to_duration())) < tolerance);
     }
 }
