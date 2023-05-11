@@ -74,7 +74,7 @@ impl LinuxRuntime {
     fn join_multicast(
         interface: &InterfaceDescriptor,
         socket: &std::net::UdpSocket,
-    ) -> Result<SocketAddr, NetworkError> {
+    ) -> std::io::Result<SocketAddr> {
         let port = socket.local_addr()?.port();
 
         match interface.get_address()? {
@@ -238,18 +238,23 @@ impl NetworkPort for LinuxNetworkPort {
                 timestamp: libc_timestamp_to_instant(recv_result.timestamp),
             };
 
-            log::trace!("Recv TC");
+            log::trace!(
+                "Recv TC {:?} -> {:?}",
+                recv_result.peer_address,
+                self.tc_address
+            );
 
             Ok(packet)
         };
 
         let non_time_critical_future = async {
             let mut buffer = [0; 2048];
-            let (received_len, _) = self
+            let (received_len, peer_address) = self
                 .ntc_socket
                 .async_io(Interest::READABLE, |inner| inner.recv_from(&mut buffer))
                 .await?;
-            log::trace!("Recv NTC");
+
+            log::trace!("Recv TC {:?} -> {:?}", peer_address, self.ntc_address);
 
             let data_too_long = |_| io::Error::new(ErrorKind::InvalidData, "too long");
             let data = buffer[..received_len].try_into().map_err(data_too_long)?;

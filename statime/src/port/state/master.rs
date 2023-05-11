@@ -148,10 +148,13 @@ impl MasterState {
                     )
                     .await
                 }
-                _ => Err(MasterError::UnexpectedMessage.into()),
+                _ => {
+                    log::error!("A Master can never process {:?}", &message);
+                    Err(MasterError::UnexpectedMessage.into())
+                }
             }
         } else {
-            log::trace!("Ignored message from self {:?}", &message);
+            // log::trace!("Ignored message from self {:?}", &message);
             Ok(())
         }
     }
