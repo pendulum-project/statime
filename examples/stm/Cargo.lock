@@ -1012,6 +1012,7 @@ dependencies = [
  "embassy-executor",
  "embassy-macros",
  "embassy-net",
+ "embassy-net-driver",
  "embassy-stm32",
  "embassy-sync",
  "embassy-time",
@@ -1026,6 +1027,7 @@ dependencies = [
  "rand_core",
  "static_cell",
  "statime",
+ "vcell",
 ]
 
 [[package]]

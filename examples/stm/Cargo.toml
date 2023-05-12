@@ -20,6 +20,7 @@ rand_core = "0.6.3"
 critical-section = "1.1"
 embedded-storage = "0.3.0"
 static_cell = "1.0"
+vcell = "0.1.3"
 embedded-io = { version = "0.4.0", features = ["async"] }
 
 embassy-sync = { version = "0.2.0", features = ["defmt"] }
@@ -28,6 +29,7 @@ embassy-macros = "0.2.0"
 embassy-time = { version = "0.1.0", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
 embassy-stm32 = { version = "0.1.0", features = ["nightly", "defmt", "stm32f767zi", "unstable-pac", "time-driver-any", "exti"]  }
 embassy-net = { version = "0.1.0", features = ["defmt", "nightly", "tcp", "dhcpv4", "medium-ethernet"] }
+embassy-net-driver = { version = "0.1.0", features = ["defmt"] }
 embassy-usb = { version = "0.1.0", features = ["defmt"] }
 
 statime = { path = "../../statime", default-features = false }
@@ -39,4 +41,5 @@ embassy-macros = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e7
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e730aa" }
 embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e730aa" }
 embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e730aa" }
+embassy-net-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e730aa" }
 embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "3e730aa" }

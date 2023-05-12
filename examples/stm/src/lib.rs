@@ -20,6 +20,8 @@ use panic_probe as _;
 use rand_core::RngCore;
 use static_cell::StaticCell;
 
+mod eth;
+
 macro_rules! singleton {
     ($val:expr) => {{
         type T = impl Sized;
