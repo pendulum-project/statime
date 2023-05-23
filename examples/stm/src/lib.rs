@@ -24,6 +24,7 @@ use statime::clock::Clock;
 mod device;
 mod eth;
 mod runtime;
+mod static_ethernet;
 
 macro_rules! singleton {
     ($val:expr) => {{
@@ -36,7 +37,7 @@ macro_rules! singleton {
 
 type Device = Ethernet<'static, ETH, GenericSMI>;
 
-struct StmClock<'d> {
+pub struct StmClock<'d> {
     ptp: PTPClock<'d>,
     multiplier: f64,
 }

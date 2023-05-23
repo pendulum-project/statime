@@ -12,7 +12,7 @@ pub trait NetworkRuntime {
     /// Can be useful to select between e.g. ethernet and wifi if both are
     /// present on the machine or to select between IPv4 and IPv6.
     type InterfaceDescriptor: Clone;
-    type NetworkPort: NetworkPort;
+    type NetworkPort<'a>: NetworkPort;
     type Error: core::fmt::Debug;
 
     /// Open a port on the given network interface.
@@ -26,7 +26,7 @@ pub trait NetworkRuntime {
     async fn open(
         &mut self,
         interface: Self::InterfaceDescriptor,
-    ) -> Result<Self::NetworkPort, Self::Error>;
+    ) -> Result<Self::NetworkPort<'_>, Self::Error>;
 }
 
 /// The representation of a network packet

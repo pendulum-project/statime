@@ -6,43 +6,45 @@ use smoltcp::{
     time::Instant,
 };
 
-use crate::eth::{Ethernet, RDesRing, TDesRing};
+use crate::static_ethernet::StaticEthernet;
 
-pub struct StmDevice<'d, T: Instance, P: PHY> {
-    ethernet: Ethernet<'d, T, P>,
+pub struct StmDevice<T: Instance, P: PHY> {
+    pub(crate) ethernet: StaticEthernet<T, P>,
 }
 
-impl<'d, T: Instance, P: PHY> StmDevice<'d, T, P> {
+impl<T: Instance, P: PHY> StmDevice<T, P> {
     pub fn mac_addr(&self) -> [u8; 6] {
         self.ethernet.mac_addr
     }
-
-    pub fn rx(&self) -> &RDesRing {
-        &self.ethernet.rx
-    }
-
-    pub fn tx(&self) -> &TDesRing {
-        &self.ethernet.tx
-    }
 }
 
-struct StmRxToken<'a, 'd>(embassy_stm32::eth::RxToken<'a, 'd>);
-struct StmTxToken<'a, 'd>(embassy_stm32::eth::TxToken<'a, 'd>);
-
-impl<'d, T: Instance, P: PHY> Device for StmDevice<'d, T, P> {
+impl<'d, T: Instance, P: PHY> Device for StmDevice<T, P> {
     type RxToken<'a> = StmRxToken<'a, 'd> where Self: 'a;
     type TxToken<'a> = StmTxToken<'a, 'd> where Self: 'a;
 
     fn receive(&mut self, _timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        let mut cx = todo!();
-        self.ethernet
-            .receive(&mut cx)
-            .map(|(rx, tx)| (StmRxToken(rx), StmTxToken(tx)))
+        if self.ethernet.rx.available().is_some() && self.ethernet.tx.available().is_some() {
+            Some((
+                StmRxToken(crate::eth::RxToken {
+                    rx: &mut self.ethernet.rx,
+                }),
+                StmTxToken(crate::eth::TxToken {
+                    tx: &mut self.ethernet.tx,
+                }),
+            ))
+        } else {
+            None
+        }
     }
 
     fn transmit(&mut self, _timestamp: Instant) -> Option<Self::TxToken<'_>> {
-        let mut cx = todo!();
-        self.ethernet.transmit(&mut cx).map(StmTxToken)
+        if self.ethernet.tx.available().is_some() {
+            Some(StmTxToken(crate::eth::TxToken {
+                tx: &mut self.ethernet.tx,
+            }))
+        } else {
+            None
+        }
     }
 
     fn capabilities(&self) -> DeviceCapabilities {
@@ -50,19 +52,22 @@ impl<'d, T: Instance, P: PHY> Device for StmDevice<'d, T, P> {
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = embassy_caps.max_transmission_unit;
         caps.max_burst_size = embassy_caps.max_burst_size;
-        // TODO: Complete translation
         caps
     }
 }
 
+pub struct StmRxToken<'a, 'd>(crate::eth::RxToken<'a, 'd>);
+
 impl<'a, 'd> phy::RxToken for StmRxToken<'a, 'd> {
-    fn consume<R, F>(mut self, f: F) -> R
+    fn consume<R, F>(self, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
     {
         self.0.consume(f)
     }
 }
+
+pub struct StmTxToken<'a, 'd>(crate::eth::TxToken<'a, 'd>);
 
 impl<'a, 'd> phy::TxToken for StmTxToken<'a, 'd> {
     fn consume<R, F>(self, len: usize, f: F) -> R

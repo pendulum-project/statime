@@ -93,7 +93,7 @@ impl<'d, T: Instance, P: PHY> embassy_net_driver::Driver for Ethernet<'d, T, P> 
 }
 
 pub struct RxToken<'a, 'd> {
-    rx: &'a mut RDesRing<'d>,
+    pub(crate) rx: &'a mut RDesRing<'d>,
 }
 
 impl<'a, 'd> embassy_net_driver::RxToken for RxToken<'a, 'd> {
@@ -110,7 +110,7 @@ impl<'a, 'd> embassy_net_driver::RxToken for RxToken<'a, 'd> {
 }
 
 pub struct TxToken<'a, 'd> {
-    tx: &'a mut TDesRing<'d>,
+    pub(crate) tx: &'a mut TDesRing<'d>,
 }
 
 impl<'a, 'd> embassy_net_driver::TxToken for TxToken<'a, 'd> {

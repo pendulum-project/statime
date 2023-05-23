@@ -33,18 +33,6 @@ use super::*;
 mod rx_desc;
 mod tx_desc;
 
-pub struct Ethernet<'d, T: Instance, P: PHY> {
-    _peri: PeripheralRef<'d, T>,
-    pub(crate) tx: TDesRing<'d>,
-    pub(crate) rx: RDesRing<'d>,
-
-    pins: [PeripheralRef<'d, AnyPin>; 9],
-    _phy: P,
-    clock_range: Cr,
-    phy_addr: u8,
-    pub(crate) mac_addr: [u8; 6],
-}
-
 pub struct PTPClock<'d> {
     pps_pin: PeripheralRef<'d, AnyPin>,
     base_addend: u32,
@@ -214,6 +202,18 @@ macro_rules! config_pins {
             )*
         })
     };
+}
+
+pub struct Ethernet<'d, T: Instance, P: PHY> {
+    _peri: PeripheralRef<'d, T>,
+    pub(crate) tx: TDesRing<'d>,
+    pub(crate) rx: RDesRing<'d>,
+
+    pins: [PeripheralRef<'d, AnyPin>; 9],
+    _phy: P,
+    clock_range: Cr,
+    phy_addr: u8,
+    pub(crate) mac_addr: [u8; 6],
 }
 
 impl<'d, T: Instance + RccPeripheral, P: PHY> Ethernet<'d, T, P> {

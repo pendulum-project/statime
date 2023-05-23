@@ -36,13 +36,13 @@ pub struct Port<P> {
 }
 
 impl<P> Port<P> {
-    pub async fn new<NR>(
+    pub async fn new<'a, NR>(
         port_ds: PortDS,
-        runtime: &mut NR,
+        runtime: &'a mut NR,
         interface: NR::InterfaceDescriptor,
     ) -> Self
     where
-        NR: NetworkRuntime<NetworkPort = P>,
+        NR: NetworkRuntime<NetworkPort<'a> = P>,
     {
         let network_port = runtime
             .open(interface)
