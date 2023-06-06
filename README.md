@@ -50,13 +50,16 @@ where `<INTERFACE>` is the netwerk interface you want ptpd to use. Here `-n` dis
 
 # Roadmap
 
-- Q2 2023: PTP master, boundary clock + support for embedded device
-- Q3 2023: NTP/PTP clock device + development of PTP for Linux
-- Q4 2023: Completion of PTP for Linux
+- Q2 2023: PTP master, boundary clock
+- Q3 2023: NTP/PTP clock device + development of PTP for Linux (pending funding)
+- Q4 2023: Completion of PTP for Linux (pending funding)
 
 # Support our work
 
-The development of Statime is kindly supported by the [NLnet Foundation](https://nlnet.nl).
+The development of Statime is kindly supported by the NGI Assure Fund of the [NLnet Foundation](https://nlnet.nl).
+
+<img style="margin: 1rem 5% 1rem 5%;" src="https://nlnet.nl/logo/banner.svg" alt="Logo NLnet"  width="150px" />
+<img style="margin: 1rem 5% 1rem 5%;" src="https://nlnet.nl/image/logos/NGIAssure_tag.svg" alt="Logo NGI Assure" width="150px" />
 
 [SIDN Fonds](https://www.sidnfonds.nl/excerpt) is supporting us with a grant to develop clock devices running Statime and ntpd-rs, in collaboration with SIDN Labs' [TimeNL](https://www.sidnlabs.nl/en/news-and-blogs/an-open-infrastructure-for-sub-millisecond-internet-time).
 
