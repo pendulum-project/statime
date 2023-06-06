@@ -5,7 +5,7 @@
 [![book](https://shields.io/badge/docs.rs-statime-green)](https://pendulum-project.github.io/statime/docs/statime)
 [![book](https://shields.io/badge/docs.rs-statime_linux-green)](https://pendulum-project.github.io/statime/docs/statime_linux)
 
-Statime is a work in progress Rust implementation of PTP version 2.1 (IEEE 1588-2019). It currently implements support for acting as either an ordinary or a boundary clock. Note that we are planning a refactor of the codebase to deal with a number of issues, and that the public interface is likely to change with that.
+Statime is a work in progress Rust implementation of PTP version 2.1 (IEEE 1588-2019). It currently implements support for acting as a master and an ordinary or a boundary clock. Note that we are planning a refactor of the codebase, and that the public interface is likely to change.
 
 <p align="center">
 <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
