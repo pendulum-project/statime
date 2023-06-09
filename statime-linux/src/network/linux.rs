@@ -236,7 +236,7 @@ pub fn get_clock_id() -> Option<[u8; 8]> {
 
     for mac in candidates {
         // Ignore multicast and locally administered mac addresses
-        if mac[0] & 0x3 == 0 && mac.iter().any(|x| *x != 0) {
+        if !(mac[0] == 0x01 && mac[1] == 0x00 && mac[2] == 0x5e) && mac.iter().any(|x| *x != 0) {
             let f = |i| mac.get(i).copied().unwrap_or_default();
             return Some(std::array::from_fn(f));
         }
