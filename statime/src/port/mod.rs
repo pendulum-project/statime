@@ -139,18 +139,21 @@ impl<P: NetworkPort> Port<P> {
                             "Port {} announce timeout",
                             self.port_ds.port_identity.port_number
                         );
-                        // Send announce message
-                        if let Err(error) = self
-                            .send_announce(
-                                local_clock,
-                                default_ds,
-                                time_properties_ds,
-                                parent_ds,
-                                current_ds,
-                            )
-                            .await
-                        {
-                            log::error!("{:?}", error);
+                        // Don't announce if not defined
+                        if parent_ds.grandmaster_identity.0.iter().any(|x| *x != 0) {
+                            // Send announce message
+                            if let Err(error) = self
+                                .send_announce(
+                                    local_clock,
+                                    default_ds,
+                                    time_properties_ds,
+                                    parent_ds,
+                                    current_ds,
+                                )
+                                .await
+                            {
+                                log::error!("{:?}", error);
+                            }
                         }
                     }
                 },
