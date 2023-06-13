@@ -72,7 +72,11 @@ impl RawLinuxClock {
     /// If the time offset is higher than 0.5 seconds, then the clock will be
     /// set directly and no frequency change will be made.
     pub fn adjust_clock(&mut self, time_offset: f64, frequency_multiplier: f64) -> Result<(), i32> {
-        log::trace!("Adjusting clock: {time_offset}s, {frequency_multiplier}x");
+        log::trace!(
+            "Adjusting clock: {}ns, {}x",
+            time_offset * 1e9,
+            frequency_multiplier
+        );
 
         let (current_timex, _clock_state) = self.get_clock_state()?;
 
