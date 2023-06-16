@@ -1,5 +1,6 @@
 use clap::Parser;
 use fern::colors::Color;
+use libc::{setpriority, PRIO_PROCESS};
 use statime::{
     BasicFilter, ClockIdentity, DefaultDS, DelayMechanism, Port, PortDS, PortIdentity, PtpInstance,
     SdoId, TimePropertiesDS, TimeSource,
@@ -125,6 +126,10 @@ async fn main() {
     setup_logger(args.loglevel).expect("Could not setup logging");
 
     println!("Starting PTP");
+
+    unsafe {
+        setpriority(PRIO_PROCESS, 0, -20);
+    }
 
     let local_clock = if let Some(hardware_clock) = &args.hardware_clock {
         let clock =
