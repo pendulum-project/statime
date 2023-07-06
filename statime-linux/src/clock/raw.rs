@@ -1,7 +1,7 @@
 use std::{ffi::CString, fmt::Display, ops::DerefMut};
 
 use libc::{clockid_t, timespec};
-use statime::{ClockAccuracy, ClockQuality, Duration, Instant};
+use statime::{ClockAccuracy, ClockQuality, Duration, Time};
 
 use crate::clock::timex::{AdjustFlags, StatusFlags, Timex};
 
@@ -242,10 +242,10 @@ impl RawLinuxClock {
         Ok(time)
     }
 
-    pub fn get_time(&self) -> std::io::Result<Instant> {
+    pub fn get_time(&self) -> std::io::Result<Time> {
         let timespec = self.get_timespec()?;
 
-        let secs = Instant::from_secs(timespec.tv_sec.unsigned_abs() as _);
+        let secs = Time::from_secs(timespec.tv_sec.unsigned_abs() as _);
         let nanos = Duration::from_nanos(timespec.tv_nsec as _);
 
         Ok(secs + nanos)

@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bitflags::bitflags;
 use libc::timex;
-use statime::{Duration, Instant};
+use statime::{Duration, Time};
 
 use crate::clock::raw::Fixed;
 
@@ -51,11 +51,11 @@ impl Timex {
         Fixed::from_bits(self.stabil)
     }
 
-    pub fn get_time(&self) -> Instant {
+    pub fn get_time(&self) -> Time {
         let time = self.time;
         let nanos = self.get_status().contains(StatusFlags::NANO);
 
-        let secs = Instant::from_secs(time.tv_sec.unsigned_abs() as _);
+        let secs = Time::from_secs(time.tv_sec.unsigned_abs() as _);
         let sub_secs = if nanos {
             Duration::from_nanos(time.tv_usec as _)
         } else {
