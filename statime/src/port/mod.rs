@@ -193,7 +193,6 @@ impl<'a, C: Clock, F: Filter> Port<Running<'a, C, F>> {
     }
 
     // Handle the announce receipt timer going of
-    #[allow(unreachable_code)]
     pub fn handle_announce_receipt_timer(&mut self) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Master(_) => (),
