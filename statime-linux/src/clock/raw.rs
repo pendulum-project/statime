@@ -1,7 +1,7 @@
 use std::{ffi::CString, fmt::Display, ops::DerefMut};
 
 use libc::{clockid_t, timespec};
-use statime::{ClockAccuracy, ClockQuality, Duration, Time};
+use statime::{ClockAccuracy, ClockQuality, Duration, LeapIndicator, Time};
 
 use crate::clock::timex::{AdjustFlags, StatusFlags, Timex};
 
@@ -205,20 +205,15 @@ impl RawLinuxClock {
         self.quality
     }
 
-    pub fn set_leap_seconds(&self, leap_61: bool, leap_59: bool) -> Result<(), i32> {
+    pub fn set_leap_seconds(&self, leap_indicator: LeapIndicator) -> Result<(), i32> {
         let (mut clock, _) = self.get_clock_state()?;
 
         let mut status = clock.get_status();
 
-        if leap_61 {
-            status |= StatusFlags::INS;
-        } else {
-            status &= !StatusFlags::INS;
-        }
-        if leap_59 {
-            status |= StatusFlags::DEL;
-        } else {
-            status &= !StatusFlags::DEL;
+        match leap_indicator {
+            LeapIndicator::Leap61 => status |= StatusFlags::INS,
+            LeapIndicator::Leap59 => status |= StatusFlags::DEL,
+            LeapIndicator::NoLeap => { /* do nothing */ }
         }
 
         clock.set_status(status);
