@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use clap::Parser;
 use fern::colors::Color;
 use statime::{
-    BasicFilter, ClockIdentity, DefaultDS, DelayMechanism, Duration, PortActionIterator,
+    Clock, BasicFilter, ClockIdentity, DefaultDS, DelayMechanism, Duration, PortActionIterator,
     PortConfig, PortIdentity, PtpInstance, SdoId, Time, TimePropertiesDS, TimeSource,
     TimestampContext,
 };
@@ -176,7 +176,7 @@ async fn actual_main() {
 
     println!("Starting PTP");
 
-    let local_clock = if let Some(hardware_clock) = &args.hardware_clock {
+    let mut local_clock = if let Some(hardware_clock) = &args.hardware_clock {
         let clock =
             RawLinuxClock::get_from_file(hardware_clock).expect("Could not open hardware clock");
         LinuxClock::new(clock)
@@ -222,7 +222,7 @@ async fn actual_main() {
     let instance = PtpInstance::new(
         default_ds,
         time_properties_ds,
-        local_clock,
+        local_clock.clone(),
         BasicFilter::new(0.25),
     );
     let mut bmca_port = instance.add_port(port_config);
@@ -251,6 +251,7 @@ async fn actual_main() {
             &mut port_announce_timer,
             &mut port_sync_timer,
             &mut port_announce_timeout_timer,
+            &mut local_clock,
         )
         .await;
         while let Some((context, timestamp)) = pending_timestamp.take() {
@@ -261,6 +262,7 @@ async fn actual_main() {
                 &mut port_announce_timer,
                 &mut port_sync_timer,
                 &mut port_announce_timeout_timer,
+                &mut local_clock,
             )
             .await;
         }
@@ -299,6 +301,7 @@ async fn actual_main() {
                 &mut port_announce_timer,
                 &mut port_sync_timer,
                 &mut port_announce_timeout_timer,
+                &mut local_clock,
             )
             .await;
             while let Some((context, timestamp)) = pending_timestamp.take() {
@@ -309,6 +312,7 @@ async fn actual_main() {
                     &mut port_announce_timer,
                     &mut port_sync_timer,
                     &mut port_announce_timeout_timer,
+                    &mut local_clock,
                 )
                 .await;
             }
@@ -326,18 +330,21 @@ async fn handle_actions(
     port_announce_timer: &mut Pin<&mut Timer>,
     port_sync_timer: &mut Pin<&mut Timer>,
     port_announce_timeout_timer: &mut Pin<&mut Timer>,
+    local_clock: &mut LinuxClock,
 ) -> Option<(TimestampContext, Time)> {
     let mut pending_timestamp = None;
     for action in actions {
         match action {
             statime::PortAction::SendTimeCritical { context, data } => {
+
+                // TODO: Discuss local_clock
                 pending_timestamp = Some((
                     context,
                     network_port
                         .send_time_critical(data)
                         .await
                         .unwrap()
-                        .unwrap(),
+                        .unwrap_or(local_clock.now()),
                 ))
             }
             statime::PortAction::SendGeneral { data } => network_port.send(data).await.unwrap(),
