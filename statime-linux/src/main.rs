@@ -3,7 +3,7 @@ use std::{future::Future, pin::Pin};
 use clap::Parser;
 use fern::colors::Color;
 use statime::{
-    Clock, BasicFilter, ClockIdentity, DefaultDS, DelayMechanism, Duration, PortActionIterator,
+    BasicFilter, Clock, ClockIdentity, DefaultDS, DelayMechanism, Duration, PortActionIterator,
     PortConfig, PortIdentity, PtpInstance, SdoId, Time, TimePropertiesDS, TimeSource,
     TimestampContext,
 };
@@ -336,7 +336,6 @@ async fn handle_actions(
     for action in actions {
         match action {
             statime::PortAction::SendTimeCritical { context, data } => {
-
                 // TODO: Discuss local_clock
                 pending_timestamp = Some((
                     context,
