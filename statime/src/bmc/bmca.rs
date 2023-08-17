@@ -10,7 +10,7 @@ use crate::{
     datastructures::{
         common::{PortIdentity, TimeInterval, WireTimestamp},
         datasets::DefaultDS,
-        messages::AnnounceMessage,
+        messages::{AnnounceMessage, Header},
     },
     port::state::PortState,
 };
@@ -51,13 +51,17 @@ impl Bmca {
     /// Register a received announce message to the BMC algorithm
     pub(crate) fn register_announce_message(
         &mut self,
+        header: &Header,
         announce_message: &AnnounceMessage,
         current_time: WireTimestamp,
     ) {
         // Ignore messages comming from the same port
         if announce_message.header.source_port_identity != self.own_port_identity {
-            self.foreign_master_list
-                .register_announce_message(announce_message, current_time);
+            self.foreign_master_list.register_announce_message(
+                header,
+                announce_message,
+                current_time,
+            );
         }
     }
 
@@ -73,20 +77,20 @@ impl Bmca {
             .take_qualified_announce_messages(current_time);
 
         // The best of the foreign master messages is our erbest
-        let erbest =
-            Self::find_best_announce_message(announce_messages.map(|(message, timestamp)| {
-                BestAnnounceMessage {
-                    message,
-                    timestamp,
-                    identity: self.own_port_identity,
-                }
-            }));
+        let erbest = Self::find_best_announce_message(announce_messages.map(|message| {
+            BestAnnounceMessage {
+                header: message.header,
+                message: message.message,
+                timestamp: message.timestamp,
+                identity: self.own_port_identity,
+            }
+        }));
 
         if let Some(best) = &erbest {
             // All messages that were considered have been removed from the
             // foreignmasterlist. However, the one that has been selected as the
             // Erbest must not be removed, so let's just reregister it.
-            self.register_announce_message(&best.message, best.timestamp);
+            self.register_announce_message(&best.header, &best.message, best.timestamp);
         }
 
         erbest
@@ -231,6 +235,7 @@ enum MessageComparison {
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct BestAnnounceMessage {
+    header: Header,
     message: AnnounceMessage,
     timestamp: WireTimestamp,
     identity: PortIdentity,
@@ -271,8 +276,8 @@ mod tests {
         ClockIdentity,
     };
 
-    fn default_announce_message() -> AnnounceMessage {
-        let header = Header {
+    fn default_announce_message_header() -> Header {
+        Header {
             sdo_id: Default::default(),
             version: PtpVersion::new(2, 1).unwrap(),
             domain_number: Default::default(),
@@ -292,10 +297,12 @@ mod tests {
             source_port_identity: Default::default(),
             sequence_id: Default::default(),
             log_message_interval: Default::default(),
-        };
+        }
+    }
 
+    fn default_announce_message() -> AnnounceMessage {
         AnnounceMessage {
-            header,
+            header: default_announce_message_header(),
             origin_timestamp: Default::default(),
             current_utc_offset: Default::default(),
             grandmaster_priority_1: Default::default(),
@@ -308,6 +315,7 @@ mod tests {
     }
 
     fn default_best_announce_message() -> BestAnnounceMessage {
+        let header = default_announce_message_header();
         let message = default_announce_message();
 
         let timestamp = WireTimestamp {
@@ -321,6 +329,7 @@ mod tests {
         };
 
         BestAnnounceMessage {
+            header,
             message,
             timestamp,
             identity,
