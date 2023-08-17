@@ -14,6 +14,7 @@ use statime::{
 };
 use statime_linux::{
     clock::LinuxClock,
+    config::{Config, PtpMode},
     socket::{EventSocket, GeneralSocket},
 };
 use timestamped_socket::{
@@ -196,6 +197,22 @@ async fn main() {
 
 async fn actual_main() {
     let args = Args::parse();
+
+    // Parse config from file.
+    //
+    // TODO: Get file path from /etc or from command line arg?
+    let config = match Config::from_file("config.toml").await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("There was an error loading the config: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    config.check();
+
+    // TODO: Merge config and args,
+    // then create required ports, etc.
 
     setup_logger(args.loglevel).expect("Could not setup logging");
 
