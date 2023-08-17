@@ -384,13 +384,11 @@ impl SlaveState {
 
 #[cfg(test)]
 mod tests {
-    use arrayvec::ArrayVec;
-
     use super::*;
     use crate::{
         config::InstanceConfig,
         datastructures::{
-            common::{ClockIdentity, TimeInterval},
+            common::{ClockIdentity, TimeInterval, TlvSet},
             messages::{Header, SdoId},
         },
         Interval, MAX_DATA_LEN,
@@ -416,7 +414,7 @@ mod tests {
             Message {
                 header,
                 body,
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -444,7 +442,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(1050),
         );
@@ -464,7 +462,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(1000).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -494,7 +492,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -571,7 +569,7 @@ mod tests {
             Message {
                 header,
                 body,
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -599,7 +597,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(1050),
         );
@@ -646,7 +644,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(1000).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -662,7 +660,7 @@ mod tests {
                     receive_timestamp: Time::from_micros(1255).into(),
                     requesting_port_identity: req_header.source_port_identity,
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -693,7 +691,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(10).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -711,7 +709,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -743,7 +741,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -761,7 +759,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(10).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -778,7 +776,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(10).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -803,7 +801,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -823,7 +821,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(1050),
         );
@@ -841,7 +839,7 @@ mod tests {
                 body: MessageBody::FollowUp(FollowUpMessage {
                     precise_origin_timestamp: Time::from_micros(1000).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -869,7 +867,7 @@ mod tests {
                 body: MessageBody::Sync(SyncMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_micros(50),
         );
@@ -946,7 +944,7 @@ mod tests {
                         ..Default::default()
                     },
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -964,7 +962,7 @@ mod tests {
                     receive_timestamp: Time::from_micros(353).into(),
                     requesting_port_identity: req_header.source_port_identity,
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
@@ -982,7 +980,7 @@ mod tests {
                     receive_timestamp: Time::from_micros(253).into(),
                     requesting_port_identity: req_header.source_port_identity,
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             PortIdentity::default(),
         );
