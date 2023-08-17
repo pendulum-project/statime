@@ -15,9 +15,13 @@ statime = { path = "../statime" }
 thiserror = "1.0.46"
 pin-project-lite = "0.2.12"
 toml = "0.3"
-tokio = { version = "1.31", features = ["fs", "net", "rt-multi-thread", "time", "macros", "sync"] }
+tokio = { version = "1.31", features = ["net", "rt-multi-thread", "time", "macros", "sync"] }
 rand = { version = "0.8.5", default-features = false, features = ["std", "std_rng"] }
-serde = { version = "0.9.15", features = ["derive"] }
+serde = { version = "0.9.15", features = ["derive"], optional = true }
 
 clock-steering = { git = "https://github.com/pendulum-project/clock-steering.git", rev = "3ab6721" }
 timestamped-socket = { git =  "https://github.com/pendulum-project/timestamped-socket.git", rev = "83d2dae" }
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]

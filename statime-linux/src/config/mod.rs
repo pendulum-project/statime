@@ -1,27 +1,19 @@
-use std::{os::unix::fs::PermissionsExt, path::Path};
+use std::{os::unix::fs::PermissionsExt, path::Path, fs::read_to_string};
 use log::warn;
 use serde::Deserialize;
+use statime::{Interval, Duration, DelayMechanism};
 use thiserror::Error;
-use tokio::{fs::read_to_string, io};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     pub loglevel: String,
-    pub mode: PtpMode,
-    pub sdo_id: String,
+    pub sdo_id: u16,
     pub domain: u8,
     pub priority1: u8,
     pub priority2: u8,
     pub hardware_clock: Option<String>,
     pub ports: Vec<PortConfig>,
-}
-
-#[derive(Deserialize, Debug)]
-pub enum PtpMode {
-    Ordinary,
-    Boundary,
-    Transparant,
 }
 
 #[derive(Deserialize, Debug)]
@@ -31,13 +23,34 @@ pub struct PortConfig {
     pub sync_interval: i8,
     pub announce_receipt_timeout: u8,
     pub master_only: bool,
-    pub slave_only: bool,
+    pub delay_asymetry: i64,
+    pub delay_mechanism: i8,
+}
+
+impl From<PortConfig> for statime::PortConfig {
+    fn from(pc: PortConfig) -> Self {
+        Self {
+            announce_interval: Interval::from_log_2(pc.announce_interval),
+            sync_interval: Interval::from_log_2(pc.sync_interval),
+            announce_receipt_timeout: pc.announce_receipt_timeout,
+            master_only: pc.master_only,
+            delay_asymmetry: Duration::from_nanos(pc.delay_asymetry),
+            delay_mechanism: DelayMechanism::E2E { interval: Interval::from_log_2(pc.delay_mechanism) },
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub enum PtpMode {
+    Ordinary,
+    Boundary,
+    Transparant,
 }
 
 impl Config {
 
     /// Parse config from file
-    pub async fn from_file(file: impl AsRef<Path>) -> Result<Config, ConfigError> {
+    pub fn from_file(file: impl AsRef<Path>) -> Result<Config, ConfigError> {
         let meta = std::fs::metadata(&file).unwrap();
         let perm = meta.permissions();
 
@@ -45,8 +58,8 @@ impl Config {
             warn!("Unrestricted config file permissions: Others can write.");
         }
 
-        let contents = read_to_string(file).await?;
-        Ok( toml::de::from_str(&contents).unwrap()  )
+        let contents = read_to_string(file)?;
+        Ok(toml::de::from_str(&contents)?)
     }
 
     /// Check that the config is reasonable
@@ -70,7 +83,7 @@ impl Config {
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("io error while reading config: {0}")]
-    Io(#[from] io::Error),
+    Io(#[from] std::io::Error),
     #[error("config toml parsing error: {0}")]
     Toml(#[from] toml::de::Error),
 }

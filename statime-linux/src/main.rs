@@ -1,20 +1,20 @@
 use std::{
     future::Future,
     pin::{pin, Pin},
-    sync::OnceLock,
+    sync::OnceLock, str::FromStr,
 };
 
 use clap::Parser;
 use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    BasicFilter, Clock, ClockIdentity, DelayMechanism, Duration, InBmca, InstanceConfig, Interval,
-    Port, PortAction, PortActionIterator, PortConfig, PtpInstance, SdoId, Time, TimePropertiesDS,
+    BasicFilter, Clock, ClockIdentity, InBmca, InstanceConfig,
+    Port, PortAction, PortActionIterator, PtpInstance, SdoId, Time, TimePropertiesDS,
     TimeSource, TimestampContext, MAX_DATA_LEN,
 };
 use statime_linux::{
     clock::LinuxClock,
-    config::{Config, PtpMode},
+    config::Config,
     socket::{EventSocket, GeneralSocket},
 };
 use timestamped_socket::{
@@ -68,50 +68,11 @@ impl clap::builder::TypedValueParser for SdoIdParser {
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-struct Args {
-    /// Set desired logging level
-    #[clap(short, long, default_value_t = log::LevelFilter::Info)]
-    loglevel: log::LevelFilter,
-
-    /// Set interface on which to listen to PTP messages
-    #[clap(short, long)]
-    interface: InterfaceDescriptor,
-
-    /// The SDO id of the desired ptp domain
-    #[clap(long, default_value_t = SdoId::default(), value_parser = SdoIdParser)]
-    sdo: SdoId,
-
-    /// The domain number of the desired ptp domain
-    #[clap(long, default_value_t = 0)]
-    domain: u8,
-
-    /// Local clock priority (part 1) used in master clock selection
-    /// Default init value is 128, see: A.9.4.2
-    #[clap(long, default_value_t = 255)]
-    priority_1: u8,
-
-    /// Local clock priority (part 2) used in master clock selection
-    /// Default init value is 128, see: A.9.4.2
-    #[clap(long, default_value_t = 255)]
-    priority_2: u8,
-
-    /// Log value of interval expected between announce messages, see: 7.7.2.2
-    /// Default init value is 1, see: A.9.4.2
-    #[clap(long, default_value_t = 1)]
-    log_announce_interval: i8,
-
+pub struct Args {
     /// Time interval between Sync messages, see: 7.7.2.3
     /// Default init value is 0, see: A.9.4.2
-    #[clap(long, default_value_t = 0)]
-    log_sync_interval: i8,
-
-    /// Default init value is 3, see: A.9.4.2
-    #[clap(long, default_value_t = 3)]
-    announce_receipt_timeout: u8,
-
-    /// Use hardware clock
-    #[clap(long, short = 'c')]
-    hardware_clock: Option<String>,
+    #[clap(long, short = 'f', default_value_t = String::from("config.toml"))]
+    log_sync_interval: String,
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
@@ -196,33 +157,24 @@ async fn main() {
 }
 
 async fn actual_main() {
-    let args = Args::parse();
-
-    // Parse config from file.
-    //
     // TODO: Get file path from /etc or from command line arg?
-    let config = match Config::from_file("config.toml").await {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("There was an error loading the config: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    config.check();
+    let config = Config::from_file("config.toml")
+        .unwrap_or_else(|e| panic!("error loading config: {e}"));
 
     // TODO: Merge config and args,
     // then create required ports, etc.
+    let log_level = log::LevelFilter::from_str(&config.loglevel).unwrap();
+    setup_logger(log_level).expect("could not setup logging");
 
-    setup_logger(args.loglevel).expect("Could not setup logging");
-
-    let local_clock = if let Some(hardware_clock) = &args.hardware_clock {
-        LinuxClock::open(hardware_clock).expect("Could not open hardware clock")
+    let local_clock = if let Some(hardware_clock) = config.hardware_clock {
+        LinuxClock::open(hardware_clock).expect("could not open hardware clock")
     } else {
         LinuxClock::CLOCK_REALTIME
     };
 
-    let timestamping_mode = if args.hardware_clock.is_some() {
+    let timestamping_mode = TimestampingMode::Software;
+    /*
+    let timestamping_mode = if config.hardware_clock.is_some() {
         match args.interface.interface_name {
             Some(interface_name) => TimestampingMode::Hardware(interface_name),
             None => panic!("an interface name is required when using hardware timestamping"),
@@ -230,23 +182,23 @@ async fn actual_main() {
     } else {
         TimestampingMode::Software
     };
+*/
+    let clock_identity = ClockIdentity(get_clock_id().expect("could not get clock identity"));
 
-    let clock_identity = ClockIdentity(get_clock_id().expect("Could not get clock identity"));
-
-    let config = InstanceConfig {
+    let instance_config = InstanceConfig {
         clock_identity,
-        priority_1: args.priority_1,
-        priority_2: args.priority_2,
-        domain_number: args.domain,
+        priority_1: config.priority1,
+        priority_2: config.priority2,
+        domain_number: config.domain,
         slave_only: false,
-        sdo_id: args.sdo,
+        sdo_id: SdoId::new(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
     };
 
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
     let instance = PtpInstance::new(
-        config,
+        instance_config,
         time_properties_ds,
         local_clock.clone(),
         BasicFilter::new(0.25),
@@ -255,7 +207,7 @@ async fn actual_main() {
     // borrow instance with the static lifetime
     static INSTANCE: OnceLock<PtpInstance<LinuxClock, BasicFilter>> = OnceLock::new();
     let instance = INSTANCE.get_or_init(|| instance);
-
+/*
     let port_config = PortConfig {
         delay_mechanism: DelayMechanism::E2E {
             interval: Interval::TWO_SECONDS,
@@ -266,18 +218,17 @@ async fn actual_main() {
         master_only: false,
         delay_asymmetry: Duration::ZERO,
     };
-
-    let rng1 = StdRng::from_entropy();
-    let port_in_bmca1 = instance.add_port(port_config, rng1);
-
-    let rng2 = StdRng::from_entropy();
-    let port_in_bmca2 = instance.add_port(port_config, rng2);
-
-    let ports = vec![port_in_bmca1, port_in_bmca2];
+ */
+    
+    let ports = config.ports
+        .into_iter()
+        .map(|port_config| {
+            let rng = StdRng::from_entropy();
+            instance.add_port(port_config.into(), rng)
+        }).collect();
 
     run(
         ports,
-        &args.interface,
         timestamping_mode,
         &local_clock,
         instance,
@@ -288,7 +239,6 @@ async fn actual_main() {
 
 async fn run(
     ports: Vec<BmcaPort>,
-    interface: &InterfaceDescriptor,
     timestamping_mode: TimestampingMode,
     local_clock: &LinuxClock,
     instance: &'static PtpInstance<LinuxClock, BasicFilter>,
@@ -300,8 +250,8 @@ async fn run(
     let mut main_task_receivers = Vec::with_capacity(ports.len());
 
     for port in ports.into_iter() {
-        let event_socket = EventSocket::new(interface, timestamping_mode).await?;
-        let general_socket = GeneralSocket::new(interface).await?;
+        let event_socket = EventSocket::new(port.interface, timestamping_mode).await?;
+        let general_socket = GeneralSocket::new(port.interface).await?;
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
