@@ -159,7 +159,6 @@ impl<'a, C: Clock, F: Filter, R: Rng> Port<Running<'a, C, F>, R> {
             &mut self.port_state,
             &self.lifecycle.state.filter,
             &self.lifecycle.state.local_clock,
-            &self.lifecycle.state.time_properties_ds,
         );
 
         actions
@@ -250,7 +249,6 @@ impl<'a, C: Clock, F: Filter, R: Rng> Port<Running<'a, C, F>, R> {
             &mut self.port_state,
             &self.lifecycle.state.filter,
             &self.lifecycle.state.local_clock,
-            &self.lifecycle.state.time_properties_ds,
         );
 
         actions
@@ -294,7 +292,6 @@ impl<'a, C: Clock, F: Filter, R: Rng> Port<Running<'a, C, F>, R> {
             &mut self.port_state,
             &self.lifecycle.state.filter,
             &self.lifecycle.state.local_clock,
-            &self.lifecycle.state.time_properties_ds,
         );
 
         action
@@ -360,7 +357,7 @@ impl<L, R> Port<L, R> {
     }
 }
 
-impl<'a, C, F, R: Rng> Port<InBmca<'a, C, F>, R> {
+impl<'a, C: Clock, F, R: Rng> Port<InBmca<'a, C, F>, R> {
     pub(crate) fn calculate_best_local_announce_message(&mut self, current_time: WireTimestamp) {
         self.lifecycle.local_best = self.bmca.take_best_port_announce_message(current_time)
     }
@@ -383,6 +380,7 @@ impl<'a, C, F, R: Rng> Port<InBmca<'a, C, F>, R> {
         current_ds: &mut CurrentDS,
         parent_ds: &mut ParentDS,
         default_ds: &DefaultDS,
+        clock: &mut C,
     ) {
         self.set_recommended_port_state(&recommended_state, default_ds);
 
@@ -423,6 +421,10 @@ impl<'a, C, F, R: Rng> Port<InBmca<'a, C, F>, R> {
                 parent_ds.grandmaster_priority_2 = announce_message.grandmaster_priority_2;
 
                 *time_properties_ds = announce_message.time_properties();
+
+                if let Err(error) = clock.set_properties(time_properties_ds) {
+                    log::error!("Could not update clock: {:?}", error);
+                }
             }
         }
 
@@ -540,7 +542,6 @@ fn handle_time_measurement<C: Clock, F: Filter>(
     port_state: &mut PortState,
     filter: &AtomicRefCell<F>,
     clock: &AtomicRefCell<C>,
-    time_properties_ds: &TimePropertiesDS,
 ) {
     if let Some(measurement) = port_state.extract_measurement() {
         // If the received message allowed the (slave) state to calculate its offset
@@ -562,8 +563,11 @@ fn handle_time_measurement<C: Clock, F: Filter>(
 
         let (offset, freq_corr) = filter.absorb(measurement);
 
-        if let Err(error) = clock.adjust(offset, freq_corr, time_properties_ds) {
-            log::error!("failed to adjust clock: {:?}", error);
+        if let Err(error) = clock.step_clock(offset) {
+            log::error!("Failed to step clock: {:?}", error);
+        }
+        if let Err(error) = clock.adjust_frequency(freq_corr) {
+            log::error!("Failed to adjust clock frequency: {:?}", error);
         }
     }
 }
