@@ -1,7 +1,7 @@
 use std::{
     future::Future,
     pin::{pin, Pin},
-    sync::OnceLock, str::FromStr,
+    sync::OnceLock, str::FromStr, path::PathBuf
 };
 
 use clap::Parser;
@@ -31,6 +31,12 @@ use tokio::{
 
 #[derive(Clone, Copy)]
 struct SdoIdParser;
+
+pub struct PortDefinition {
+    port: BmcaPort,
+    interface: InterfaceDescriptor,
+    timestamping_mode: TimestampingMode,
+}
 
 impl clap::builder::TypedValueParser for SdoIdParser {
     type Value = SdoId;
@@ -71,8 +77,8 @@ impl clap::builder::TypedValueParser for SdoIdParser {
 pub struct Args {
     /// Time interval between Sync messages, see: 7.7.2.3
     /// Default init value is 0, see: A.9.4.2
-    #[clap(long, short = 'f', default_value_t = String::from("config.toml"))]
-    log_sync_interval: String,
+    #[clap(long, short = 'f', default_value = "config.toml")]
+    config_file: Option<String>,
 }
 
 fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
@@ -157,8 +163,11 @@ async fn main() {
 }
 
 async fn actual_main() {
+
+    let args = Args::parse();
+    
     // TODO: Get file path from /etc or from command line arg?
-    let config = Config::from_file("config.toml")
+    let config = Config::from_file(PathBuf::from(args.config_file.expect("could not determine config file path")))
         .unwrap_or_else(|e| panic!("error loading config: {e}"));
 
     // TODO: Merge config and args,
@@ -196,36 +205,32 @@ async fn actual_main() {
     // borrow instance with the static lifetime
     static INSTANCE: OnceLock<PtpInstance<LinuxClock, BasicFilter>> = OnceLock::new();
     let instance = INSTANCE.get_or_init(|| instance);
-    /*
-    let port_config = PortConfig {
-    delay_mechanism: DelayMechanism::E2E {
-    interval: Interval::TWO_SECONDS,
-    },
-    announce_interval: Interval::from_log_2(args.log_announce_interval),
-    announce_receipt_timeout: args.announce_receipt_timeout,
-    sync_interval: Interval::from_log_2(args.log_sync_interval),
-    master_only: false,
-    delay_asymmetry: Duration::ZERO,
-    };
-     */
-    
-    let ports: Vec<(BmcaPort, InterfaceDescriptor, TimestampingMode)> = config.ports
+
+    // for every port in the config file, create a port definition and add it
+    // to the instance
+    let ports: Vec<PortDefinition> = config.ports
         .into_iter()
         .map(|port_config| {
-            let interface_descriptor = InterfaceDescriptor::from_str(dbg!(port_config.interface.as_str())).unwrap();
-
-            /*
+            let interface = InterfaceDescriptor::from_str(port_config.interface.as_str()).unwrap();
+            /* NOTE: Hardware timestamping is ignored for now
             let timestamping_mode = if config.hardware_clock.is_some() {
-                match interface_descriptor.interface_name {
-                    Some(interface_name) => TimestampingMode::Hardware(interface_name),
-                    None => panic!("an interface name is required when using hardware timestamping"),
-                }
+            match interface_descriptor.interface_name {
+            Some(interface_name) => TimestampingMode::Hardware(interface_name),
+            None => panic!("an interface name is required when using hardware timestamping"),
+            }
             } else {
-                TimestampingMode::Software
+            TimestampingMode::Software
             };
-    */
+             */
+            let timestamping_mode = TimestampingMode::Software;
             let rng = StdRng::from_entropy();
-            (instance.add_port(port_config.into(), rng), interface_descriptor, TimestampingMode::Software)
+            let port = instance.add_port(port_config.into(), rng);
+
+            PortDefinition {
+                port,
+                interface,
+                timestamping_mode,
+            }
         }).collect();
 
     run(
@@ -238,7 +243,7 @@ async fn actual_main() {
 }
 
 async fn run(
-    ports: Vec<(BmcaPort, InterfaceDescriptor, TimestampingMode)>,
+    ports: Vec<PortDefinition>,
     local_clock: &LinuxClock,
     instance: &'static PtpInstance<LinuxClock, BasicFilter>,
 ) -> std::io::Result<()> {
@@ -250,8 +255,8 @@ async fn run(
 
     for port in ports.into_iter() {
         
-        let event_socket = EventSocket::new(&port.1, port.2).await?;
-        let general_socket = GeneralSocket::new(&port.1).await?;
+        let event_socket = EventSocket::new(&port.interface, port.timestamping_mode).await?;
+        let general_socket = GeneralSocket::new(&port.interface).await?;
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -266,7 +271,7 @@ async fn run(
         ));
 
         main_task_sender
-            .send(port.0)
+            .send(port.port)
             .await
             .expect("space in channel buffer");
 
