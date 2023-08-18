@@ -214,14 +214,14 @@ async fn actual_main() {
             let interface = InterfaceDescriptor::from_str(port_config.interface.as_str()).unwrap();
             /* NOTE: Hardware timestamping is ignored for now
             let timestamping_mode = if config.hardware_clock.is_some() {
-            match interface_descriptor.interface_name {
-            Some(interface_name) => TimestampingMode::Hardware(interface_name),
-            None => panic!("an interface name is required when using hardware timestamping"),
-            }
+                match interface_descriptor.interface_name {
+                    Some(interface_name) => TimestampingMode::Hardware(interface_name),
+                    None => panic!("an interface name is required when using hardware timestamping"),
+                }
             } else {
-            TimestampingMode::Software
+                TimestampingMode::Software
             };
-             */
+            */
             let timestamping_mode = TimestampingMode::Software;
             let rng = StdRng::from_entropy();
             let port = instance.add_port(port_config.into(), rng);

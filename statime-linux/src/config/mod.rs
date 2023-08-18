@@ -59,24 +59,20 @@ impl Config {
         }
 
         let contents = read_to_string(file)?;
-        Ok(toml::de::from_str(&contents)?)
+        let config: Config = toml::de::from_str(&contents)?;
+        config.warn_when_unreasonable();
+        Ok(config)
     }
 
-    /// Check that the config is reasonable
-    pub fn check(&self) -> bool {
-        let mut ok = true;
-
+    /// Warn about unreasonable config values
+    pub fn warn_when_unreasonable(&self) {
         if self.ports.len() < 1 {
             warn!("No ports configured.");
-            ok = false;
         }
 
         if self.ports.len() > 16 {
             warn!("Too many ports are configured.");
-            ok = false;
         }
-
-        ok
     }
 }
 
