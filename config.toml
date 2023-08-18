@@ -16,12 +16,3 @@ announce_receipt_timeout = 3
 delay_asymetry = 0
 delay_mechanism = 0
 master_only = false
-
-[[ports]]
-interface = "wlp2s0"
-announce_interval = 1
-sync_interval = 0
-announce_receipt_timeout = 3
-delay_asymetry = 0
-delay_mechanism = 0
-master_only = false

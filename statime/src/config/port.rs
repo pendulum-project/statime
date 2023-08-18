@@ -19,7 +19,6 @@ pub enum DelayMechanism {
 /// as part of [crate::port::Port].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PortConfig {
-    pub interface: &'static str,
     pub delay_mechanism: DelayMechanism,
     pub announce_interval: Interval,
     // more like announce_message_retries. Specifies how many announce_intervals to wait until the

@@ -18,7 +18,7 @@ use statime_linux::{
     socket::{EventSocket, GeneralSocket},
 };
 use timestamped_socket::{
-    interface::{InterfaceDescriptor, InterfaceIterator},
+    interface::{InterfaceIterator, InterfaceDescriptor},
     raw_udp_socket::TimestampingMode,
 };
 use tokio::{
@@ -172,17 +172,6 @@ async fn actual_main() {
         LinuxClock::CLOCK_REALTIME
     };
 
-    let timestamping_mode = TimestampingMode::Software;
-    /*
-    let timestamping_mode = if config.hardware_clock.is_some() {
-        match args.interface.interface_name {
-            Some(interface_name) => TimestampingMode::Hardware(interface_name),
-            None => panic!("an interface name is required when using hardware timestamping"),
-        }
-    } else {
-        TimestampingMode::Software
-    };
-*/
     let clock_identity = ClockIdentity(get_clock_id().expect("could not get clock identity"));
 
     let instance_config = InstanceConfig {
@@ -207,39 +196,49 @@ async fn actual_main() {
     // borrow instance with the static lifetime
     static INSTANCE: OnceLock<PtpInstance<LinuxClock, BasicFilter>> = OnceLock::new();
     let instance = INSTANCE.get_or_init(|| instance);
-/*
+    /*
     let port_config = PortConfig {
-        delay_mechanism: DelayMechanism::E2E {
-            interval: Interval::TWO_SECONDS,
-        },
-        announce_interval: Interval::from_log_2(args.log_announce_interval),
-        announce_receipt_timeout: args.announce_receipt_timeout,
-        sync_interval: Interval::from_log_2(args.log_sync_interval),
-        master_only: false,
-        delay_asymmetry: Duration::ZERO,
+    delay_mechanism: DelayMechanism::E2E {
+    interval: Interval::TWO_SECONDS,
+    },
+    announce_interval: Interval::from_log_2(args.log_announce_interval),
+    announce_receipt_timeout: args.announce_receipt_timeout,
+    sync_interval: Interval::from_log_2(args.log_sync_interval),
+    master_only: false,
+    delay_asymmetry: Duration::ZERO,
     };
- */
+     */
     
-    let ports = config.ports
+    let ports: Vec<(BmcaPort, InterfaceDescriptor, TimestampingMode)> = config.ports
         .into_iter()
         .map(|port_config| {
+            let interface_descriptor = InterfaceDescriptor::from_str(dbg!(port_config.interface.as_str())).unwrap();
+
+            /*
+            let timestamping_mode = if config.hardware_clock.is_some() {
+                match interface_descriptor.interface_name {
+                    Some(interface_name) => TimestampingMode::Hardware(interface_name),
+                    None => panic!("an interface name is required when using hardware timestamping"),
+                }
+            } else {
+                TimestampingMode::Software
+            };
+    */
             let rng = StdRng::from_entropy();
-            instance.add_port(port_config.into(), rng)
+            (instance.add_port(port_config.into(), rng), interface_descriptor, TimestampingMode::Software)
         }).collect();
 
     run(
         ports,
-        timestamping_mode,
         &local_clock,
         instance,
     )
-    .await
-    .unwrap()
+        .await
+        .unwrap()
 }
 
 async fn run(
-    ports: Vec<BmcaPort>,
-    timestamping_mode: TimestampingMode,
+    ports: Vec<(BmcaPort, InterfaceDescriptor, TimestampingMode)>,
     local_clock: &LinuxClock,
     instance: &'static PtpInstance<LinuxClock, BasicFilter>,
 ) -> std::io::Result<()> {
@@ -250,8 +249,9 @@ async fn run(
     let mut main_task_receivers = Vec::with_capacity(ports.len());
 
     for port in ports.into_iter() {
-        let event_socket = EventSocket::new(port.interface, timestamping_mode).await?;
-        let general_socket = GeneralSocket::new(port.interface).await?;
+        
+        let event_socket = EventSocket::new(&port.1, port.2).await?;
+        let general_socket = GeneralSocket::new(&port.1).await?;
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -266,7 +266,7 @@ async fn run(
         ));
 
         main_task_sender
-            .send(port)
+            .send(port.0)
             .await
             .expect("space in channel buffer");
 
