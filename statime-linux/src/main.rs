@@ -228,12 +228,7 @@ async fn actual_main() {
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
-    let instance = PtpInstance::new(
-        config,
-        time_properties_ds,
-        local_clock.clone(),
-        BasicFilter::new(0.25),
-    );
+    let instance = PtpInstance::new(config, time_properties_ds, local_clock.clone());
 
     // borrow instance with the static lifetime
     static INSTANCE: OnceLock<PtpInstance<LinuxClock, BasicFilter>> = OnceLock::new();
@@ -251,10 +246,10 @@ async fn actual_main() {
     };
 
     let rng1 = StdRng::from_entropy();
-    let port_in_bmca1 = instance.add_port(port_config, rng1);
+    let port_in_bmca1 = instance.add_port(port_config, 0.25, local_clock.clone(), rng1);
 
     let rng2 = StdRng::from_entropy();
-    let port_in_bmca2 = instance.add_port(port_config, rng2);
+    let port_in_bmca2 = instance.add_port(port_config, 0.25, local_clock.clone(), rng2);
 
     let ports = vec![port_in_bmca1, port_in_bmca2];
 
@@ -342,7 +337,7 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<InBmca<'static, LinuxClock, BasicFilter>, StdRng>;
+type BmcaPort = Port<InBmca<'static>, StdRng, LinuxClock, BasicFilter>;
 
 // the Port task
 //
@@ -355,7 +350,7 @@ async fn port_task(
     port_task_sender: Sender<BmcaPort>,
     mut event_socket: EventSocket,
     mut general_socket: GeneralSocket,
-    mut local_clock: LinuxClock,
+    local_clock: LinuxClock,
     bmca_notify: &Notify,
 ) {
     let mut timers = Timers {
@@ -363,6 +358,7 @@ async fn port_task(
         port_announce_timer: pin!(Timer::new()),
         port_announce_timeout_timer: pin!(Timer::new()),
         delay_request_timer: pin!(Timer::new()),
+        filter_update_timer: pin!(Timer::new()),
     };
 
     loop {
@@ -376,7 +372,7 @@ async fn port_task(
             &mut event_socket,
             &mut general_socket,
             &mut timers,
-            &mut local_clock,
+            &local_clock,
         )
         .await;
 
@@ -386,7 +382,7 @@ async fn port_task(
                 &mut event_socket,
                 &mut general_socket,
                 &mut timers,
-                &mut local_clock,
+                &local_clock,
             )
             .await;
         }
@@ -416,6 +412,9 @@ async fn port_task(
                 () = &mut timers.delay_request_timer => {
                     port.handle_delay_request_timer()
                 },
+                () = &mut timers.filter_update_timer => {
+                    port.handle_filter_update_timer()
+                },
                 () = bmca_notify.notified() => {
                     break;
                 }
@@ -427,7 +426,7 @@ async fn port_task(
                     &mut event_socket,
                     &mut general_socket,
                     &mut timers,
-                    &mut local_clock,
+                    &local_clock,
                 )
                 .await;
 
@@ -449,6 +448,7 @@ struct Timers<'a> {
     port_announce_timer: Pin<&'a mut Timer>,
     port_announce_timeout_timer: Pin<&'a mut Timer>,
     delay_request_timer: Pin<&'a mut Timer>,
+    filter_update_timer: Pin<&'a mut Timer>,
 }
 
 async fn handle_actions(
@@ -456,7 +456,7 @@ async fn handle_actions(
     event_socket: &mut EventSocket,
     general_socket: &mut GeneralSocket,
     timers: &mut Timers<'_>,
-    local_clock: &mut LinuxClock,
+    local_clock: &LinuxClock,
 ) -> Option<(TimestampContext, Time)> {
     let mut pending_timestamp = None;
 
@@ -487,6 +487,9 @@ async fn handle_actions(
             }
             PortAction::ResetAnnounceReceiptTimer { duration } => {
                 timers.port_announce_timeout_timer.as_mut().reset(duration);
+            }
+            PortAction::ResetFilterUpdateTimer { duration } => {
+                timers.filter_update_timer.as_mut().reset(duration);
             }
         }
     }
