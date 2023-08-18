@@ -1,5 +1,10 @@
 use crate::datastructures::WireFormatError;
 
+/// A validated (but not parsed!) collection of TLVs
+///
+/// Because the number of TLVs is unknown and can be large, we cannot reliable
+/// parse TLVs in a no_std context. So instead we validate the TLVs, but hold
+/// onto the original slice that contains the TLV bytes. The
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct TlvSet<'a> {
     bytes: &'a [u8],
@@ -258,13 +263,18 @@ mod tests {
             value: &b"hello!"[..],
         };
 
-        let mut buffer = [0; 256];
-        tlv.serialize(&mut buffer).unwrap();
+        let mut buffer1 = std::vec::Vec::new();
+        tlv.write_serialized(&mut buffer1).unwrap();
+
+        let mut buffer2 = [0; 256];
+        tlv.serialize(&mut buffer2[..buffer1.len()]).unwrap();
+
+        assert_eq!(&buffer1, &buffer2[..buffer1.len()]);
 
         let n = tlv.wire_size();
         assert_eq!(n, 10);
 
-        let decoded = Tlv::deserialize(&buffer[..n]).unwrap();
+        let decoded = Tlv::deserialize(&buffer2[..n]).unwrap();
 
         assert_eq!(tlv, decoded);
     }

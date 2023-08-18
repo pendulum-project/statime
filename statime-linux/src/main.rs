@@ -415,6 +415,9 @@ async fn run(
     // their normal actions at this time: bmca is stop-the-world!
     let mut bmca_timer = pin!(Timer::new());
 
+    // TLVs that must be propagated to other ports
+    let mut propagate = Vec::new();
+
     loop {
         // reset bmca timer
         bmca_timer.as_mut().reset(instance.bmca_interval());
@@ -429,7 +432,6 @@ async fn run(
 
         let mut bmca_ports = Vec::with_capacity(main_task_receivers.len());
         let mut mut_bmca_ports = Vec::with_capacity(main_task_receivers.len());
-        let mut propagate = Vec::new();
 
         for receiver in main_task_receivers.iter_mut() {
             let output = receiver.recv().await.unwrap();
@@ -468,7 +470,7 @@ async fn run(
         // Announce message in the order of arrival at the egress PTP Port from
         // the ingress PTP Port of the PTP Instance.
         propagate.sort();
-        let tlv: Vec<u8> = propagate.into_iter().flat_map(|tlv| tlv.bytes).collect();
+        let tlv: Vec<u8> = propagate.drain(..).flat_map(|tlv| tlv.bytes).collect();
 
         for (port, sender) in bmca_ports.into_iter().zip(main_task_senders.iter()) {
             let input = PortTaskInput {
@@ -812,15 +814,22 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
             PortAction::PropagateTlv {
                 tlv_set,
                 current_time,
-            } => tlv.extend(tlv_set.announce_propagate_tlv().map(|tlv| {
-                let mut bytes = Vec::with_capacity(128);
-                tlv.write_serialized(&mut bytes).expect("Vec can grow");
+            } => {
+                // 14.2.2.2 Unsupported TLVs marked "Propagate"
+                //
+                // When certain TLV types are attached to an Announce message, they must be
+                // forwarded. Here we pass these TLVs up. They will be combined and distributed
+                // by the BMCA logic
+                tlv.extend(tlv_set.announce_propagate_tlv().map(|tlv| {
+                    let mut bytes = Vec::with_capacity(128);
+                    tlv.write_serialized(&mut bytes).expect("Vec can grow");
 
-                OwnedTlv {
-                    timestamp: current_time.to_nanos(),
-                    bytes,
-                }
-            })),
+                    OwnedTlv {
+                        timestamp: current_time.to_nanos(),
+                        bytes,
+                    }
+                }))
+            }
         }
     }
 
