@@ -15,7 +15,7 @@ use crate::{
     clock::Clock,
     config::PortConfig,
     datastructures::{
-        common::{LeapIndicator, PortIdentity, TimeSource},
+        common::{LeapIndicator, PortIdentity, TimeSource, TlvSet, WireTimestamp},
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
         messages::{Message, MessageBody},
     },
@@ -121,6 +121,10 @@ pub enum PortAction<'a> {
     ResetFilterUpdateTimer {
         duration: core::time::Duration,
     },
+    PropagateTlv {
+        tlv_set: TlvSet<'a>,
+        current_time: WireTimestamp,
+    },
 }
 
 const MAX_ACTIONS: usize = 2;
@@ -181,11 +185,12 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     // Handle the announce timer going of
-    pub fn handle_announce_timer(&mut self) -> PortActionIterator<'_> {
+    pub fn handle_announce_timer(&mut self, tlv_set: TlvSet<'_>) -> PortActionIterator<'_> {
         self.port_state.send_announce(
             self.lifecycle.state.deref(),
             &self.config,
             self.port_identity,
+            tlv_set,
             &mut self.packet_buffer,
         )
     }
@@ -256,7 +261,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     // Handle a message over the event channel
-    pub fn handle_event_receive(&mut self, data: &[u8], timestamp: Time) -> PortActionIterator {
+    pub fn handle_event_receive<'b>(
+        &'b mut self,
+        data: &'b [u8],
+        timestamp: Time,
+    ) -> PortActionIterator<'b> {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
             Err(error) => {
@@ -287,7 +296,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     // Handle a general ptp message
-    pub fn handle_general_receive(&mut self, data: &[u8]) -> PortActionIterator {
+    pub fn handle_general_receive<'b>(&mut self, data: &'b [u8]) -> PortActionIterator<'b> {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
             Err(error) => {
@@ -306,14 +315,25 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         self.handle_general_internal(message)
     }
 
-    fn handle_general_internal(&mut self, message: Message<'_>) -> PortActionIterator<'_> {
+    fn handle_general_internal<'b>(&mut self, message: Message<'b>) -> PortActionIterator<'b> {
         match message.body {
             MessageBody::Announce(announce) => {
                 self.bmca
                     .register_announce_message(&message.header, &announce);
-                actions![PortAction::ResetAnnounceReceiptTimer {
+
+                let reset = PortAction::ResetAnnounceReceiptTimer {
                     duration: self.config.announce_duration(&mut self.rng),
-                }]
+                };
+
+                let propagate = PortAction::PropagateTlv {
+                    tlv_set: message.suffix,
+                    current_time: WireTimestamp::from(self.clock.now()),
+                };
+
+                match message.suffix.announce_propagate_tlv().count() {
+                    0 => actions![reset],
+                    _ => actions![reset, propagate],
+                }
             }
             _ => {
                 self.port_state

@@ -4,7 +4,11 @@ use rand::Rng;
 
 use super::{PortActionIterator, TimestampContext};
 use crate::{
-    datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
+    datastructures::{
+        common::{PortIdentity, TlvSet},
+        datasets::DefaultDS,
+        messages::Message,
+    },
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
     Clock, Filter, PortConfig,
@@ -44,15 +48,15 @@ impl<F: Filter> PortState<F> {
         }
     }
 
-    pub(crate) fn handle_event_receive<'a, C: Clock>(
-        &mut self,
+    pub(crate) fn handle_event_receive<'a, 'b, C: Clock>(
+        &'a mut self,
         message: Message,
         timestamp: Time,
         min_delay_req_interval: Interval,
         port_identity: PortIdentity,
         clock: &mut C,
-        buffer: &'a mut [u8],
-    ) -> PortActionIterator<'a> {
+        buffer: &'b mut [u8],
+    ) -> PortActionIterator<'b> {
         match self {
             PortState::Master(master) => master.handle_event_receive(
                 message,
@@ -66,12 +70,12 @@ impl<F: Filter> PortState<F> {
         }
     }
 
-    pub(crate) fn handle_general_receive<C: Clock>(
+    pub(crate) fn handle_general_receive<'b, C: Clock>(
         &mut self,
         message: Message,
         port_identity: PortIdentity,
         clock: &mut C,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'b> {
         match self {
             PortState::Master(_) => {
                 if message.header().source_port_identity != port_identity {
@@ -144,11 +148,12 @@ impl<F> PortState<F> {
         global: &PtpInstanceState,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
+        tlv_set: TlvSet<'_>,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match self {
             PortState::Master(master) => {
-                master.send_announce(global, config, port_identity, buffer)
+                master.send_announce(global, config, port_identity, tlv_set, buffer)
             }
             PortState::Slave(_) | PortState::Listening | PortState::Passive => actions![],
         }

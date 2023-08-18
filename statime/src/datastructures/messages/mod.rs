@@ -239,7 +239,7 @@ fn base_header(default_ds: &DefaultDS, port_identity: PortIdentity, sequence_id:
     }
 }
 
-impl Message<'_> {
+impl<'a> Message<'a> {
     pub(crate) fn sync(
         default_ds: &DefaultDS,
         port_identity: PortIdentity,
@@ -283,6 +283,7 @@ impl Message<'_> {
         global: &PtpInstanceState,
         port_identity: PortIdentity,
         sequence_id: u16,
+        tlv_set: TlvSet<'a>,
     ) -> Self {
         let time_properties_ds = &global.time_properties_ds;
 
@@ -311,7 +312,7 @@ impl Message<'_> {
         Message {
             header,
             body,
-            suffix: TlvSet::default(),
+            suffix: tlv_set,
         }
     }
 

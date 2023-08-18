@@ -13,6 +13,12 @@ pub struct WireTimestamp {
     pub nanos: u32,
 }
 
+impl WireTimestamp {
+    pub fn to_nanos(self) -> u128 {
+        self.seconds as u128 * 1_000_000_000 + self.nanos as u128
+    }
+}
+
 impl WireFormat for WireTimestamp {
     fn wire_size(&self) -> usize {
         10

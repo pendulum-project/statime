@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use crate::{
     datastructures::{
-        common::PortIdentity,
+        common::{PortIdentity, TlvSet},
         datasets::DefaultDS,
         messages::{DelayReqMessage, Header, Message, MessageBody},
     },
@@ -110,23 +110,28 @@ impl MasterState {
         global: &PtpInstanceState,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
+        tlv_set: TlvSet<'_>,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         log::trace!("sending announce message");
 
-        let packet_length =
-            match Message::announce(global, port_identity, self.announce_seq_ids.generate())
-                .serialize(buffer)
-            {
-                Ok(length) => length,
-                Err(error) => {
-                    log::error!(
-                        "Statime bug: Could not serialize announce message {:?}",
-                        error
-                    );
-                    return actions![];
-                }
-            };
+        let message = Message::announce(
+            global,
+            port_identity,
+            self.announce_seq_ids.generate(),
+            tlv_set,
+        );
+
+        let packet_length = match message.serialize(buffer) {
+            Ok(length) => length,
+            Err(error) => {
+                log::error!(
+                    "Statime bug: Could not serialize announce message {:?}",
+                    error
+                );
+                return actions![];
+            }
+        };
 
         actions![
             PortAction::ResetAnnounceTimer {
@@ -360,8 +365,13 @@ mod tests {
         };
         let mut state = MasterState::new();
 
-        let mut actions =
-            state.send_announce(&global, &config, PortIdentity::default(), &mut buffer);
+        let mut actions = state.send_announce(
+            &global,
+            &config,
+            PortIdentity::default(),
+            TlvSet::default(),
+            &mut buffer,
+        );
 
         assert!(matches!(
             actions.next(),
@@ -383,8 +393,13 @@ mod tests {
 
         assert_eq!(msg.grandmaster_priority_1, 15);
 
-        let mut actions =
-            state.send_announce(&global, &config, PortIdentity::default(), &mut buffer);
+        let mut actions = state.send_announce(
+            &global,
+            &config,
+            PortIdentity::default(),
+            TlvSet::default(),
+            &mut buffer,
+        );
 
         assert!(matches!(
             actions.next(),

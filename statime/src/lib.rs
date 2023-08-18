@@ -50,7 +50,7 @@ pub use config::{DelayMechanism, InstanceConfig, PortConfig};
 #[cfg(feature = "fuzz")]
 pub use datastructures::messages::FuzzMessage;
 pub use datastructures::{
-    common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource},
+    common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource, TlvSet},
     datasets::TimePropertiesDS,
     messages::{SdoId, MAX_DATA_LEN},
 };
