@@ -13,7 +13,6 @@ pub struct Config {
     pub priority1: u8,
     pub priority2: u8,
     pub hardware_clock: Option<String>,
-    #[serde(alias = "port")]
     pub ports: Vec<PortConfig>,
 }
 
