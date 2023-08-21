@@ -539,7 +539,6 @@ dependencies = [
  "rand",
  "serde",
  "statime",
- "thiserror",
  "timestamped-socket",
  "tokio",
  "toml",
@@ -580,26 +579,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a393066ed9010ebaed60b9eafa373d4b1baac186dd7e008555b0f702b51945b6"
 dependencies = [
  "unicode-xid",
-]
-
-[[package]]
-name = "thiserror"
-version = "1.0.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97a802ec30afc17eee47b2855fc72e0c4cd62be9b4efe6591edde0ec5bd68d8f"
-dependencies = [
- "thiserror-impl",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bb623b56e39ab7dcd4b1b98bb6c8f8d907ed255b18de254088016b27a8ee19b"
-dependencies = [
- "proc-macro2",
- "quote 1.0.29",
- "syn 2.0.23",
 ]
 
 [[package]]

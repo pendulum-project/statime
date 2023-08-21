@@ -2,7 +2,6 @@ use std::{os::unix::fs::PermissionsExt, path::Path, fs::read_to_string};
 use log::warn;
 use serde::Deserialize;
 use statime::{Interval, Duration, DelayMechanism};
-use thiserror::Error;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -59,8 +58,8 @@ impl Config {
             warn!("Unrestricted config file permissions: Others can write.");
         }
 
-        let contents = read_to_string(file)?;
-        let config: Config = toml::de::from_str(&contents)?;
+        let contents = read_to_string(file).map_err(ConfigError::Io)?;
+        let config: Config = toml::de::from_str(&contents).map_err(ConfigError::Toml)?;
         config.warn_when_unreasonable();
         Ok(config)
     }
@@ -77,10 +76,19 @@ impl Config {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ConfigError {
-    #[error("io error while reading config: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("config toml parsing error: {0}")]
-    Toml(#[from] toml::de::Error),
+    Io(std::io::Error),
+    Toml(toml::de::Error),
 }
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::Io(e) => writeln!(f, "io error while reading config: {e}"),
+            ConfigError::Toml(e) => writeln!(f, "config toml parsing error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
