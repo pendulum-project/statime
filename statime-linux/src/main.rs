@@ -1,16 +1,18 @@
 use std::{
     future::Future,
+    path::PathBuf,
     pin::{pin, Pin},
-    sync::OnceLock, str::FromStr, path::PathBuf
+    str::FromStr,
+    sync::OnceLock,
 };
 
 use clap::Parser;
 use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    BasicFilter, Clock, ClockIdentity, InBmca, InstanceConfig,
-    Port, PortAction, PortActionIterator, PtpInstance, SdoId, Time, TimePropertiesDS,
-    TimeSource, TimestampContext, MAX_DATA_LEN,
+    BasicFilter, Clock, ClockIdentity, InBmca, InstanceConfig, Port, PortAction,
+    PortActionIterator, PtpInstance, SdoId, Time, TimePropertiesDS, TimeSource, TimestampContext,
+    MAX_DATA_LEN,
 };
 use statime_linux::{
     clock::LinuxClock,
@@ -18,7 +20,7 @@ use statime_linux::{
     socket::{EventSocket, GeneralSocket},
 };
 use timestamped_socket::{
-    interface::{InterfaceIterator, InterfaceDescriptor},
+    interface::{InterfaceDescriptor, InterfaceIterator},
     raw_udp_socket::TimestampingMode,
 };
 use tokio::{
@@ -163,11 +165,14 @@ async fn main() {
 }
 
 async fn actual_main() {
-
     let args = Args::parse();
-    
-    let config = Config::from_file(&args.config_file.expect("could not determine config file path"))
-        .unwrap_or_else(|e| panic!("error loading config: {e}"));
+
+    let config = Config::from_file(
+        &args
+            .config_file
+            .expect("could not determine config file path"),
+    )
+    .unwrap_or_else(|e| panic!("error loading config: {e}"));
 
     let log_level = log::LevelFilter::from_str(&config.loglevel).unwrap();
     setup_logger(log_level).expect("could not setup logging");
@@ -200,38 +205,29 @@ async fn actual_main() {
 
     // for every port in the config file, create a port definition and add it
     // to the instance
-    let ports = config.ports
-        .into_iter()
-        .map(|port_config| {
-            let interface = InterfaceDescriptor::from_str(port_config.interface.as_str()).unwrap();
-            /* NOTE: Hardware timestamping is ignored for now
-            let timestamping_mode = if config.hardware_clock.is_some() {
-                match interface_descriptor.interface_name {
-                    Some(interface_name) => TimestampingMode::Hardware(interface_name),
-                    None => panic!("an interface name is required when using hardware timestamping"),
-                }
-            } else {
-                TimestampingMode::Software
-            };
-            */
-            let timestamping_mode = TimestampingMode::Software;
-            let rng = StdRng::from_entropy();
-            let port = instance.add_port(port_config.into(), 0.25, local_clock.clone(), rng);
+    let ports = config.ports.into_iter().map(|port_config| {
+        let interface = InterfaceDescriptor::from_str(port_config.interface.as_str()).unwrap();
+        // NOTE: Hardware timestamping is ignored for now
+        // let timestamping_mode = if config.hardware_clock.is_some() {
+        // match interface_descriptor.interface_name {
+        // Some(interface_name) => TimestampingMode::Hardware(interface_name),
+        // None => panic!("an interface name is required when using hardware
+        // timestamping"), }
+        // } else {
+        // TimestampingMode::Software
+        // };
+        let timestamping_mode = TimestampingMode::Software;
+        let rng = StdRng::from_entropy();
+        let port = instance.add_port(port_config.into(), 0.25, local_clock.clone(), rng);
 
-            PortDefinition {
-                port,
-                interface,
-                timestamping_mode,
-            }
-        });
+        PortDefinition {
+            port,
+            interface,
+            timestamping_mode,
+        }
+    });
 
-    run(
-        ports,
-        &local_clock,
-        instance,
-    )
-        .await
-        .unwrap()
+    run(ports, &local_clock, instance).await.unwrap()
 }
 
 async fn run(
@@ -246,8 +242,11 @@ async fn run(
     let mut main_task_receivers = Vec::with_capacity(ports.len());
 
     for port_definition in ports.into_iter() {
-        
-        let event_socket = EventSocket::new(&port_definition.interface, port_definition.timestamping_mode).await?;
+        let event_socket = EventSocket::new(
+            &port_definition.interface,
+            port_definition.timestamping_mode,
+        )
+        .await?;
         let general_socket = GeneralSocket::new(&port_definition.interface).await?;
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
