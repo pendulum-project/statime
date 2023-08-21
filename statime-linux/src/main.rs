@@ -245,10 +245,10 @@ async fn run(
     let mut main_task_senders = Vec::with_capacity(ports.len());
     let mut main_task_receivers = Vec::with_capacity(ports.len());
 
-    for port in ports.into_iter() {
+    for port_definition in ports.into_iter() {
         
-        let event_socket = EventSocket::new(&port.interface, port.timestamping_mode).await?;
-        let general_socket = GeneralSocket::new(&port.interface).await?;
+        let event_socket = EventSocket::new(&port_definition.interface, port_definition.timestamping_mode).await?;
+        let general_socket = GeneralSocket::new(&port_definition.interface).await?;
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -263,7 +263,7 @@ async fn run(
         ));
 
         main_task_sender
-            .send(port.port)
+            .send(port_definition.port)
             .await
             .expect("space in channel buffer");
 

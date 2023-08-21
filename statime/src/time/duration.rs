@@ -10,9 +10,6 @@ use fixed::{
     types::I96F32,
 };
 
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-
 use super::Interval;
 use crate::datastructures::common::TimeInterval;
 

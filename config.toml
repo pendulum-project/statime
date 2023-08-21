@@ -8,7 +8,7 @@ priority1 = 255
 priority2 = 255
 #hardware_clock =
 
-[[ports]]
+[[port]]
 interface = "enp0s31f6"
 announce_interval = 1
 sync_interval = 0
@@ -17,7 +17,7 @@ delay_asymetry = 0
 delay_mechanism = 0
 master_only = false
 
-[[ports]]
+[[port]]
 interface = "enp0s31f6"
 announce_interval = 1
 sync_interval = 0
