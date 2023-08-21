@@ -1,9 +1,6 @@
 use core::fmt::Debug;
 
-use atomic_refcell::AtomicRefCell;
-
 use crate::{
-    clock::Clock,
     datastructures::{
         common::PortIdentity,
         datasets::DefaultDS,
@@ -78,7 +75,6 @@ impl MasterState {
 
     pub(crate) fn send_sync<'a>(
         &mut self,
-        local_clock: &AtomicRefCell<impl Clock>,
         config: &PortConfig,
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
@@ -86,17 +82,8 @@ impl MasterState {
     ) -> PortActionIterator<'a> {
         log::trace!("sending sync message");
 
-        let current_time = match local_clock.try_borrow().map(|borrow| borrow.now()) {
-            Ok(time) => time,
-            Err(error) => {
-                log::error!("Statime bug: Clock busy {:?}", error);
-                return actions![];
-            }
-        };
-
         let seq_id = self.sync_seq_ids.generate();
-        let packet_length = match Message::sync(default_ds, port_identity, seq_id, current_time)
-            .serialize(buffer)
+        let packet_length = match Message::sync(default_ds, port_identity, seq_id).serialize(buffer)
         {
             Ok(message) => message,
             Err(error) => {
@@ -118,40 +105,28 @@ impl MasterState {
         ]
     }
 
-    pub(crate) fn send_announce<'a, C: Clock, F>(
+    pub(crate) fn send_announce<'a>(
         &mut self,
-        global: &PtpInstanceState<C, F>,
+        global: &PtpInstanceState,
         config: &PortConfig,
         port_identity: PortIdentity,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         log::trace!("sending announce message");
 
-        let current_time = match global.local_clock.try_borrow().map(|borrow| borrow.now()) {
-            Ok(time) => time,
-            Err(error) => {
-                log::error!("Statime bug: clock busy {:?}", error);
-                return actions![];
-            }
-        };
-
-        let packet_length = match Message::announce(
-            global,
-            port_identity,
-            self.announce_seq_ids.generate(),
-            current_time,
-        )
-        .serialize(buffer)
-        {
-            Ok(length) => length,
-            Err(error) => {
-                log::error!(
-                    "Statime bug: Could not serialize announce message {:?}",
-                    error
-                );
-                return actions![];
-            }
-        };
+        let packet_length =
+            match Message::announce(global, port_identity, self.announce_seq_ids.generate())
+                .serialize(buffer)
+            {
+                Ok(length) => length,
+                Err(error) => {
+                    log::error!(
+                        "Statime bug: Could not serialize announce message {:?}",
+                        error
+                    );
+                    return actions![];
+                }
+            };
 
         actions![
             PortAction::ResetAnnounceTimer {
@@ -227,41 +202,19 @@ impl MasterState {
 
 #[cfg(test)]
 mod tests {
-    use arrayvec::ArrayVec;
     use fixed::types::{I48F16, U96F32};
 
     use super::*;
     use crate::{
         config::InstanceConfig,
         datastructures::{
-            common::{ClockIdentity, TimeInterval},
+            common::{ClockIdentity, TimeInterval, TlvSet},
             datasets::{CurrentDS, ParentDS},
             messages::{Header, SdoId},
         },
         time::Interval,
         Duration, TimePropertiesDS, MAX_DATA_LEN,
     };
-
-    struct TestClock {
-        current_time: Time,
-    }
-
-    impl Clock for TestClock {
-        type Error = std::convert::Infallible;
-
-        fn now(&self) -> Time {
-            self.current_time
-        }
-
-        fn adjust(
-            &mut self,
-            _time_offset: crate::time::Duration,
-            _frequency_multiplier: f64,
-            _time_properties_ds: &crate::datastructures::datasets::TimePropertiesDS,
-        ) -> core::result::Result<(), Self::Error> {
-            panic!("Shouldn't be called");
-        }
-    }
 
     #[test]
     fn test_delay_response() {
@@ -283,7 +236,7 @@ mod tests {
                 body: MessageBody::DelayReq(DelayReqMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_fixed_nanos(U96F32::from_bits((200000 << 32) + (500 << 16))),
             Interval::from_log_2(2),
@@ -334,7 +287,7 @@ mod tests {
                 body: MessageBody::DelayReq(DelayReqMessage {
                     origin_timestamp: Time::from_micros(0).into(),
                 }),
-                suffix: ArrayVec::new(),
+                suffix: TlvSet::default(),
             },
             Time::from_fixed_nanos(U96F32::from_bits((220000 << 32) + (300 << 16))),
             Interval::from_log_2(5),
@@ -392,10 +345,6 @@ mod tests {
             current_ds,
             parent_ds,
             time_properties_ds,
-            local_clock: AtomicRefCell::new(TestClock {
-                current_time: Time::from_micros(600),
-            }),
-            filter: AtomicRefCell::new(()),
         };
 
         let config = PortConfig {
@@ -471,10 +420,6 @@ mod tests {
             delay_asymmetry: crate::Duration::ZERO,
         };
 
-        let clock = AtomicRefCell::new(TestClock {
-            current_time: Time::from_fixed_nanos(U96F32::from_bits((600000 << 32) + (248 << 16))),
-        });
-
         let mut state = MasterState::new();
         let defaultds = DefaultDS::new(InstanceConfig {
             clock_identity: ClockIdentity::default(),
@@ -485,13 +430,8 @@ mod tests {
             sdo_id: SdoId::default(),
         });
 
-        let mut actions = state.send_sync(
-            &clock,
-            &config,
-            PortIdentity::default(),
-            &defaultds,
-            &mut buffer,
-        );
+        let mut actions =
+            state.send_sync(&config, PortIdentity::default(), &defaultds, &mut buffer);
 
         assert!(matches!(
             actions.next(),
@@ -503,10 +443,10 @@ mod tests {
         assert!(actions.next().is_none());
         drop(actions);
 
-        let sync = Message::deserialize(&data).unwrap();
+        let sync = Message::deserialize(data).unwrap();
         let sync_header = sync.header;
 
-        let sync = match sync.body {
+        let _sync = match sync.body {
             MessageBody::Sync(msg) => msg,
             _ => panic!("Unexpected message type"),
         };
@@ -525,7 +465,7 @@ mod tests {
         assert!(actions.next().is_none());
         drop(actions);
 
-        let follow = Message::deserialize(&data).unwrap();
+        let follow = Message::deserialize(data).unwrap();
         let follow_header = follow.header;
 
         let follow = match follow.body {
@@ -534,7 +474,6 @@ mod tests {
         };
 
         assert_eq!(sync_header.sequence_id, follow_header.sequence_id);
-        assert_eq!(sync.origin_timestamp, Time::from_micros(600).into());
         assert_eq!(
             sync_header.correction_field,
             TimeInterval(I48F16::from_bits(0))
@@ -548,15 +487,8 @@ mod tests {
             TimeInterval(I48F16::from_bits(230))
         );
 
-        clock.borrow_mut().current_time =
-            Time::from_fixed_nanos(U96F32::from_bits((1000600000 << 32) + (192 << 16)));
-        let mut actions = state.send_sync(
-            &clock,
-            &config,
-            PortIdentity::default(),
-            &defaultds,
-            &mut buffer,
-        );
+        let mut actions =
+            state.send_sync(&config, PortIdentity::default(), &defaultds, &mut buffer);
 
         assert!(matches!(
             actions.next(),
@@ -568,10 +500,10 @@ mod tests {
         assert!(actions.next().is_none());
         drop(actions);
 
-        let sync2 = Message::deserialize(&data).unwrap();
+        let sync2 = Message::deserialize(data).unwrap();
         let sync2_header = sync2.header;
 
-        let sync2 = match sync2.body {
+        let _sync2 = match sync2.body {
             MessageBody::Sync(msg) => msg,
             _ => panic!("Unexpected message type"),
         };
@@ -589,7 +521,7 @@ mod tests {
         };
         assert!(actions.next().is_none());
 
-        let follow2 = Message::deserialize(&data).unwrap();
+        let follow2 = Message::deserialize(data).unwrap();
         let follow2_header = follow2.header;
 
         let follow2 = match follow2.body {
@@ -599,7 +531,6 @@ mod tests {
 
         assert_ne!(sync_header.sequence_id, sync2_header.sequence_id);
         assert_eq!(sync2_header.sequence_id, follow2_header.sequence_id);
-        assert_eq!(sync2.origin_timestamp, Time::from_micros(1000600).into());
         assert_eq!(
             sync2_header.correction_field,
             TimeInterval(I48F16::from_bits(0))

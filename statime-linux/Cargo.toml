@@ -7,21 +7,17 @@ edition = "2021"
 
 [dependencies]
 arrayvec = { version = "0.7.4", default-features = false }
-clap = { version = "4.3.21", features = ["derive"] }
+clap = { version = "4.3.22", features = ["derive"] }
 fern = { version = "0.6.2", features = ["colored"] }
 libc = { version = "0.2.147", features = ["extra_traits"] }
 log = "0.4.20"
 statime = { path = "../statime" }
-thiserror = "1.0.46"
+thiserror = "1.0.47"
 pin-project-lite = "0.2.12"
 toml = "0.3"
-tokio = { version = "1.31", features = ["net", "rt-multi-thread", "time", "macros", "sync"] }
+tokio = { version = "1.32", features = ["net", "rt-multi-thread", "time", "macros", "sync"] }
 rand = { version = "0.8.5", default-features = false, features = ["std", "std_rng"] }
-serde = { version = "0.9.15", features = ["derive"], optional = true }
+serde = { version = "0.9.15", features = ["derive"] }
 
 clock-steering = { git = "https://github.com/pendulum-project/clock-steering.git", rev = "3ab6721" }
 timestamped-socket = { git =  "https://github.com/pendulum-project/timestamped-socket.git", rev = "83d2dae" }
-
-[features]
-default = ["serde"]
-serde = ["dep:serde"]

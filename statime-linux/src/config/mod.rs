@@ -51,7 +51,8 @@ impl Config {
 
     /// Parse config from file
     pub fn from_file(file: impl AsRef<Path>) -> Result<Config, ConfigError> {
-        let meta = std::fs::metadata(&file).unwrap();
+        let file = file.as_ref();
+        let meta = std::fs::metadata(file).unwrap();
         let perm = meta.permissions();
 
         if perm.mode() as libc::mode_t & libc::S_IWOTH != 0 {
@@ -66,7 +67,7 @@ impl Config {
 
     /// Warn about unreasonable config values
     pub fn warn_when_unreasonable(&self) {
-        if self.ports.len() < 1 {
+        if self.ports.is_empty() {
             warn!("No ports configured.");
         }
 
