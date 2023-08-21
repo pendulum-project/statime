@@ -166,7 +166,7 @@ async fn actual_main() {
 
     let args = Args::parse();
     
-    let config = Config::from_file(args.config_file.expect("could not determine config file path"))
+    let config = Config::from_file(&args.config_file.expect("could not determine config file path"))
         .unwrap_or_else(|e| panic!("error loading config: {e}"));
 
     let log_level = log::LevelFilter::from_str(&config.loglevel).unwrap();

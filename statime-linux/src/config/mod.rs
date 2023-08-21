@@ -1,4 +1,4 @@
-use std::{os::unix::fs::PermissionsExt, path::PathBuf, fs::read_to_string};
+use std::{os::unix::fs::PermissionsExt, path::Path, fs::read_to_string};
 use log::warn;
 use serde::Deserialize;
 use statime::{Interval, Duration, DelayMechanism};
@@ -13,6 +13,7 @@ pub struct Config {
     pub priority1: u8,
     pub priority2: u8,
     pub hardware_clock: Option<String>,
+    #[serde(rename = "port")]
     pub ports: Vec<PortConfig>,
 }
 
@@ -50,7 +51,7 @@ pub enum PtpMode {
 impl Config {
 
     /// Parse config from file
-    pub fn from_file(file: PathBuf) -> Result<Config, ConfigError> {
+    pub fn from_file(file: &Path) -> Result<Config, ConfigError> {
         let meta = std::fs::metadata(&file).unwrap();
         let perm = meta.permissions();
 
