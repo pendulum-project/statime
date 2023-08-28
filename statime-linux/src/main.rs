@@ -306,7 +306,7 @@ async fn actual_main() {
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
-        let (local_clock, timestamping) = match &port_config.hardware_clock {
+        let (port_clock, timestamping) = match &port_config.hardware_clock {
             Some(path) => {
                 let clock = LinuxClock::open(path).expect("Unable to open clock");
                 if let Some(id) = clock_name_map.get(path) {
@@ -328,7 +328,7 @@ async fn actual_main() {
             }
         };
         let rng = StdRng::from_entropy();
-        let port = instance.add_port(port_config.into(), 0.25, local_clock, rng);
+        let port = instance.add_port(port_config.into(), 0.25, port_clock, rng);
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
