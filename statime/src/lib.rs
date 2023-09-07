@@ -54,7 +54,11 @@ pub use datastructures::{
     datasets::TimePropertiesDS,
     messages::{SdoId, MAX_DATA_LEN},
 };
-pub use filters::{basic::BasicFilter, Filter};
+pub use filters::{
+    basic::BasicFilter,
+    kalman::{KalmanFilter, KalmanFilterConfig},
+    Filter,
+};
 pub use port::{
     InBmca, Measurement, Port, PortAction, PortActionIterator, Running, TimestampContext,
 };

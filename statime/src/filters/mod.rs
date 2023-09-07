@@ -1,6 +1,8 @@
 //! Definitions and implementations for the abstracted measurement filters
 
 pub mod basic;
+pub mod kalman;
+mod matrix;
 
 use crate::{port::Measurement, Clock, Duration};
 

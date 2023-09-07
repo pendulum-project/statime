@@ -10,7 +10,7 @@ use clap::Parser;
 use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    BasicFilter, Clock, ClockIdentity, InBmca, InstanceConfig, Port, PortAction,
+    Clock, ClockIdentity, InBmca, InstanceConfig, KalmanFilter, Port, PortAction,
     PortActionIterator, PtpInstance, SdoId, Time, TimePropertiesDS, TimeSource, TimestampContext,
     MAX_DATA_LEN,
 };
@@ -200,7 +200,7 @@ async fn actual_main() {
     let instance = PtpInstance::new(instance_config, time_properties_ds, local_clock.clone());
 
     // borrow instance with the static lifetime
-    static INSTANCE: OnceLock<PtpInstance<LinuxClock, BasicFilter>> = OnceLock::new();
+    static INSTANCE: OnceLock<PtpInstance<LinuxClock, KalmanFilter>> = OnceLock::new();
     let instance = INSTANCE.get_or_init(|| instance);
 
     // for every port in the config file, create a port definition and add it
@@ -218,7 +218,12 @@ async fn actual_main() {
         // };
         let timestamping_mode = TimestampingMode::Software;
         let rng = StdRng::from_entropy();
-        let port = instance.add_port(port_config.into(), 0.25, local_clock.clone(), rng);
+        let port = instance.add_port(
+            port_config.into(),
+            Default::default(),
+            local_clock.clone(),
+            rng,
+        );
 
         PortDefinition {
             port,
@@ -233,7 +238,7 @@ async fn actual_main() {
 async fn run(
     ports: impl Iterator<Item = PortDefinition> + ExactSizeIterator,
     local_clock: &LinuxClock,
-    instance: &'static PtpInstance<LinuxClock, BasicFilter>,
+    instance: &'static PtpInstance<LinuxClock, KalmanFilter>,
 ) -> std::io::Result<()> {
     static BMCA_NOTIFY: OnceLock<Notify> = OnceLock::new();
     let bmca_notify = BMCA_NOTIFY.get_or_init(Notify::new);
@@ -305,7 +310,7 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<InBmca<'static>, StdRng, LinuxClock, BasicFilter>;
+type BmcaPort = Port<InBmca<'static>, StdRng, LinuxClock, KalmanFilter>;
 
 // the Port task
 //
