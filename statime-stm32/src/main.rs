@@ -1,27 +1,26 @@
-#![no_std]
+//! examples/smallest.rs
+
 #![no_main]
-#![feature(type_alias_impl_trait)]
+#![no_std]
+#![deny(warnings)]
+#![deny(unsafe_code)]
+#![deny(missing_docs)]
 
-use defmt::info;
-use embassy_executor::Spawner;
-use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_time::{Duration, Timer};
-use {defmt_rtt as _, panic_probe as _};
+use panic_probe as _; // panic handler
+use defmt_rtt as _; // global logger
+use rtic::app;
 
-#[embassy_executor::main]
-async fn main(_spawner: Spawner) {
-    let p = embassy_stm32::init(Default::default());
-    info!("Hello World!");
+#[app(device = stm32f7xx_hal::pac)]
+mod app {
+    #[shared]
+    struct Shared {}
 
-    let mut led = Output::new(p.PB7, Level::High, Speed::Low);
+    #[local]
+    struct Local {}
 
-    loop {
-        info!("high");
-        led.set_high();
-        Timer::after(Duration::from_millis(300)).await;
-
-        info!("low");
-        led.set_low();
-        Timer::after(Duration::from_millis(300)).await;
+    #[init]
+    fn init(_: init::Context) -> (Shared, Local) {
+        defmt::println!("hoi");
+        (Shared {}, Local {})
     }
 }
