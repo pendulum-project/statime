@@ -7,6 +7,7 @@ use panic_probe as _; // panic handler
 use rtic::app;
 
 pub mod ethernet;
+pub mod ptp_clock;
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0, CAN1_RX1, CAN1_TX])]
 mod app {
