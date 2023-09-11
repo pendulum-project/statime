@@ -4,6 +4,6 @@ members = [
     "statime-linux",
 ]
 exclude = [
-    "statime-stm32", # Incompatible build target
+    "statime-stm32"
 ]
 resolver = "2"

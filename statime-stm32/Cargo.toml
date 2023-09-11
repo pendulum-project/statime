@@ -1,0 +1,21 @@
+[package]
+edition = "2021"
+name = "stm32-ptp"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rtic = { version = "2.0.0", features = ["thumbv7-backend"] }
+
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"] }
+stm32-eth = { version = "0.5.0", features = ["smoltcp-phy", "async-await", "stm32f767"] }
+smoltcp = { version = "0.10.0", default-features = false, features = ["defmt", "medium-ethernet", "proto-ipv4", "proto-ipv6", "socket-udp"] }
+
+defmt = "0.3"
+defmt-rtt = "0.4"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+
+[profile.release]
+debug = 2
