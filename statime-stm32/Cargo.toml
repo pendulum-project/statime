@@ -6,10 +6,12 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rtic = { version = "2.0.0", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "1.1.0", features = ["cortex-m-systick"] }
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"] }
 stm32-eth = { version = "0.5.0", features = ["smoltcp-phy", "async-await", "stm32f767"] }
+ieee802_3_miim = "0.8.0"
 smoltcp = { version = "0.10.0", default-features = false, features = ["defmt", "medium-ethernet", "proto-ipv4", "proto-ipv6", "socket-udp"] }
 
 defmt = "0.3"

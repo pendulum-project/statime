@@ -471,6 +471,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtic-common"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0786b50b81ef9d2a944a000f60405bb28bf30cd45da2d182f3fe636b2321f35c"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "rtic-core"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -487,6 +496,30 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "rtic-monotonics"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77e9f99e2119d5bdd927c45a31ef9e8d9888f02ede3e357bcbd7ab79c426e02d"
+dependencies = [
+ "atomic-polyfill 1.0.3",
+ "cfg-if",
+ "cortex-m",
+ "fugit",
+ "rtic-time",
+]
+
+[[package]]
+name = "rtic-time"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55127cfa37ad32522eca2b70a12298bdb035c75ee3a4e403af8773ffe1a64bd3"
+dependencies = [
+ "critical-section",
+ "futures-util",
+ "rtic-common",
 ]
 
 [[package]]
@@ -595,8 +628,10 @@ dependencies = [
  "cortex-m",
  "defmt",
  "defmt-rtt",
+ "ieee802_3_miim",
  "panic-probe",
  "rtic",
+ "rtic-monotonics",
  "smoltcp",
  "stm32-eth",
  "stm32f7xx-hal",
