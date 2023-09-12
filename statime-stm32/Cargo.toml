@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rtic = { version = "2.0.0", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.1.0", features = ["cortex-m-systick"] }
+rtic-sync = "1.0.2"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 critical-section = "1.1.2"
@@ -18,6 +19,8 @@ smoltcp = { version = "0.10.0", default-features = false, features = ["defmt", "
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+futures = { version = "0.3.28", default-features = false, features = ["async-await"] }
 
 statime = { path = "../statime", default-features = false }
 fixed = "1.23.1"

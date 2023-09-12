@@ -585,6 +585,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtic-sync"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adc586db4c7ee4a85482ebb0542f34ffaee16bd8b8c552081f07492f531aca9f"
+dependencies = [
+ "critical-section",
+ "heapless",
+ "rtic-common",
+]
+
+[[package]]
 name = "rtic-time"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -717,10 +728,12 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "fixed",
+ "futures",
  "ieee802_3_miim",
  "panic-probe",
  "rtic",
  "rtic-monotonics",
+ "rtic-sync",
  "smoltcp",
  "statime",
  "stm32-eth",
