@@ -2,9 +2,17 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
+use core::task::Poll;
+
 use defmt_rtt as _; // global logger
 use panic_probe as _; // panic handler
-use rtic::app;
+use rtic::{app, Mutex};
+use rtic_sync::channel::Receiver;
+use smoltcp::{
+    iface::SocketHandle,
+    socket::udp::{self, UdpMetadata},
+};
+use stm32_eth::dma::PacketIdNotFound;
 
 pub mod ethernet;
 pub mod ptp_clock;
@@ -34,7 +42,10 @@ mod app {
         prelude::*,
     };
 
-    use crate::ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR};
+    use crate::{
+        ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR},
+        send_with_timestamp,
+    };
 
     #[shared]
     struct Shared {
@@ -186,8 +197,10 @@ mod app {
         };
 
         unwrap!(blinky::spawn());
-        udp_ping::spawn(udp_socket, please_poll_s.clone(), tx_done_r).unwrap();
-        poll_smoltcp::spawn(please_poll_r).unwrap();
+        udp_ping::spawn(udp_socket, tx_done_r)
+            .unwrap_or_else(|_| defmt::panic!("Failed to start udp_ping"));
+        poll_smoltcp::spawn(please_poll_r)
+            .unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
 
         (
             Shared { net },
@@ -214,56 +227,24 @@ mod app {
     async fn udp_ping(
         mut cx: udp_ping::Context,
         socket: SocketHandle,
-        mut please_poll: Sender<'static, (), 1>,
         mut tx_done_r: Receiver<'static, (), 1>,
     ) {
-        let mut meta: udp::UdpMetadata = smoltcp::wire::IpEndpoint {
+        let to = smoltcp::wire::IpEndpoint {
             addr: IpAddress::Ipv4(Ipv4Address([10, 0, 0, 1])),
             port: 1337,
-        }
-        .into();
+        };
 
         loop {
             Systick::delay(1000.millis()).await;
 
-            let packet_id = cx.shared.net.lock(|net| {
-                let packet_id = net.dma.next_packet_id();
-                meta.meta = packet_id.clone().into();
+            let result =
+                send_with_timestamp(&mut cx.shared.net, socket, &to, &[0x23; 42], &mut tx_done_r)
+                    .await;
 
-                defmt::println!("to: {}", meta);
-
-                let result = net
-                    .sockets
-                    .get_mut::<udp::Socket>(socket)
-                    .send_slice(&[0x42; 42], meta);
-
-                match result {
-                    Ok(()) => (),
-                    Err(e) => defmt::error!("Could not sent UDP packet because: {}", e),
-                }
-
-                // Send out the packet, this makes sure the MAC actually dets the packet and
-                // knows about the packet_id
-                net.poll();
-
-                packet_id
-            });
-
-            defmt::trace!("sent udp");
-
-            let timestamp = loop {
-                let poll = cx
-                    .shared
-                    .net
-                    .lock(|net| net.dma.poll_tx_timestamp(&packet_id));
-
-                let _ = match poll {
-                    core::task::Poll::Ready(result) => break result,
-                    core::task::Poll::Pending => tx_done_r.recv().await,
-                };
-            };
-
-            defmt::info!("Timestamp for {}: {}", packet_id, timestamp);
+            match result {
+                Ok(ts) => defmt::info!("Sent a package at {}", ts),
+                Err(e) => defmt::error!("Failed to send packet because: {}", e),
+            }
         }
     }
 
@@ -305,4 +286,92 @@ mod app {
             let _ = cx.local.tx_done_s.try_send(());
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, defmt::Format)]
+enum SendError {
+    PacketIdNotFound(PacketIdNotFound),
+    Unaddressable,
+    BufferFull,
+    NoTimestampRecorded,
+}
+
+impl From<PacketIdNotFound> for SendError {
+    fn from(value: PacketIdNotFound) -> Self {
+        Self::PacketIdNotFound(value)
+    }
+}
+
+impl From<udp::SendError> for SendError {
+    fn from(value: udp::SendError) -> Self {
+        match value {
+            udp::SendError::Unaddressable => Self::Unaddressable,
+            udp::SendError::BufferFull => Self::BufferFull,
+        }
+    }
+}
+
+async fn send_with_timestamp(
+    net: &mut impl Mutex<T = ethernet::NetworkStack>,
+    socket: SocketHandle,
+    to: &smoltcp::wire::IpEndpoint,
+    data: &[u8],
+    tx_done_r: &mut Receiver<'static, (), 1>,
+) -> Result<stm32_eth::ptp::Timestamp, SendError> {
+    let packet_id = net.lock(|net| -> Result<_, SendError> {
+        // Get an Id to track our packet
+        let packet_id = net.dma.next_packet_id();
+
+        // Combine the receiver with the packet id
+        let mut meta: UdpMetadata = (*to).into();
+        meta.meta = packet_id.clone().into();
+
+        // Actually send the packet
+        net.sockets
+            .get_mut::<udp::Socket>(socket)
+            .send_slice(data, meta)?;
+
+        // Send out the packet, this makes sure the MAC actually sees the packet and
+        // knows about the packet_id
+        net.poll();
+
+        Ok(packet_id)
+    })?;
+
+    let mut tries = 0;
+
+    let timestamp = loop {
+        let poll = net.lock(|net| net.dma.poll_tx_timestamp(&packet_id));
+
+        async fn tx_done(tx_done_r: &mut Receiver<'static, (), 1>) -> Result<(), SendError> {
+            if tx_done_r.recv().await.is_err() {
+                return Err(SendError::NoTimestampRecorded);
+            }
+            Ok(())
+        }
+
+        match poll {
+            Poll::Ready(Ok(ts)) => break ts,
+            Poll::Ready(Err(e @ PacketIdNotFound)) => {
+                // Smoltcp sometimes does not send the package immediately (eg because of ARP)
+                // so we retry a few tiems TODO maybe add a way to ask smoltcp
+                // for if a package with a given Id still is in the send buffer
+                if tries < 5 {
+                    defmt::warn!("Package with Id {} not yet send... waiting...", packet_id);
+                    tries += 1;
+                    tx_done(tx_done_r).await?;
+                } else {
+                    return Err(e.into());
+                }
+            }
+            Poll::Pending => tx_done(tx_done_r).await?,
+        };
+    };
+
+    let timestamp = match timestamp {
+        Some(ts) => ts,
+        None => return Err(SendError::NoTimestampRecorded),
+    };
+
+    Ok(timestamp)
 }
