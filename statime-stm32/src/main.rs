@@ -11,8 +11,9 @@ use rtic_sync::channel::Receiver;
 use smoltcp::{
     iface::SocketHandle,
     socket::udp::{self, UdpMetadata},
+    wire::IpEndpoint,
 };
-use stm32_eth::dma::PacketIdNotFound;
+use stm32_eth::dma::{PacketId, PacketIdNotFound};
 
 pub mod ethernet;
 pub mod ptp_clock;
@@ -44,7 +45,7 @@ mod app {
 
     use crate::{
         ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR},
-        send_with_timestamp,
+        recv_with, send_with_timestamp,
     };
 
     #[shared]
@@ -245,6 +246,21 @@ mod app {
                 Ok(ts) => defmt::info!("Sent a package at {}", ts),
                 Err(e) => defmt::error!("Failed to send packet because: {}", e),
             }
+
+            let result = recv_with(&mut cx.shared.net, socket, |from, data, ts| {
+                (from, data.len(), ts)
+            })
+            .await;
+
+            match result {
+                Ok((from, len, ts)) => defmt::info!(
+                    "Got package from {} with {} bytes at timestamp {}",
+                    from,
+                    len,
+                    ts
+                ),
+                Err(e) => defmt::error!("Failed to recaive packet because: {}", e),
+            }
         }
     }
 
@@ -309,6 +325,51 @@ impl From<udp::SendError> for SendError {
             udp::SendError::BufferFull => Self::BufferFull,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, defmt::Format)]
+enum RecvError {
+    Exhausted,
+    PacketIdNotFound(PacketIdNotFound),
+    NoTimestampRecorded,
+}
+
+impl From<PacketIdNotFound> for RecvError {
+    fn from(value: PacketIdNotFound) -> Self {
+        Self::PacketIdNotFound(value)
+    }
+}
+
+impl From<udp::RecvError> for RecvError {
+    fn from(value: udp::RecvError) -> Self {
+        match value {
+            udp::RecvError::Exhausted => Self::Exhausted,
+        }
+    }
+}
+
+async fn recv_with<R>(
+    net: &mut impl Mutex<T = ethernet::NetworkStack>,
+    socket: SocketHandle,
+    handler: impl FnOnce(IpEndpoint, &[u8], stm32_eth::ptp::Timestamp) -> R,
+) -> Result<R, RecvError> {
+    net.lock(|net| -> Result<R, RecvError> {
+        // Get next packet (if any)
+        let socket: &mut udp::Socket = net.sockets.get_mut(socket);
+        let (data, meta) = socket.recv()?;
+        let from = meta.endpoint;
+
+        // Get the timestamp
+        let packet_id = PacketId::from(meta.meta);
+        let timestamp = match net.dma.rx_timestamp(&packet_id) {
+            Ok(Some(ts)) => ts,
+            Ok(None) => return Err(RecvError::NoTimestampRecorded),
+            Err(e) => return Err(e.into()),
+        };
+
+        // Let the handler handle the rest
+        Ok(handler(from, data, timestamp))
+    })
 }
 
 async fn send_with_timestamp(
