@@ -681,6 +681,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "static_cell"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49cd323fc21eb534f903ee78d781d622099f9716c5b408ed23bcf39f8f1651c0"
+dependencies = [
+ "atomic-polyfill 1.0.3",
+]
+
+[[package]]
 name = "statime"
 version = "0.1.0"
 dependencies = [
@@ -735,6 +744,7 @@ dependencies = [
  "rtic-monotonics",
  "rtic-sync",
  "smoltcp",
+ "static_cell",
  "statime",
  "stm32-eth",
  "stm32f7xx-hal",

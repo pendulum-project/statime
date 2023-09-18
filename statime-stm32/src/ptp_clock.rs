@@ -26,13 +26,17 @@ impl PtpClock {
     }
 }
 
+pub fn stm_time_to_statime(timestamp: stm32_eth::ptp::Timestamp) -> statime::Time {
+    let seconds: U96F32 = I33F31::from_bits(timestamp.raw()).cast();
+    let nanos = seconds * 1_000_000_000u128;
+    statime::Time::from_fixed_nanos(nanos)
+}
+
 impl statime::Clock for &PtpClock {
     type Error = core::convert::Infallible;
 
     fn now(&self) -> statime::Time {
-        let seconds: U96F32 = I33F31::from_bits(EthernetPTP::get_time().raw()).cast();
-        let nanos = seconds * 1_000_000_000u128;
-        statime::Time::from_fixed_nanos(nanos)
+        stm_time_to_statime(EthernetPTP::get_time())
     }
 
     fn step_clock(&mut self, offset: statime::Duration) -> Result<statime::Time, Self::Error> {

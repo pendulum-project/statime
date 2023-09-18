@@ -12,6 +12,10 @@ pub struct NetworkResources {
     pub rx_payload_storage: [u8; 8192],
     pub tx_meta_storage: [udp::PacketMetadata; 8],
     pub tx_payload_storage: [u8; 8192],
+    pub tc_rx_meta_storage: [udp::PacketMetadata; 8],
+    pub tc_rx_payload_storage: [u8; 8192],
+    pub tc_tx_meta_storage: [udp::PacketMetadata; 8],
+    pub tc_tx_payload_storage: [u8; 8192],
     pub sockets: [SocketStorage<'static>; 8],
 }
 
@@ -24,6 +28,10 @@ impl NetworkResources {
             rx_payload_storage: [0; 8192],
             tx_meta_storage: [udp::PacketMetadata::EMPTY; 8],
             tx_payload_storage: [0; 8192],
+            tc_rx_meta_storage: [udp::PacketMetadata::EMPTY; 8],
+            tc_rx_payload_storage: [0; 8192],
+            tc_tx_meta_storage: [udp::PacketMetadata::EMPTY; 8],
+            tc_tx_payload_storage: [0; 8192],
             sockets: [SocketStorage::EMPTY; 8],
         }
     }
@@ -51,5 +59,5 @@ pub const CLIENT_ADDR: [u8; 6] = [0x80, 0x00, 0xde, 0xad, 0xbe, 0xef];
 fn now() -> smoltcp::time::Instant {
     let now_millis = Systick::now().ticks();
     // TODO handle case where systick is not 1kHz
-    smoltcp::time::Instant::from_millis(now_millis)
+    smoltcp::time::Instant::from_millis(i64::try_from(now_millis).unwrap())
 }
