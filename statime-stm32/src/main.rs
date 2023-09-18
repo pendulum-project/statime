@@ -4,7 +4,9 @@
 
 use core::task::Poll;
 
-use defmt_rtt as _; // global logger
+use defmt_rtt as _;
+use futures::future::poll_fn;
+// global logger
 use panic_probe as _; // panic handler
 use rtic::{app, Mutex};
 use rtic_sync::channel::Receiver;
@@ -236,8 +238,6 @@ mod app {
         };
 
         loop {
-            Systick::delay(1000.millis()).await;
-
             let result =
                 send_with_timestamp(&mut cx.shared.net, socket, &to, &[0x23; 42], &mut tx_done_r)
                     .await;
@@ -247,19 +247,21 @@ mod app {
                 Err(e) => defmt::error!("Failed to send packet because: {}", e),
             }
 
-            let result = recv_with(&mut cx.shared.net, socket, |from, data, ts| {
+            let recv = recv_with(&mut cx.shared.net, socket, |from, data, ts| {
                 (from, data.len(), ts)
-            })
-            .await;
+            });
+
+            let result = Systick::timeout_after(1000.millis(), recv).await;
 
             match result {
-                Ok((from, len, ts)) => defmt::info!(
+                Ok(Ok((from, len, ts))) => defmt::info!(
                     "Got package from {} with {} bytes at timestamp {}",
                     from,
                     len,
                     ts
                 ),
-                Err(e) => defmt::error!("Failed to recaive packet because: {}", e),
+                Ok(Err(e)) => defmt::error!("Failed to recaive packet because: {}", e),
+                Err(_) => (),
             }
         }
     }
@@ -353,23 +355,45 @@ async fn recv_with<R>(
     socket: SocketHandle,
     handler: impl FnOnce(IpEndpoint, &[u8], stm32_eth::ptp::Timestamp) -> R,
 ) -> Result<R, RecvError> {
-    net.lock(|net| -> Result<R, RecvError> {
-        // Get next packet (if any)
-        let socket: &mut udp::Socket = net.sockets.get_mut(socket);
-        let (data, meta) = socket.recv()?;
-        let from = meta.endpoint;
+    let mut handler = Some(handler);
 
-        // Get the timestamp
-        let packet_id = PacketId::from(meta.meta);
-        let timestamp = match net.dma.rx_timestamp(&packet_id) {
-            Ok(Some(ts)) => ts,
-            Ok(None) => return Err(RecvError::NoTimestampRecorded),
-            Err(e) => return Err(e.into()),
-        };
+    poll_fn(|cx| {
+        let result = net.lock(|net| -> Result<R, RecvError> {
+            // Get next packet (if any)
+            let socket: &mut udp::Socket = net.sockets.get_mut(socket);
+            let (data, meta) = socket.recv()?;
+            let from = meta.endpoint;
 
-        // Let the handler handle the rest
-        Ok(handler(from, data, timestamp))
+            // Get the timestamp
+            let packet_id = PacketId::from(meta.meta);
+            let timestamp = match net.dma.rx_timestamp(&packet_id) {
+                Ok(Some(ts)) => ts,
+                Ok(None) => return Err(RecvError::NoTimestampRecorded),
+                Err(e) => return Err(e.into()),
+            };
+
+            // Unpack the handler
+            let handler = handler.take().unwrap_or_else(|| {
+                defmt::panic!("Polled recv_with after it already returned Ready!")
+            });
+
+            // Let the handler handle the rest
+            Ok(handler(from, data, timestamp))
+        });
+
+        match result {
+            Ok(r) => Poll::Ready(Ok(r)),
+            e @ Err(RecvError::NoTimestampRecorded | RecvError::PacketIdNotFound(_)) => {
+                Poll::Ready(e)
+            }
+            Err(RecvError::Exhausted) => net.lock(|net| {
+                let socket: &mut udp::Socket = net.sockets.get_mut(socket);
+                socket.register_recv_waker(cx.waker());
+                Poll::Pending
+            }),
+        }
     })
+    .await
 }
 
 async fn send_with_timestamp(
