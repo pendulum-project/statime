@@ -26,6 +26,7 @@ statime = { path = "../statime", default-features = false }
 fixed = "1.23.1"
 az = "1.2"
 static_cell = "1.2.0"
+log-to-defmt = "0.1.0"
 
 [profile.release]
 debug = 2

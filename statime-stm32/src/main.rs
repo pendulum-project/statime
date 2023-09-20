@@ -17,10 +17,7 @@ use ieee802_3_miim::{
 // global logger
 use panic_probe as _; // panic handler
 use rtic::{app, Mutex};
-use rtic_monotonics::{
-    systick::{ExtU64, Systick},
-    Monotonic,
-};
+use rtic_monotonics::systick::{ExtU64, Systick};
 use rtic_sync::{
     channel::{Receiver, Sender},
     make_channel,
@@ -53,7 +50,8 @@ use crate::{
 };
 
 defmt::timestamp!("{=u64:us}", {
-    Systick::now().duration_since_epoch().to_micros()
+    let time = stm32_eth::ptp::EthernetPTP::get_time();
+    time.seconds() as u64 * 1_000_000 + (time.subseconds().nanos() / 1000) as u64
 });
 
 type StmPort<State> = statime::Port<State, Rng, &'static PtpClock, BasicFilter>;
@@ -137,6 +135,8 @@ mod app {
         let rcc = p.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(96.MHz()).hclk(96.MHz());
         let clocks = clocks.freeze();
+
+        log_to_defmt::setup();
 
         // Setup LED
         let gpioa = p.GPIOA.split();
@@ -289,11 +289,11 @@ mod app {
 
         let instance_config = InstanceConfig {
             clock_identity: statime::ClockIdentity(*b"TODOFIXM"),
-            priority_1: 0,
-            priority_2: 0,
+            priority_1: 255,
+            priority_2: 255,
             domain_number: 0,
             slave_only: false,
-            sdo_id: SdoId::new(42).unwrap(),
+            sdo_id: SdoId::new(0).unwrap(),
         };
         let time_properties_ds = statime::TimePropertiesDS::new_arbitrary_time(
             false,
@@ -406,8 +406,6 @@ mod app {
         let net = &mut cx.shared.net;
 
         loop {
-            defmt::info!("Running BMCA");
-
             let wait_duration = (&mut cx.shared.ptp_instance, &mut cx.shared.ptp_port).lock(
                 |ptp_instance, ptp_port| {
                     ptp_instance.bmca(&mut [ptp_port.as_bmca_mode()]);
@@ -861,8 +859,6 @@ fn handle_port_actions(
     general_socket: SocketHandle,
 ) {
     for action in actions {
-        defmt::info!("Action: {}", defmt::Debug2Format(&action));
-
         match action {
             PortAction::SendTimeCritical { context, data } => {
                 const TO: IpEndpoint = IpEndpoint {
