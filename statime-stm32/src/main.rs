@@ -17,7 +17,10 @@ use ieee802_3_miim::{
 // global logger
 use panic_probe as _; // panic handler
 use rtic::{app, Mutex};
-use rtic_monotonics::systick::{ExtU64, Systick};
+use rtic_monotonics::{
+    systick::{ExtU64, Systick},
+    Monotonic,
+};
 use rtic_sync::{
     channel::{Receiver, Sender},
     make_channel,
@@ -29,8 +32,8 @@ use smoltcp::{
 };
 use static_cell::StaticCell;
 use statime::{
-    BasicFilter, Duration, InBmca, InstanceConfig, Interval, PortAction, PortConfig, PtpInstance,
-    Running, SdoId,
+    BasicFilter, Duration, InBmca, InstanceConfig, Interval, PortAction, PortActionIterator,
+    PortConfig, PtpInstance, Running, SdoId,
 };
 use stm32_eth::{
     dma::{PacketId, PacketIdNotFound},
@@ -49,11 +52,48 @@ use crate::{
     ptp_clock::PtpClock,
 };
 
+defmt::timestamp!("{=u64:us}", {
+    Systick::now().duration_since_epoch().to_micros()
+});
+
 type StmPort<State> = statime::Port<State, Rng, &'static PtpClock, BasicFilter>;
 
 pub enum PtpPort {
+    None,
     Running(StmPort<Running<'static>>),
     InBmca(StmPort<InBmca<'static>>),
+}
+
+impl PtpPort {
+    pub fn as_bmca_mode(&mut self) -> &mut StmPort<InBmca<'static>> {
+        let this = core::mem::replace(self, PtpPort::None);
+
+        *self = match this {
+            PtpPort::Running(port) => PtpPort::InBmca(port.start_bmca()),
+            val => val,
+        };
+
+        match self {
+            PtpPort::InBmca(port) => port,
+            _ => defmt::unreachable!(),
+        }
+    }
+
+    pub fn to_running(&mut self) -> PortActionIterator<'static> {
+        let this = core::mem::replace(self, PtpPort::None);
+
+        let (this, actions) = match this {
+            PtpPort::InBmca(port) => {
+                let (port, actions) = port.end_bmca();
+                (PtpPort::Running(port), actions)
+            }
+            _ => defmt::panic!("Port in bad state"),
+        };
+
+        *self = this;
+
+        actions
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -172,7 +212,7 @@ mod app {
 
         let mut interface = Interface::new(cfg, &mut &mut dma, smoltcp::time::Instant::ZERO);
 
-        let mut dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
+        let dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
 
         interface.update_ip_addrs(|a| {
             a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 24)).unwrap();
@@ -332,7 +372,9 @@ mod app {
             general_socket,
         )
         .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
-	dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
+        instance_bmca::spawn(timer_sender.clone())
+            .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
+        dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
 
         (
             Shared {
@@ -348,7 +390,27 @@ mod app {
         )
     }
 
-    #[task(shared = [net, ptp_port], priority = 1)]
+    #[task(shared=[ptp_instance, ptp_port], priority = 1)]
+    async fn instance_bmca(
+        mut cx: instance_bmca::Context,
+        mut timer_resets_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
+    ) {
+        loop {
+            defmt::info!("Running BMCA");
+
+            let wait_duration = (&mut cx.shared.ptp_instance, &mut cx.shared.ptp_port).lock(
+                |ptp_instance, ptp_port| {
+                    ptp_instance.bmca(&mut [ptp_port.as_bmca_mode()]);
+                    handle_port_actions(ptp_port.to_running(), &mut timer_resets_sender);
+                    ptp_instance.bmca_interval()
+                },
+            );
+
+            Systick::delay((wait_duration.as_millis() as u64).millis()).await;
+        }
+    }
+
+    #[task(shared=[net, ptp_port], priority = 1)]
     async fn statime_timers(
         mut cx: statime_timers::Context,
         mut timer_resets: Receiver<'static, (TimerName, core::time::Duration), 4>,
@@ -781,6 +843,8 @@ fn handle_port_actions(
     general_socket: SocketHandle,
 ) {
     for action in actions {
+        defmt::info!("Action: {}", defmt::Debug2Format(&action));
+
         match action {
             PortAction::SendTimeCritical { context, data } => {
                 const TO: IpEndpoint = IpEndpoint {
