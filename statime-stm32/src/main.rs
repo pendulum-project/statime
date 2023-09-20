@@ -372,8 +372,13 @@ mod app {
             general_socket,
         )
         .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
-        instance_bmca::spawn(timer_sender.clone())
-            .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
+        instance_bmca::spawn(
+            timer_sender.clone(),
+            packet_id_sender.clone(),
+            time_critical_socket,
+            general_socket,
+        )
+        .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
         dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
 
         (
@@ -390,18 +395,30 @@ mod app {
         )
     }
 
-    #[task(shared=[ptp_instance, ptp_port], priority = 1)]
+    #[task(shared=[net, ptp_instance, ptp_port], priority = 1)]
     async fn instance_bmca(
         mut cx: instance_bmca::Context,
         mut timer_resets_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
+        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
+        time_critical_socket: SocketHandle,
+        general_socket: SocketHandle,
     ) {
+        let net = &mut cx.shared.net;
+
         loop {
             defmt::info!("Running BMCA");
 
             let wait_duration = (&mut cx.shared.ptp_instance, &mut cx.shared.ptp_port).lock(
                 |ptp_instance, ptp_port| {
                     ptp_instance.bmca(&mut [ptp_port.as_bmca_mode()]);
-                    handle_port_actions(ptp_port.to_running(), &mut timer_resets_sender);
+                    handle_port_actions(
+                        ptp_port.to_running(),
+                        &mut timer_resets_sender,
+                        &mut packet_id_sender,
+                        net,
+                        time_critical_socket,
+                        general_socket,
+                    );
                     ptp_instance.bmca_interval()
                 },
             );
@@ -826,6 +843,7 @@ where
 {
     port.lock(|port| {
         let running_port = match port {
+            PtpPort::None => panic!("Port was left in None state..."),
             PtpPort::Running(r) => r,
             PtpPort::InBmca(_) => panic!("Port was left in InBmca state..."),
         };
