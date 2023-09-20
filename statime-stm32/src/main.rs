@@ -70,6 +70,8 @@ pub mod ptp_clock;
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0, CAN1_RX1, CAN1_TX])]
 mod app {
+    use smoltcp::{socket::dhcpv4, wire::Ipv4Cidr};
+
     use super::*;
     use crate::ptp_clock::stm_time_to_statime;
 
@@ -169,6 +171,9 @@ mod app {
         let cfg = Config::new(EthernetAddress(CLIENT_ADDR).into());
 
         let mut interface = Interface::new(cfg, &mut &mut dma, smoltcp::time::Instant::ZERO);
+
+        let mut dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
+
         interface.update_ip_addrs(|a| {
             a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 24)).unwrap();
         });
@@ -204,6 +209,7 @@ mod app {
         let mut sockets = SocketSet::new(&mut sockets[..]);
         let time_critical_socket = sockets.add(time_critical_socket);
         let general_socket = sockets.add(general_socket);
+        let dhcp_socket = sockets.add(dhcp_socket);
 
         defmt::info!("Enabling interrupts");
         dma.enable_interrupt();
@@ -296,6 +302,7 @@ mod app {
             .unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
         statime_timers::spawn(timer_receiver, timer_sender.clone())
             .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
+        dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
 
         (
             Shared {
@@ -311,7 +318,7 @@ mod app {
         )
     }
 
-    #[task(shared=[ptp_port],priority = 1)]
+    #[task(shared=[ptp_port], priority = 1)]
     async fn statime_timers(
         mut cx: statime_timers::Context,
         mut timer_resets: Receiver<'static, (TimerName, core::time::Duration), 4>,
@@ -465,6 +472,56 @@ mod app {
 
         if reason.tx {
             let _ = cx.local.tx_done_s.try_send(());
+        }
+    }
+
+    #[task(shared = [net], priority = 1)]
+    async fn dhcp(mut cx: dhcp::Context, dhcp_handle: SocketHandle) {
+        loop {
+            core::future::poll_fn(|ctx| {
+                cx.shared.net.lock(|net| {
+                    let dhcp_socket = net.sockets.get_mut::<dhcpv4::Socket>(dhcp_handle);
+                    dhcp_socket.register_waker(ctx.waker());
+
+                    match dhcp_socket.poll() {
+                        Some(dhcpv4::Event::Deconfigured) => {
+                            defmt::warn!("DHCP got deconfigured");
+                            net.iface.update_ip_addrs(|addrs| {
+                                let dest = addrs.iter_mut().next().unwrap();
+                                *dest = IpCidr::Ipv4(Ipv4Cidr::new(Ipv4Address::UNSPECIFIED, 0));
+                            });
+                            net.iface.routes_mut().remove_default_ipv4_route();
+                            Poll::Pending
+                        }
+                        Some(dhcpv4::Event::Configured(config)) => {
+                            defmt::debug!("DHCP config acquired!");
+
+                            defmt::debug!("IP address:      {}", config.address);
+                            net.iface.update_ip_addrs(|addrs| {
+                                let dest = addrs.iter_mut().next().unwrap();
+                                *dest = IpCidr::Ipv4(config.address);
+                            });
+                            if let Some(router) = config.router {
+                                defmt::debug!("Default gateway: {}", router);
+                                net.iface
+                                    .routes_mut()
+                                    .add_default_ipv4_route(router)
+                                    .unwrap();
+                            } else {
+                                defmt::debug!("Default gateway: None");
+                                net.iface.routes_mut().remove_default_ipv4_route();
+                            }
+
+                            for (i, s) in config.dns_servers.iter().enumerate() {
+                                defmt::debug!("DNS server {}:    {}", i, s);
+                            }
+                            Poll::Ready(())
+                        }
+                        None => Poll::Pending,
+                    }
+                })
+            })
+            .await;
         }
     }
 }
