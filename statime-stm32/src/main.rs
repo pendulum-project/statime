@@ -34,7 +34,9 @@ use statime::{
 };
 use stm32_eth::{
     dma::{PacketId, PacketIdNotFound},
-    mac, EthPins, Parts, PartsIn,
+    mac,
+    ptp::Timestamp,
+    EthPins, Parts, PartsIn,
 };
 use stm32f7xx_hal::{
     gpio::{Output, Pin, Speed},
@@ -292,7 +294,8 @@ mod app {
             .unwrap_or_else(|_| defmt::panic!("Failed to start general_listen"));
         poll_smoltcp::spawn(please_poll_r)
             .unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
-        statime_timers::spawn(timer_receiver, timer_sender.clone()).unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
+        statime_timers::spawn(timer_receiver, timer_sender.clone())
+            .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
 
         (
             Shared {
@@ -441,7 +444,7 @@ mod app {
             // And wait until it wants to get polled again, we want to send something, or we
             // received something
             if let Some(delay_millis) = delay_millis {
-                let delay = u64::try_from(delay_millis).unwrap_or(1_000_000).millis();
+                let delay = delay_millis.millis();
                 select_biased! {
                     _ = Systick::delay(delay).fuse() => (),
                     _ = please_poll.recv().fuse() => (),
@@ -551,14 +554,13 @@ async fn recv_with<R>(
     .await
 }
 
-async fn send_with_timestamp(
+async fn send(
     net: &mut impl Mutex<T = ethernet::NetworkStack>,
     socket: SocketHandle,
     to: &smoltcp::wire::IpEndpoint,
     data: &[u8],
-    tx_done_r: &mut Receiver<'static, (), 1>,
-) -> Result<stm32_eth::ptp::Timestamp, SendError> {
-    let packet_id = net.lock(|net| -> Result<_, SendError> {
+) -> Result<PacketId, SendError> {
+    net.lock(|net| {
         // Get an Id to track our packet
         let packet_id = net.dma.next_packet_id();
 
@@ -576,8 +578,14 @@ async fn send_with_timestamp(
         net.poll();
 
         Ok(packet_id)
-    })?;
+    })
+}
 
+async fn get_timestamp(
+    net: &mut impl Mutex<T = NetworkStack>,
+    tx_done_r: &mut Receiver<'static, (), 1>,
+    packet_id: PacketId,
+) -> Result<Timestamp, SendError> {
     let mut tries = 0;
 
     let timestamp = loop {
