@@ -43,6 +43,8 @@ impl statime::Clock for &PtpClock {
         let seconds = offset.nanos() / 1_000_000_000i128;
         let seconds: I33F31 = seconds.cast();
 
+        defmt::println!("Stepping {}", defmt::Display2Format(&offset));
+
         self.access(|clock| {
             clock.update_time(Timestamp::new_raw(seconds.to_bits()));
         });
@@ -50,8 +52,12 @@ impl statime::Clock for &PtpClock {
         Ok(self.now())
     }
 
-    fn set_frequency(&mut self, freq: f64) -> Result<statime::Time, Self::Error> {
-        let total_frequency = self.addend_starter_frequency * freq;
+    fn set_frequency(&mut self, ppm: f64) -> Result<statime::Time, Self::Error> {
+        let freq = 1.0 + ppm / 1_000_000.0;
+
+        defmt::info!("Ppm offset is: {}. Setting frequency to: {}", ppm, freq);
+
+        let total_frequency = self.addend_starter_frequency / freq;
         let addend = u32::MAX as f64 / total_frequency;
 
         self.access(|clock| {

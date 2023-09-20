@@ -49,9 +49,9 @@ use crate::{
     ptp_clock::PtpClock,
 };
 
-defmt::timestamp!("{=u64:us}", {
+defmt::timestamp!("{=u64:iso8601ms}", {
     let time = stm32_eth::ptp::EthernetPTP::get_time();
-    time.seconds() as u64 * 1_000_000 + (time.subseconds().nanos() / 1000) as u64
+    time.seconds() as u64 * 1_000 + (time.subseconds().nanos() / 1000000) as u64
 });
 
 type StmPort<State> = statime::Port<State, Rng, &'static PtpClock, BasicFilter>;
@@ -116,7 +116,7 @@ mod app {
     #[shared]
     struct Shared {
         net: NetworkStack,
-        ptp_instance: &'static statime::PtpInstance<&'static PtpClock, BasicFilter>,
+        ptp_instance: &'static statime::PtpInstance<BasicFilter>,
         ptp_port: PtpPort,
     }
 
@@ -133,10 +133,10 @@ mod app {
 
         // Setup clocks
         let rcc = p.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(96.MHz()).hclk(96.MHz());
+        let clocks = rcc.cfgr.sysclk(216.MHz()).hclk(216.MHz());
         let clocks = clocks.freeze();
 
-        log_to_defmt::setup();
+        // log_to_defmt::setup();
 
         // Setup LED
         let gpioa = p.GPIOA.split();
@@ -146,7 +146,7 @@ mod app {
         let led_pin = gpiob.pb7.into_push_pull_output();
 
         let systick_token = rtic_monotonics::create_systick_token!();
-        Systick::start(cx.core.SYST, 96_000_000, systick_token);
+        Systick::start(cx.core.SYST, clocks.sysclk().to_Hz(), systick_token);
 
         // Setup Ethernet
         let ethernet = PartsIn {
@@ -280,15 +280,26 @@ mod app {
 
         // Setup PPS
         ptp.enable_pps(pps);
-        ptp.set_pps_freq(0);
+        ptp.set_pps_freq(4);
         // todo handle addend
 
         // Setup statime
         static PTP_CLOCK: StaticCell<PtpClock> = StaticCell::new();
         let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp));
 
+        let uid = stm32f7xx_hal::signature::Uid::get();
+
         let instance_config = InstanceConfig {
-            clock_identity: statime::ClockIdentity(*b"TODOFIXM"),
+            clock_identity: statime::ClockIdentity([
+                uid.waf_num(),
+                (uid.x() >> 8) as u8,
+                uid.x() as u8,
+                (uid.y() >> 8) as u8,
+                uid.y() as u8,
+                0,
+                0,
+                0,
+            ]),
             priority_1: 255,
             priority_2: 255,
             domain_number: 0,
@@ -300,24 +311,21 @@ mod app {
             false,
             statime::TimeSource::InternalOscillator,
         );
-        static PTP_INSTANCE: StaticCell<PtpInstance<&PtpClock, BasicFilter>> = StaticCell::new();
-        let ptp_instance = &*PTP_INSTANCE.init(PtpInstance::new(
-            instance_config,
-            time_properties_ds,
-            ptp_clock,
-        ));
+        static PTP_INSTANCE: StaticCell<PtpInstance<BasicFilter>> = StaticCell::new();
+        let ptp_instance =
+            &*PTP_INSTANCE.init(PtpInstance::new(instance_config, time_properties_ds));
 
         let port_config = PortConfig {
             delay_mechanism: statime::DelayMechanism::E2E {
-                interval: Interval::ONE_SECOND,
+                interval: Interval::from_log_2(-2),
             },
-            announce_interval: Interval::ONE_SECOND,
-            announce_receipt_timeout: 42,
-            sync_interval: Interval::ONE_SECOND,
+            announce_interval: Interval::from_log_2(1),
+            announce_receipt_timeout: 3,
+            sync_interval: Interval::from_log_2(-6),
             master_only: false,
             delay_asymmetry: Duration::ZERO,
         };
-        let filter_config = 1.0;
+        let filter_config = 0.1;
         let rng = p.RNG.init();
         let ptp_port =
             PtpPort::InBmca(ptp_instance.add_port(port_config, filter_config, ptp_clock, rng));
