@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 rtic = { version = "2.0.1", features = ["thumbv7-backend"] }
 rtic-monotonics = { version = "1.2.0", features = ["cortex-m-systick", "systick-64bit"] }
 rtic-sync = "1.0.2"
+embassy-sync = "0.3"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 critical-section = "1.1.2"
@@ -27,6 +28,7 @@ fixed = "1.23.1"
 az = "1.2"
 static_cell = "1.2.0"
 log-to-defmt = "0.1.0"
+adler = { version = "1.0.2", default-features = false }
 
 [profile.release]
 debug = 2

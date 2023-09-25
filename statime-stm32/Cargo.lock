@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "adler"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
+
+[[package]]
 name = "aligned"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -216,6 +222,18 @@ name = "deranged"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
+
+[[package]]
+name = "embassy-sync"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0525b466ca3ace30b57f2db868a35215dfaecd038d8668cb2db03feb7c069a0"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "futures-util",
+ "heapless",
+]
 
 [[package]]
 name = "embedded-hal"
@@ -724,11 +742,13 @@ dependencies = [
 name = "statime-stm32"
 version = "0.1.0"
 dependencies = [
+ "adler",
  "az",
  "cortex-m",
  "critical-section",
  "defmt",
  "defmt-rtt",
+ "embassy-sync",
  "fixed",
  "futures",
  "ieee802_3_miim",

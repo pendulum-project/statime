@@ -54,8 +54,6 @@ impl NetworkStack {
     }
 }
 
-pub const CLIENT_ADDR: [u8; 6] = [0x80, 0x00, 0xde, 0xad, 0xbe, 0xef];
-
 fn now() -> smoltcp::time::Instant {
     let now_millis = Systick::now().ticks();
     // TODO handle case where systick is not 1kHz

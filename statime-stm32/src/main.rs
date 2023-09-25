@@ -6,11 +6,9 @@ use core::task::Poll;
 
 use defmt::unwrap;
 use defmt_rtt as _;
-use ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR};
-use futures::{
-    future::{poll_fn, FutureExt},
-    select_biased,
-};
+use embassy_sync::waitqueue::WakerRegistration;
+use ethernet::{NetworkResources, NetworkStack};
+use futures::future::{poll_fn, FutureExt};
 use ieee802_3_miim::{
     phy::{PhySpeed, LAN8742A},
     Phy,
@@ -19,20 +17,17 @@ use panic_probe as _;
 use ptp_clock::PtpClock;
 use rtic::{app, Mutex};
 use rtic_monotonics::systick::{ExtU64, Systick};
-use rtic_sync::{
-    channel::{Receiver, Sender},
-    make_channel,
-};
+use rtic_sync::{channel::Receiver, make_channel};
 use smoltcp::{
     iface::{Config, Interface, SocketHandle, SocketSet},
-    socket::udp::{self},
-    wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address},
+    socket::{
+        dhcpv4,
+        udp::{self},
+    },
+    wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address, Ipv4Cidr},
 };
 use static_cell::StaticCell;
-use statime::{
-    BasicFilter, Duration, InstanceConfig, Interval,
-    PortConfig, PtpInstance, SdoId,
-};
+use statime::{BasicFilter, Duration, InstanceConfig, Interval, PortConfig, PtpInstance, SdoId};
 use stm32_eth::{
     dma::{PacketId, PacketIdNotFound},
     mac,
@@ -43,7 +38,10 @@ use stm32f7xx_hal::{
     gpio::{Output, Pin, Speed},
     prelude::*,
     rng::{Rng, RngExt},
+    signature::Uid,
 };
+
+use crate::ptp_clock::stm_time_to_statime;
 
 mod ethernet;
 mod port;
@@ -65,25 +63,21 @@ pub enum TimerName {
     FilterUpdate,
 }
 
-#[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0, CAN1_RX1, CAN1_TX])]
+#[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0])]
 mod app {
-    use smoltcp::{socket::dhcpv4, wire::Ipv4Cidr};
-
     use super::*;
-    use crate::ptp_clock::stm_time_to_statime;
 
     #[shared]
     struct Shared {
         net: NetworkStack,
         ptp_instance: &'static statime::PtpInstance<BasicFilter>,
         ptp_port: port::Port,
+        tx_waker: WakerRegistration,
     }
 
     #[local]
     struct Local {
         led_pin: Pin<'B', 7, Output>,
-        please_poll_s: Sender<'static, (), 1>,
-        tx_done_s: Sender<'static, (), 1>,
     }
 
     #[init(local = [net_resources: NetworkResources = NetworkResources::new()])]
@@ -95,7 +89,8 @@ mod app {
         let clocks = rcc.cfgr.sysclk(216.MHz()).hclk(216.MHz());
         let clocks = clocks.freeze();
 
-        // log_to_defmt::setup();
+        // Uncomment to see the statime logs at the cost of quite a bit of extra flash
+        // usage log_to_defmt::setup();
 
         // Setup LED
         let gpioa = p.GPIOA.split();
@@ -168,8 +163,10 @@ mod app {
         )
         .ok());
 
+        let mac_address = generate_mac_address();
+
         // Setup smoltcp
-        let cfg = Config::new(EthernetAddress(CLIENT_ADDR).into());
+        let cfg = Config::new(EthernetAddress(mac_address).into());
 
         let mut interface = Interface::new(cfg, &mut &mut dma, smoltcp::time::Instant::ZERO);
 
@@ -242,25 +239,13 @@ mod app {
         // Setup PPS
         ptp.enable_pps(pps);
         ptp.set_pps_freq(4);
-        // todo handle addend
 
         // Setup statime
         static PTP_CLOCK: StaticCell<PtpClock> = StaticCell::new();
         let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp));
 
-        let uid = stm32f7xx_hal::signature::Uid::get();
-
         let instance_config = InstanceConfig {
-            clock_identity: statime::ClockIdentity([
-                uid.waf_num(),
-                (uid.x() >> 8) as u8,
-                uid.x() as u8,
-                (uid.y() >> 8) as u8,
-                uid.y() as u8,
-                0,
-                0,
-                0,
-            ]),
+            clock_identity: statime::ClockIdentity(eui48_to_eui64(mac_address)),
             priority_1: 255,
             priority_2: 255,
             domain_number: 0,
@@ -289,9 +274,6 @@ mod app {
         let filter_config = 0.1;
         let rng = p.RNG.init();
 
-        type Empty = ();
-        let (please_poll_s, please_poll_r) = make_channel!(Empty, 1);
-        let (tx_done_s, tx_done_r) = make_channel!(Empty, 1);
         type TimerMsg = (TimerName, core::time::Duration);
         let (timer_sender, timer_receiver) = make_channel!(TimerMsg, 4);
         type PacketIdMsg = (statime::TimestampContext, PacketId);
@@ -315,10 +297,9 @@ mod app {
         time_critical_listen::spawn()
             .unwrap_or_else(|_| defmt::panic!("Failed to start time_critical_listen"));
         general_listen::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start general_listen"));
-        send_timestamp_grabber::spawn(packet_id_receiver, tx_done_r)
+        tx_timestamp_listener::spawn(packet_id_receiver)
             .unwrap_or_else(|_| defmt::panic!("Failed to start send_timestamp_grabber"));
-        poll_smoltcp::spawn(please_poll_r)
-            .unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
+        poll_smoltcp::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
         statime_timers::spawn(timer_receiver)
             .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
         instance_bmca::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
@@ -329,15 +310,13 @@ mod app {
                 net,
                 ptp_instance,
                 ptp_port,
+                tx_waker: WakerRegistration::new(),
             },
-            Local {
-                led_pin,
-                please_poll_s,
-                tx_done_s,
-            },
+            Local { led_pin },
         )
     }
 
+    /// Task that runs the BMCA every required interval
     #[task(shared=[net, ptp_instance, ptp_port], priority = 1)]
     async fn instance_bmca(mut cx: instance_bmca::Context) {
         let net = &mut cx.shared.net;
@@ -360,7 +339,10 @@ mod app {
         }
     }
 
-    #[task(shared=[net, ptp_port], priority = 1)]
+    /// Task that runs the timers and lets the port handle the expired timers.
+    /// The channel is used for resetting the timers (which comes from the port
+    /// actions and get sent here).
+    #[task(shared=[net, ptp_port], priority = 0)]
     async fn statime_timers(
         mut cx: statime_timers::Context,
         mut timer_resets: Receiver<'static, (TimerName, core::time::Duration), 4>,
@@ -408,31 +390,56 @@ mod app {
         }
     }
 
-    #[task(shared = [net, ptp_port], priority = 1)]
-    async fn send_timestamp_grabber(
-        mut cx: send_timestamp_grabber::Context,
+    #[task(shared = [net, ptp_port, tx_waker], priority = 0)]
+    async fn tx_timestamp_listener(
+        mut cx: tx_timestamp_listener::Context,
         mut packet_id_receiver: Receiver<'static, (statime::TimestampContext, PacketId), 16>,
-        mut tx_done_r: Receiver<'static, (), 1>,
     ) {
+        let tx_waker = &mut cx.shared.tx_waker;
         let net = &mut cx.shared.net;
         let ptp_port = &mut cx.shared.ptp_port;
 
         loop {
-            let (ts_cx, pid) = unwrap!(packet_id_receiver.recv().await.ok());
-            match get_timestamp(net, &mut tx_done_r, &pid).await {
-                Ok(timestamp) => ptp_port.lock(|p| {
-                    p.handle_send_timestamp(ts_cx, stm_time_to_statime(timestamp), net);
+            // Wait for the next (smoltcp) packet id and its (statime) timestamp context
+            let (timestamp_context, packet_id) = unwrap!(packet_id_receiver.recv().await.ok());
+
+            // We try a limited amount of times since the queued packet might not be sent
+            // first
+            let mut tries = 10;
+
+            let timestamp = core::future::poll_fn(|ctx| {
+                // Register to wake up after every tx packet has been sent
+                tx_waker.lock(|tx_waker| tx_waker.register(ctx.waker()));
+
+                // Keep polling as long as we have tries left
+                match net.lock(|net| net.dma.poll_tx_timestamp(&packet_id)) {
+                    Poll::Ready(Ok(ts)) => Poll::Ready(ts),
+                    Poll::Ready(Err(_)) | Poll::Pending => {
+                        if tries > 0 {
+                            tries -= 1;
+                            Poll::Pending
+                        } else {
+                            Poll::Ready(None)
+                        }
+                    }
+                }
+            })
+            .await;
+
+            match timestamp {
+                Some(timestamp) => ptp_port.lock(|port| {
+                    port.handle_send_timestamp(
+                        timestamp_context,
+                        stm_time_to_statime(timestamp),
+                        net,
+                    );
                 }),
-                Err(e) => defmt::error!(
-                    "Failed to get timestamp for packet id {}, because {}",
-                    pid,
-                    e
-                ),
+                None => defmt::error!("Failed to get timestamp for packet id {}", packet_id,),
             }
         }
     }
 
-    #[task(local = [led_pin], priority = 1)]
+    #[task(local = [led_pin], priority = 0)]
     async fn blinky(cx: blinky::Context) {
         let led = cx.local.led_pin;
         loop {
@@ -453,9 +460,12 @@ mod app {
         listen_and_handle::<true>(&mut cx.shared.net, socket, &mut cx.shared.ptp_port).await
     }
 
-    #[task(shared = [net, ptp_port], priority = 1)]
+    #[task(shared = [net, ptp_port], priority = 0)]
     async fn general_listen(mut cx: general_listen::Context) {
-        let socket = cx.shared.ptp_port.lock(|ptp_port| ptp_port.general_socket());
+        let socket = cx
+            .shared
+            .ptp_port
+            .lock(|ptp_port| ptp_port.general_socket());
 
         listen_and_handle::<false>(&mut cx.shared.net, socket, &mut cx.shared.ptp_port).await
     }
@@ -486,46 +496,37 @@ mod app {
         }
     }
 
-    #[task(shared = [net], priority = 1)]
-    async fn poll_smoltcp(
-        mut cx: poll_smoltcp::Context,
-        mut please_poll: Receiver<'static, (), 1>,
-    ) {
+    #[task(shared = [net], priority = 0)]
+    async fn poll_smoltcp(mut cx: poll_smoltcp::Context) {
         loop {
             // Let smoltcp handle its things
-            let delay_millis = cx.shared.net.lock(|net| {
-                net.poll();
-                net.poll_delay().map(|d| d.total_millis())
-            });
+            let delay_millis = cx
+                .shared
+                .net
+                .lock(|net| {
+                    net.poll();
+                    net.poll_delay().map(|d| d.total_millis())
+                })
+                .unwrap_or(50);
 
-            // And wait until it wants to get polled again, we want to send something, or we
-            // received something
-            if let Some(delay_millis) = delay_millis {
-                let delay = delay_millis.millis();
-                select_biased! {
-                    _ = Systick::delay(delay).fuse() => (),
-                    _ = please_poll.recv().fuse() => (),
-                };
-            } else {
-                let _ = please_poll.recv().await;
-            }
+            Systick::delay(delay_millis.millis()).await;
         }
     }
 
-    #[task(binds = ETH, local = [please_poll_s, tx_done_s], priority = 2)]
-    fn eth_interrupt(cx: eth_interrupt::Context) {
+    #[task(binds = ETH, shared = [net, tx_waker], priority = 2)]
+    fn eth_interrupt(mut cx: eth_interrupt::Context) {
         let reason = stm32_eth::eth_interrupt_handler();
 
-        if reason.rx {
-            let _ = cx.local.please_poll_s.try_send(());
+        if reason.tx {
+            cx.shared.tx_waker.lock(|tx_waker| tx_waker.wake());
         }
 
-        if reason.tx {
-            let _ = cx.local.tx_done_s.try_send(());
-        }
+        cx.shared.net.lock(|net| {
+            net.poll();
+        });
     }
 
-    #[task(shared = [net], priority = 1)]
+    #[task(shared = [net], priority = 0)]
     async fn dhcp(mut cx: dhcp::Context, dhcp_handle: SocketHandle) {
         loop {
             core::future::poll_fn(|ctx| {
@@ -573,39 +574,6 @@ mod app {
     }
 }
 
-#[derive(Debug, Clone, Copy, defmt::Format)]
-enum TimestampError {
-    PacketIdNotFound(PacketIdNotFound),
-    NoTimestampRecorded,
-}
-
-impl From<PacketIdNotFound> for TimestampError {
-    fn from(value: PacketIdNotFound) -> Self {
-        Self::PacketIdNotFound(value)
-    }
-}
-
-#[derive(Debug, Clone, Copy, defmt::Format)]
-enum RecvError {
-    Exhausted,
-    PacketIdNotFound(PacketIdNotFound),
-    NoTimestampRecorded,
-}
-
-impl From<PacketIdNotFound> for RecvError {
-    fn from(value: PacketIdNotFound) -> Self {
-        Self::PacketIdNotFound(value)
-    }
-}
-
-impl From<udp::RecvError> for RecvError {
-    fn from(value: udp::RecvError) -> Self {
-        match value {
-            udp::RecvError::Exhausted => Self::Exhausted,
-        }
-    }
-}
-
 async fn recv_slice(
     net: &mut impl Mutex<T = ethernet::NetworkStack>,
     socket: SocketHandle,
@@ -639,45 +607,67 @@ async fn recv_slice(
     .await
 }
 
-async fn get_timestamp(
-    net: &mut impl Mutex<T = NetworkStack>,
-    tx_done_r: &mut Receiver<'static, (), 1>,
-    packet_id: &PacketId,
-) -> Result<Timestamp, TimestampError> {
-    let mut tries = 0;
+#[derive(Debug, Clone, Copy, defmt::Format)]
+enum RecvError {
+    Exhausted,
+    PacketIdNotFound(PacketIdNotFound),
+    NoTimestampRecorded,
+}
 
-    let timestamp = loop {
-        let poll = net.lock(|net| net.dma.poll_tx_timestamp(packet_id));
+impl From<PacketIdNotFound> for RecvError {
+    fn from(value: PacketIdNotFound) -> Self {
+        Self::PacketIdNotFound(value)
+    }
+}
 
-        async fn tx_done(tx_done_r: &mut Receiver<'static, (), 1>) -> Result<(), TimestampError> {
-            if tx_done_r.recv().await.is_err() {
-                return Err(TimestampError::NoTimestampRecorded);
-            }
-            Ok(())
+impl From<udp::RecvError> for RecvError {
+    fn from(value: udp::RecvError) -> Self {
+        match value {
+            udp::RecvError::Exhausted => Self::Exhausted,
         }
+    }
+}
 
-        match poll {
-            Poll::Ready(Ok(ts)) => break ts,
-            Poll::Ready(Err(e @ PacketIdNotFound)) => {
-                // Smoltcp sometimes does not send the package immediately (eg because of ARP)
-                // so we retry a few tiems TODO maybe add a way to ask smoltcp
-                // for if a package with a given Id still is in the send buffer
-                if tries < 5 {
-                    defmt::warn!("Package with Id {} not yet send... waiting...", packet_id);
-                    tries += 1;
-                    tx_done(tx_done_r).await?;
-                } else {
-                    return Err(e.into());
-                }
-            }
-            Poll::Pending => tx_done(tx_done_r).await?,
-        };
-    };
+/// Generate a mac based on the UID of the chip.
+///
+/// *Note: This is not the proper way to do it.
+/// You're supposed to buy a mac address or buy a phy that includes a mac and
+/// use that one*
+fn generate_mac_address() -> [u8; 6] {
+    let mut hasher = adler::Adler32::new();
 
-    let timestamp = match timestamp {
-        Some(ts) => ts,
-        None => return Err(TimestampError::NoTimestampRecorded),
-    };
+    // Form the basis of our OUI octets
+    let bin_name = env!("CARGO_BIN_NAME").as_bytes();
+    hasher.write_slice(bin_name);
+    let oui = hasher.checksum().to_ne_bytes();
 
-    Ok(timestamp)
+    // Form the basis of our NIC octets
+    let uid: [u8; 12] =
+        unsafe { core::mem::transmute_copy::<_, [u8; core::mem::size_of::<Uid>()]>(Uid::get()) };
+    hasher.write_slice(&uid);
+    let nic = hasher.checksum().to_ne_bytes();
+
+    // To make it adhere to EUI-48, we set it to be a unicast locally administered
+    // address
+    [
+        oui[0] & 0b1111_1100 | 0b0000_0010,
+        oui[1],
+        oui[2],
+        nic[0],
+        nic[1],
+        nic[2],
+    ]
+}
+
+fn eui48_to_eui64(address: [u8; 6]) -> [u8; 8] {
+    [
+        address[0] ^ 0b00000010,
+        address[1],
+        address[2],
+        0xff,
+        0xfe,
+        address[3],
+        address[4],
+        address[5],
+    ]
 }
