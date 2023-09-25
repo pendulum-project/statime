@@ -6,6 +6,7 @@ use core::task::Poll;
 
 use defmt::unwrap;
 use defmt_rtt as _;
+use ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR};
 use futures::{
     future::{poll_fn, FutureExt},
     select_biased,
@@ -14,8 +15,8 @@ use ieee802_3_miim::{
     phy::{PhySpeed, LAN8742A},
     Phy,
 };
-// global logger
-use panic_probe as _; // panic handler
+use panic_probe as _;
+use ptp_clock::PtpClock;
 use rtic::{app, Mutex};
 use rtic_monotonics::systick::{ExtU64, Systick};
 use rtic_sync::{
@@ -24,13 +25,13 @@ use rtic_sync::{
 };
 use smoltcp::{
     iface::{Config, Interface, SocketHandle, SocketSet},
-    socket::udp::{self, UdpMetadata},
-    wire::{EthernetAddress, IpAddress, IpCidr, IpEndpoint, Ipv4Address},
+    socket::udp::{self},
+    wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address},
 };
 use static_cell::StaticCell;
 use statime::{
-    BasicFilter, Duration, InBmca, InstanceConfig, Interval, PortAction, PortActionIterator,
-    PortConfig, PtpInstance, Running, SdoId,
+    BasicFilter, Duration, InstanceConfig, Interval,
+    PortConfig, PtpInstance, SdoId,
 };
 use stm32_eth::{
     dma::{PacketId, PacketIdNotFound},
@@ -44,10 +45,9 @@ use stm32f7xx_hal::{
     rng::{Rng, RngExt},
 };
 
-use crate::{
-    ethernet::{NetworkResources, NetworkStack, CLIENT_ADDR},
-    ptp_clock::PtpClock,
-};
+mod ethernet;
+mod port;
+mod ptp_clock;
 
 defmt::timestamp!("{=u64:iso8601ms}", {
     let time = stm32_eth::ptp::EthernetPTP::get_time();
@@ -55,44 +55,6 @@ defmt::timestamp!("{=u64:iso8601ms}", {
 });
 
 type StmPort<State> = statime::Port<State, Rng, &'static PtpClock, BasicFilter>;
-
-pub enum PtpPort {
-    None,
-    Running(StmPort<Running<'static>>),
-    InBmca(StmPort<InBmca<'static>>),
-}
-
-impl PtpPort {
-    pub fn as_bmca_mode(&mut self) -> &mut StmPort<InBmca<'static>> {
-        let this = core::mem::replace(self, PtpPort::None);
-
-        *self = match this {
-            PtpPort::Running(port) => PtpPort::InBmca(port.start_bmca()),
-            val => val,
-        };
-
-        match self {
-            PtpPort::InBmca(port) => port,
-            _ => defmt::unreachable!(),
-        }
-    }
-
-    pub fn to_running(&mut self) -> PortActionIterator<'static> {
-        let this = core::mem::replace(self, PtpPort::None);
-
-        let (this, actions) = match this {
-            PtpPort::InBmca(port) => {
-                let (port, actions) = port.end_bmca();
-                (PtpPort::Running(port), actions)
-            }
-            _ => defmt::panic!("Port in bad state"),
-        };
-
-        *self = this;
-
-        actions
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimerName {
@@ -102,9 +64,6 @@ pub enum TimerName {
     AnnounceReceipt,
     FilterUpdate,
 }
-
-pub mod ethernet;
-pub mod ptp_clock;
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0, CAN1_RX1, CAN1_TX])]
 mod app {
@@ -117,7 +76,7 @@ mod app {
     struct Shared {
         net: NetworkStack,
         ptp_instance: &'static statime::PtpInstance<BasicFilter>,
-        ptp_port: PtpPort,
+        ptp_port: port::Port,
     }
 
     #[local]
@@ -204,8 +163,10 @@ mod app {
             mut dma,
             mac,
             mut ptp,
-        } = stm32_eth::new_with_mii(ethernet, rx_ring, tx_ring, clocks, eth_pins, mdio, mdc)
-            .unwrap();
+        } = unwrap!(stm32_eth::new_with_mii(
+            ethernet, rx_ring, tx_ring, clocks, eth_pins, mdio, mdc
+        )
+        .ok());
 
         // Setup smoltcp
         let cfg = Config::new(EthernetAddress(CLIENT_ADDR).into());
@@ -215,7 +176,7 @@ mod app {
         let dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
 
         interface.update_ip_addrs(|a| {
-            a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 24)).unwrap();
+            unwrap!(a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 24)));
         });
 
         unwrap!(interface.join_multicast_group(
@@ -237,14 +198,14 @@ mod app {
         let tc_tx_buffer =
             udp::PacketBuffer::new(&mut tc_tx_meta_storage[..], &mut tc_tx_payload_storage[..]);
         let mut time_critical_socket = udp::Socket::new(tc_rx_buffer, tc_tx_buffer);
-        time_critical_socket.bind(319).unwrap();
+        unwrap!(time_critical_socket.bind(319));
 
         let rx_buffer =
             udp::PacketBuffer::new(&mut rx_meta_storage[..], &mut rx_payload_storage[..]);
         let tx_buffer =
             udp::PacketBuffer::new(&mut tx_meta_storage[..], &mut tx_payload_storage[..]);
         let mut general_socket = udp::Socket::new(rx_buffer, tx_buffer);
-        general_socket.bind(320).unwrap();
+        unwrap!(general_socket.bind(320));
 
         // Register socket
         let mut sockets = SocketSet::new(&mut sockets[..]);
@@ -304,7 +265,7 @@ mod app {
             priority_2: 255,
             domain_number: 0,
             slave_only: false,
-            sdo_id: SdoId::new(0).unwrap(),
+            sdo_id: unwrap!(SdoId::new(0)),
         };
         let time_properties_ds = statime::TimePropertiesDS::new_arbitrary_time(
             false,
@@ -327,8 +288,6 @@ mod app {
         };
         let filter_config = 0.1;
         let rng = p.RNG.init();
-        let ptp_port =
-            PtpPort::InBmca(ptp_instance.add_port(port_config, filter_config, ptp_clock, rng));
 
         type Empty = ();
         let (please_poll_s, please_poll_r) = make_channel!(Empty, 1);
@@ -338,6 +297,14 @@ mod app {
         type PacketIdMsg = (statime::TimestampContext, PacketId);
         let (packet_id_sender, packet_id_receiver) = make_channel!(PacketIdMsg, 16);
 
+        let ptp_port = port::Port::new(
+            timer_sender,
+            packet_id_sender,
+            time_critical_socket,
+            general_socket,
+            ptp_instance.add_port(port_config, filter_config, ptp_clock, rng),
+        );
+
         let net = NetworkStack {
             dma,
             iface: interface,
@@ -345,48 +312,16 @@ mod app {
         };
 
         unwrap!(blinky::spawn());
-        time_critical_listen::spawn(
-            time_critical_socket,
-            timer_sender.clone(),
-            packet_id_sender.clone(),
-            time_critical_socket,
-            general_socket,
-        )
-        .unwrap_or_else(|_| defmt::panic!("Failed to start time_critical_listen"));
-        general_listen::spawn(
-            general_socket,
-            timer_sender.clone(),
-            packet_id_sender.clone(),
-            time_critical_socket,
-            general_socket,
-        )
-        .unwrap_or_else(|_| defmt::panic!("Failed to start general_listen"));
-        send_timestamp_grabber::spawn(
-            timer_sender.clone(),
-            packet_id_receiver,
-            tx_done_r,
-            packet_id_sender.clone(),
-            time_critical_socket,
-            general_socket,
-        )
-        .unwrap_or_else(|_| defmt::panic!("Failed to start send_timestamp_grabber"));
+        time_critical_listen::spawn()
+            .unwrap_or_else(|_| defmt::panic!("Failed to start time_critical_listen"));
+        general_listen::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start general_listen"));
+        send_timestamp_grabber::spawn(packet_id_receiver, tx_done_r)
+            .unwrap_or_else(|_| defmt::panic!("Failed to start send_timestamp_grabber"));
         poll_smoltcp::spawn(please_poll_r)
             .unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
-        statime_timers::spawn(
-            timer_receiver,
-            timer_sender.clone(),
-            packet_id_sender.clone(),
-            time_critical_socket,
-            general_socket,
-        )
-        .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
-        instance_bmca::spawn(
-            timer_sender.clone(),
-            packet_id_sender.clone(),
-            time_critical_socket,
-            general_socket,
-        )
-        .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
+        statime_timers::spawn(timer_receiver)
+            .unwrap_or_else(|_| defmt::panic!("Failed to start timers"));
+        instance_bmca::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
         dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
 
         (
@@ -404,27 +339,19 @@ mod app {
     }
 
     #[task(shared=[net, ptp_instance, ptp_port], priority = 1)]
-    async fn instance_bmca(
-        mut cx: instance_bmca::Context,
-        mut timer_resets_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
-    ) {
+    async fn instance_bmca(mut cx: instance_bmca::Context) {
         let net = &mut cx.shared.net;
 
         loop {
             let wait_duration = (&mut cx.shared.ptp_instance, &mut cx.shared.ptp_port).lock(
                 |ptp_instance, ptp_port| {
-                    ptp_instance.bmca(&mut [ptp_port.as_bmca_mode()]);
-                    handle_port_actions(
-                        ptp_port.to_running(),
-                        &mut timer_resets_sender,
-                        &mut packet_id_sender,
+                    ptp_port.perform_bmca(
+                        |bmca_port| {
+                            ptp_instance.bmca(&mut [bmca_port]);
+                        },
                         net,
-                        time_critical_socket,
-                        general_socket,
                     );
+
                     ptp_instance.bmca_interval()
                 },
             );
@@ -437,14 +364,8 @@ mod app {
     async fn statime_timers(
         mut cx: statime_timers::Context,
         mut timer_resets: Receiver<'static, (TimerName, core::time::Duration), 4>,
-        mut timer_resets_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
     ) {
         let net = &mut cx.shared.net;
-        let port = &mut cx.shared.ptp_port;
-        let packet_id_sender = &mut packet_id_sender;
 
         let mut announce_timer_delay = core::pin::pin!(Systick::delay(24u64.hours()).fuse());
         let mut sync_timer_delay = core::pin::pin!(Systick::delay(24u64.hours()).fuse());
@@ -456,22 +377,22 @@ mod app {
         loop {
             futures::select_biased! {
                 _ = announce_timer_delay => {
-                    with_port(port, |port| handle_port_actions(port.handle_announce_timer(), &mut timer_resets_sender, packet_id_sender, net, time_critical_socket, general_socket));
+                    cx.shared.ptp_port.lock(|port| port.handle_timer(TimerName::Announce, net));
                 }
                 _ = sync_timer_delay => {
-                    with_port(port, |port| handle_port_actions(port.handle_sync_timer(), &mut timer_resets_sender, packet_id_sender, net, time_critical_socket, general_socket));
+                    cx.shared.ptp_port.lock(|port| port.handle_timer(TimerName::Sync, net));
                 }
                 _ = delay_request_timer_delay => {
-                    with_port(port, |port| handle_port_actions(port.handle_delay_request_timer(), &mut timer_resets_sender, packet_id_sender, net, time_critical_socket, general_socket));
+                    cx.shared.ptp_port.lock(|port| port.handle_timer(TimerName::DelayRequest, net));
                 }
                 _ = announce_receipt_timer_delay => {
-                    with_port(port, |port| handle_port_actions(port.handle_announce_receipt_timer(), &mut timer_resets_sender, packet_id_sender, net, time_critical_socket, general_socket));
+                    cx.shared.ptp_port.lock(|port| port.handle_timer(TimerName::AnnounceReceipt, net));
                 }
                 _ = filter_update_timer_delay => {
-                    with_port(port, |port| handle_port_actions(port.handle_filter_update_timer(), &mut timer_resets_sender, packet_id_sender, net, time_critical_socket, general_socket));
+                    cx.shared.ptp_port.lock(|port| port.handle_timer(TimerName::FilterUpdate, net));
                 }
                 reset = timer_resets.recv().fuse() => {
-                    let (timer, delay_time) = reset.unwrap();
+                    let (timer, delay_time) = unwrap!(reset.ok());
 
                     let delay = match timer {
                         TimerName::Announce => &mut announce_timer_delay,
@@ -490,30 +411,17 @@ mod app {
     #[task(shared = [net, ptp_port], priority = 1)]
     async fn send_timestamp_grabber(
         mut cx: send_timestamp_grabber::Context,
-        mut timer_resets_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
         mut packet_id_receiver: Receiver<'static, (statime::TimestampContext, PacketId), 16>,
         mut tx_done_r: Receiver<'static, (), 1>,
-        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
     ) {
         let net = &mut cx.shared.net;
         let ptp_port = &mut cx.shared.ptp_port;
 
         loop {
-            let (ts_cx, pid) = packet_id_receiver.recv().await.unwrap();
+            let (ts_cx, pid) = unwrap!(packet_id_receiver.recv().await.ok());
             match get_timestamp(net, &mut tx_done_r, &pid).await {
-                Ok(timestamp) => with_port(ptp_port, |p| {
-                    let timestamp = stm_time_to_statime(timestamp);
-                    let actions = p.handle_send_timestamp(ts_cx, timestamp);
-                    handle_port_actions(
-                        actions,
-                        &mut timer_resets_sender,
-                        &mut packet_id_sender,
-                        net,
-                        time_critical_socket,
-                        general_socket,
-                    );
+                Ok(timestamp) => ptp_port.lock(|p| {
+                    p.handle_send_timestamp(ts_cx, stm_time_to_statime(timestamp), net);
                 }),
                 Err(e) => defmt::error!(
                     "Failed to get timestamp for packet id {}, because {}",
@@ -536,59 +444,30 @@ mod app {
     }
 
     #[task(shared = [net, ptp_port], priority = 1)]
-    async fn time_critical_listen(
-        mut cx: time_critical_listen::Context,
-        socket: SocketHandle,
-        mut timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
-    ) {
-        listen_and_handle::<true>(
-            &mut cx.shared.net,
-            socket,
-            &mut cx.shared.ptp_port,
-            &mut timer_sender,
-            &mut packet_id_sender,
-            time_critical_socket,
-            general_socket,
-        )
-        .await
+    async fn time_critical_listen(mut cx: time_critical_listen::Context) {
+        let socket = cx
+            .shared
+            .ptp_port
+            .lock(|ptp_port| ptp_port.time_critical_socket());
+
+        listen_and_handle::<true>(&mut cx.shared.net, socket, &mut cx.shared.ptp_port).await
     }
 
     #[task(shared = [net, ptp_port], priority = 1)]
-    async fn general_listen(
-        mut cx: general_listen::Context,
-        recv_socket: SocketHandle,
-        mut timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-        mut packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
-    ) {
-        listen_and_handle::<false>(
-            &mut cx.shared.net,
-            recv_socket,
-            &mut cx.shared.ptp_port,
-            &mut timer_sender,
-            &mut packet_id_sender,
-            time_critical_socket,
-            general_socket,
-        )
-        .await
+    async fn general_listen(mut cx: general_listen::Context) {
+        let socket = cx.shared.ptp_port.lock(|ptp_port| ptp_port.general_socket());
+
+        listen_and_handle::<false>(&mut cx.shared.net, socket, &mut cx.shared.ptp_port).await
     }
 
     async fn listen_and_handle<const IS_TIME_CRITICAL: bool>(
         net: &mut impl Mutex<T = NetworkStack>,
-        recv_socket: SocketHandle,
-        port: &mut impl Mutex<T = PtpPort>,
-        timer_sender: &mut Sender<'static, (TimerName, core::time::Duration), 4>,
-        packet_id_sender: &mut Sender<'static, (statime::TimestampContext, PacketId), 16>,
-        time_critical_socket: SocketHandle,
-        general_socket: SocketHandle,
+        socket: SocketHandle,
+        port: &mut impl Mutex<T = port::Port>,
     ) {
         let mut buffer = [0u8; 1500];
         loop {
-            let (len, timestamp) = match recv_slice(net, recv_socket, &mut buffer).await {
+            let (len, timestamp) = match recv_slice(net, socket, &mut buffer).await {
                 Ok(ok) => ok,
                 Err(e) => {
                     defmt::error!("Failed to receive a packet because: {}", e);
@@ -597,22 +476,12 @@ mod app {
             };
             let data = &buffer[..len];
 
-            with_port(port, |p| {
-                let port_actions = if IS_TIME_CRITICAL {
-                    let timestamp = stm_time_to_statime(timestamp);
-                    p.handle_timecritical_receive(data, timestamp)
+            port.lock(|port| {
+                if IS_TIME_CRITICAL {
+                    port.handle_timecritical_receive(data, stm_time_to_statime(timestamp), net);
                 } else {
-                    p.handle_general_receive(data)
+                    port.handle_general_receive(data, net);
                 };
-
-                handle_port_actions(
-                    port_actions,
-                    timer_sender,
-                    packet_id_sender,
-                    net,
-                    time_critical_socket,
-                    general_socket,
-                );
             });
         }
     }
@@ -668,7 +537,7 @@ mod app {
                         Some(dhcpv4::Event::Deconfigured) => {
                             defmt::warn!("DHCP got deconfigured");
                             net.iface.update_ip_addrs(|addrs| {
-                                let dest = addrs.iter_mut().next().unwrap();
+                                let dest = unwrap!(addrs.iter_mut().next());
                                 *dest = IpCidr::Ipv4(Ipv4Cidr::new(Ipv4Address::UNSPECIFIED, 0));
                             });
                             net.iface.routes_mut().remove_default_ipv4_route();
@@ -679,15 +548,12 @@ mod app {
 
                             defmt::debug!("IP address:      {}", config.address);
                             net.iface.update_ip_addrs(|addrs| {
-                                let dest = addrs.iter_mut().next().unwrap();
+                                let dest = unwrap!(addrs.iter_mut().next());
                                 *dest = IpCidr::Ipv4(config.address);
                             });
                             if let Some(router) = config.router {
                                 defmt::debug!("Default gateway: {}", router);
-                                net.iface
-                                    .routes_mut()
-                                    .add_default_ipv4_route(router)
-                                    .unwrap();
+                                unwrap!(net.iface.routes_mut().add_default_ipv4_route(router));
                             } else {
                                 defmt::debug!("Default gateway: None");
                                 net.iface.routes_mut().remove_default_ipv4_route();
@@ -773,33 +639,6 @@ async fn recv_slice(
     .await
 }
 
-fn send(
-    net: &mut impl Mutex<T = ethernet::NetworkStack>,
-    socket: SocketHandle,
-    to: &smoltcp::wire::IpEndpoint,
-    data: &[u8],
-) -> Result<PacketId, udp::SendError> {
-    net.lock(|net| {
-        // Get an Id to track our packet
-        let packet_id = net.dma.next_packet_id();
-
-        // Combine the receiver with the packet id
-        let mut meta: UdpMetadata = (*to).into();
-        meta.meta = packet_id.clone().into();
-
-        // Actually send the packet
-        net.sockets
-            .get_mut::<udp::Socket>(socket)
-            .send_slice(data, meta)?;
-
-        // Send out the packet, this makes sure the MAC actually sees the packet and
-        // knows about the packet_id
-        net.poll();
-
-        Ok(packet_id)
-    })
-}
-
 async fn get_timestamp(
     net: &mut impl Mutex<T = NetworkStack>,
     tx_done_r: &mut Receiver<'static, (), 1>,
@@ -841,76 +680,4 @@ async fn get_timestamp(
     };
 
     Ok(timestamp)
-}
-
-fn with_port<F, R>(port: &mut impl Mutex<T = PtpPort>, f: F) -> R
-where
-    F: FnOnce(&mut StmPort<Running>) -> R,
-{
-    port.lock(|port| {
-        let running_port = match port {
-            PtpPort::None => panic!("Port was left in None state..."),
-            PtpPort::Running(r) => r,
-            PtpPort::InBmca(_) => panic!("Port was left in InBmca state..."),
-        };
-
-        f(running_port)
-    })
-}
-
-fn handle_port_actions(
-    actions: statime::PortActionIterator<'_>,
-    timer_sender: &mut Sender<'static, (TimerName, core::time::Duration), 4>,
-    packet_id_sender: &mut Sender<'static, (statime::TimestampContext, PacketId), 16>,
-    net: &mut impl Mutex<T = ethernet::NetworkStack>,
-    time_critical_socket: SocketHandle,
-    general_socket: SocketHandle,
-) {
-    for action in actions {
-        match action {
-            PortAction::SendTimeCritical { context, data } => {
-                const TO: IpEndpoint = IpEndpoint {
-                    addr: IpAddress::v4(224, 0, 1, 129),
-                    port: 319,
-                };
-                match send(net, time_critical_socket, &TO, data) {
-                    Ok(pid) => packet_id_sender.try_send((context, pid)).unwrap(),
-                    Err(e) => defmt::error!("Failed to send time critical packet, because: {}", e),
-                }
-            }
-            PortAction::SendGeneral { data } => {
-                const TO: IpEndpoint = IpEndpoint {
-                    addr: IpAddress::v4(224, 0, 1, 129),
-                    port: 320,
-                };
-                match send(net, general_socket, &TO, data) {
-                    Ok(_) => (),
-                    Err(e) => defmt::error!("Failed to send general packet, because: {}", e),
-                }
-            }
-            PortAction::ResetAnnounceTimer { duration } => {
-                timer_sender
-                    .try_send((TimerName::Announce, duration))
-                    .unwrap();
-            }
-            PortAction::ResetSyncTimer { duration } => {
-                timer_sender.try_send((TimerName::Sync, duration)).unwrap();
-            }
-            PortAction::ResetDelayRequestTimer { duration } => {
-                timer_sender
-                    .try_send((TimerName::DelayRequest, duration))
-                    .unwrap();
-            }
-            PortAction::ResetAnnounceReceiptTimer { duration } => {
-                timer_sender
-                    .try_send((TimerName::AnnounceReceipt, duration))
-                    .unwrap();
-            }
-            PortAction::ResetFilterUpdateTimer { duration } => {
-                timer_sender
-                    .try_send((TimerName::FilterUpdate, duration))
-                    .unwrap();
-            }
-        }
-    }
 }

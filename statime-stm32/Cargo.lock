@@ -133,7 +133,7 @@ dependencies = [
  "bare-metal 0.2.5",
  "bitfield",
  "critical-section",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "volatile-register",
 ]
 
@@ -226,6 +226,12 @@ dependencies = [
  "nb 0.1.3",
  "void",
 ]
+
+[[package]]
+name = "embedded-hal"
+version = "1.0.0-rc.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2894bc2f0457b8ca3d6b8ab8aad64d9337583672494013457f86c5a9146c0e22"
 
 [[package]]
 name = "equivalent"
@@ -584,13 +590,14 @@ dependencies = [
 
 [[package]]
 name = "rtic-monotonics"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e9f99e2119d5bdd927c45a31ef9e8d9888f02ede3e357bcbd7ab79c426e02d"
+checksum = "51ae55abf361b093dc1b9d6f20666313674ba314584bce49ba1a1366c99186d1"
 dependencies = [
  "atomic-polyfill 1.0.3",
  "cfg-if",
  "cortex-m",
+ "embedded-hal 1.0.0-rc.1",
  "fugit",
  "rtic-time",
 ]
@@ -714,32 +721,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stm32-eth"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c550a779760adb4fc33b2b96e0cf2bfbb044cfb4237db83cd162325b52e7176"
-dependencies = [
- "aligned",
- "cortex-m",
- "defmt",
- "futures",
- "ieee802_3_miim",
- "smoltcp",
- "stm32f7xx-hal",
- "volatile-register",
-]
-
-[[package]]
-name = "stm32-fmc"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf16ee9bd5de754482883cf3eac9a49eb862baf1420f55ce408e001705e9ae74"
-dependencies = [
- "embedded-hal",
-]
-
-[[package]]
-name = "stm32-ptp"
+name = "statime-stm32"
 version = "0.1.0"
 dependencies = [
  "az",
@@ -760,6 +742,31 @@ dependencies = [
  "statime",
  "stm32-eth",
  "stm32f7xx-hal",
+]
+
+[[package]]
+name = "stm32-eth"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "114ecd655ee196c97dc4b3ff63b48046f2e2e2a7b3f53cc5114b9599606c093b"
+dependencies = [
+ "aligned",
+ "cortex-m",
+ "defmt",
+ "futures",
+ "ieee802_3_miim",
+ "smoltcp",
+ "stm32f7xx-hal",
+ "volatile-register",
+]
+
+[[package]]
+name = "stm32-fmc"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf16ee9bd5de754482883cf3eac9a49eb862baf1420f55ce408e001705e9ae74"
+dependencies = [
+ "embedded-hal 0.2.7",
 ]
 
 [[package]]
@@ -787,7 +794,7 @@ dependencies = [
  "cast",
  "cortex-m",
  "cortex-m-rt",
- "embedded-hal",
+ "embedded-hal 0.2.7",
  "fugit",
  "fugit-timer",
  "micromath",
