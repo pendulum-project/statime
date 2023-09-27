@@ -6,10 +6,20 @@ use smoltcp::{
     socket::udp::{self, UdpMetadata},
     wire::{IpAddress, IpEndpoint},
 };
-use statime::{InBmca, PortAction, PortActionIterator, Running, TimestampContext};
+use static_cell::StaticCell;
+use statime::{
+    BasicFilter, Duration, InBmca, InstanceConfig, Interval, PortAction, PortActionIterator,
+    PortConfig, PtpInstance, Running, SdoId, TimestampContext,
+};
 use stm32_eth::dma::PacketId;
+use stm32f7xx_hal::rng::Rng;
 
-use crate::{ethernet::NetworkStack, StmPort, TimerName};
+use crate::{
+    ethernet::{eui48_to_eui64, NetworkStack},
+    ptp_clock::PtpClock,
+};
+
+type StmPort<State> = statime::Port<State, Rng, &'static PtpClock, BasicFilter>;
 
 pub struct Port {
     timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
@@ -163,6 +173,7 @@ impl Port {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum PortState {
     None,
     Running(StmPort<Running<'static>>),
@@ -243,4 +254,54 @@ fn send(
 
         Ok(packet_id)
     })
+}
+
+pub fn setup_statime(
+    ptp_peripheral: stm32_eth::ptp::EthernetPTP,
+    mac_address: [u8; 6],
+    rng: Rng,
+) -> (&'static PtpInstance<BasicFilter>, StmPort<InBmca<'static>>) {
+    static PTP_CLOCK: StaticCell<PtpClock> = StaticCell::new();
+    let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp_peripheral));
+
+    let instance_config = InstanceConfig {
+        clock_identity: statime::ClockIdentity(eui48_to_eui64(mac_address)),
+        priority_1: 255,
+        priority_2: 255,
+        domain_number: 0,
+        slave_only: false,
+        sdo_id: unwrap!(SdoId::new(0)),
+    };
+    let time_properties_ds = statime::TimePropertiesDS::new_arbitrary_time(
+        false,
+        false,
+        statime::TimeSource::InternalOscillator,
+    );
+    static PTP_INSTANCE: StaticCell<PtpInstance<BasicFilter>> = StaticCell::new();
+    let ptp_instance = &*PTP_INSTANCE.init(PtpInstance::new(instance_config, time_properties_ds));
+
+    let port_config = PortConfig {
+        delay_mechanism: statime::DelayMechanism::E2E {
+            interval: Interval::from_log_2(-2),
+        },
+        announce_interval: Interval::from_log_2(1),
+        announce_receipt_timeout: 3,
+        sync_interval: Interval::from_log_2(-6),
+        master_only: false,
+        delay_asymmetry: Duration::ZERO,
+    };
+    let filter_config = 0.1;
+
+    let ptp_port = ptp_instance.add_port(port_config, filter_config, ptp_clock, rng);
+
+    (ptp_instance, ptp_port)
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum TimerName {
+    Announce,
+    Sync,
+    DelayRequest,
+    AnnounceReceipt,
+    FilterUpdate,
 }
