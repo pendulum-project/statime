@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
     pin::{pin, Pin},
     str::FromStr,
+    sync::OnceLock,
 };
 
 use clap::Parser;
@@ -282,12 +283,11 @@ async fn actual_main() {
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
-    // Leak to get a static reference, the ptp instance will be around for the rest
-    // of the program anyway
-    let instance = Box::leak(Box::new(PtpInstance::new(
-        instance_config,
-        time_properties_ds,
-    )));
+    // get a static reference to the instance
+    let instance = {
+        static INSTANCE: OnceLock<PtpInstance<BasicFilter>> = OnceLock::new();
+        INSTANCE.get_or_init(|| PtpInstance::new(instance_config, time_properties_ds))
+    };
 
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
 
