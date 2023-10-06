@@ -254,9 +254,8 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             },
         }
     }
-}
 
-// Handle a message over the event channel
+    // Handle a message over the event channel
     pub fn handle_event_receive(&mut self, data: &[u8], timestamp: Time) -> PortActionIterator {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
