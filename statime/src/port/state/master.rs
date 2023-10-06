@@ -96,7 +96,7 @@ impl MasterState {
             PortAction::ResetSyncTimer {
                 duration: config.sync_interval.as_core_duration(),
             },
-            PortAction::SendTimeCritical {
+            PortAction::SendEvent {
                 context: TimestampContext {
                     inner: TimestampContextInner::Sync { id: seq_id },
                 },
@@ -437,7 +437,7 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetSyncTimer { .. })
         ));
-        let Some(PortAction::SendTimeCritical { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -494,7 +494,7 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetSyncTimer { .. })
         ));
-        let Some(PortAction::SendTimeCritical { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());

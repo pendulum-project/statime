@@ -369,7 +369,7 @@ impl<F> SlaveState<F> {
 
         actions![
             PortAction::ResetDelayRequestTimer { duration },
-            PortAction::SendTimeCritical {
+            PortAction::SendEvent {
                 context: TimestampContext {
                     inner: TimestampContextInner::DelayReq { id: delay_id },
                 },
@@ -658,7 +658,7 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendTimeCritical { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent { context, data }) = action.next() else {
             panic!("Unexpected action");
         };
         assert!(action.next().is_none());
@@ -749,7 +749,7 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendTimeCritical { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent { context, data }) = action.next() else {
             panic!("Unexpected action");
         };
         assert!(action.next().is_none());
@@ -1100,7 +1100,7 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendTimeCritical { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent { context, data }) = action.next() else {
             panic!("Unexpected action");
         };
 
