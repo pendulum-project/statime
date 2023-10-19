@@ -435,7 +435,9 @@ async fn run(
 
         for receiver in main_task_receivers.iter_mut() {
             let output = receiver.recv().await.unwrap();
-            propagate.extend(output.tlv_set);
+
+            propagate.push((output.port.identity(), output.tlv_set));
+
             bmca_ports.push(output.port);
         }
 
@@ -448,7 +450,7 @@ async fn run(
             mut_bmca_ports.push(mut_bmca_port);
         }
 
-        instance.bmca(&mut mut_bmca_ports);
+        let current_master = instance.bmca(&mut mut_bmca_ports);
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];
         for (idx, port) in mut_bmca_ports.iter().enumerate() {
@@ -465,17 +467,32 @@ async fn run(
         drop(mut_bmca_ports);
 
         // 14.2.2.2 Unsupported TLVs marked "Propagate"
-        //
+        let mut propagate = if let Some(current_master) = current_master {
+            propagate
+                .drain(..)
+                .filter_map(|(port_identity, tlvs)| {
+                    (port_identity == current_master).then_some(tlvs)
+                })
+                .flatten()
+                .collect()
+        } else {
+            // if there is no (best) master, there should be no TLVs to propagate
+            debug_assert!(propagate.is_empty());
+            vec![]
+        };
+
         // If multiple TLVs are sent [..] the TLVs should be appended to the next
         // Announce message in the order of arrival at the egress PTP Port from
         // the ingress PTP Port of the PTP Instance.
         propagate.sort();
-        let tlv: Vec<u8> = propagate.drain(..).flat_map(|tlv| tlv.bytes).collect();
 
         for (port, sender) in bmca_ports.into_iter().zip(main_task_senders.iter()) {
             let input = PortTaskInput {
                 port,
-                tlv_set: tlv.clone(),
+                tlv_set: propagate
+                    .iter()
+                    .flat_map(|tlv| tlv.bytes.iter().copied())
+                    .collect(),
             };
 
             sender.send(input).await.unwrap();
@@ -495,7 +512,7 @@ struct PortTaskOutput {
     tlv_set: Vec<OwnedTlv>,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 struct OwnedTlv {
     // represented as nanoseconds, for sorting
     timestamp: u128,

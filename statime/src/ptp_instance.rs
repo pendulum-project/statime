@@ -81,7 +81,7 @@ impl PtpInstanceState {
         &mut self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
         bmca_interval: crate::Duration,
-    ) {
+    ) -> Option<PortIdentity> {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
 
         for port in ports.iter_mut() {
@@ -93,6 +93,8 @@ impl PtpInstanceState {
                 .iter()
                 .filter_map(|port| port.best_local_announce_message()),
         );
+
+        let mut master = None;
 
         for port in ports.iter_mut() {
             let recommended_state = Bmca::<()>::calculate_recommended_state(
@@ -116,12 +118,18 @@ impl PtpInstanceState {
                     &self.default_ds,
                 );
             }
+
+            if port.is_master() {
+                master = Some(port.identity());
+            }
         }
 
         // And update announce message ages
         for port in ports.iter_mut() {
             port.step_announce_age(bmca_interval);
         }
+
+        master
     }
 }
 
@@ -178,7 +186,7 @@ impl<F: Filter> PtpInstance<F> {
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
-    ) {
+    ) -> Option<PortIdentity> {
         self.state.borrow_mut().bmca(
             ports,
             crate::Duration::from_seconds(

@@ -392,12 +392,20 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
         matches!(self.port_state, PortState::Slave(_))
     }
 
+    pub fn is_master(&self) -> bool {
+        matches!(self.port_state, PortState::Master(_))
+    }
+
     pub(crate) fn state(&self) -> &PortState<F> {
         &self.port_state
     }
 
     pub(crate) fn number(&self) -> u16 {
         self.port_identity.port_number
+    }
+
+    pub fn identity(&self) -> PortIdentity {
+        self.port_identity
     }
 }
 
