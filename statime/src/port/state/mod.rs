@@ -48,8 +48,8 @@ impl<F: Filter> PortState<F> {
         }
     }
 
-    pub(crate) fn handle_event_receive<'a, 'b, C: Clock>(
-        &'a mut self,
+    pub(crate) fn handle_event_receive<'b, C: Clock>(
+        &mut self,
         message: Message,
         timestamp: Time,
         min_delay_req_interval: Interval,
