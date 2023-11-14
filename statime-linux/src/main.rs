@@ -9,9 +9,13 @@ use clap::Parser;
 use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    BasicFilter, ClockIdentity, Filter, InBmca, InstanceConfig, Measurement, Port, PortAction,
-    PortActionIterator, PtpInstance, SdoId, Time, TimePropertiesDS, TimeSource, TimestampContext,
-    MAX_DATA_LEN,
+    config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
+    filters::{BasicFilter, Filter},
+    port::{
+        InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
+    },
+    time::Time,
+    PtpInstance,
 };
 use statime_linux::{
     clock::LinuxClock,

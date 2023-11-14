@@ -1,4 +1,4 @@
-use crate::ClockIdentity;
+use crate::config::ClockIdentity;
 
 pub trait AcceptableMasterList {
     fn is_acceptable(&self, identity: ClockIdentity) -> bool;

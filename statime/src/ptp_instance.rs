@@ -9,13 +9,14 @@ use rand::Rng;
 use crate::{
     bmc::{acceptable_master::AcceptableMasterList, bmca::Bmca},
     clock::Clock,
-    config::InstanceConfig,
+    config::{InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
+    filters::Filter,
     port::{InBmca, Port},
-    Filter, PortConfig,
+    time::Duration,
 };
 
 /// A PTP node.
@@ -80,7 +81,7 @@ impl PtpInstanceState {
     fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng>(
         &mut self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
-        bmca_interval: crate::Duration,
+        bmca_interval: Duration,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
 
@@ -181,7 +182,7 @@ impl<F: Filter> PtpInstance<F> {
     ) {
         self.state.borrow_mut().bmca(
             ports,
-            crate::Duration::from_seconds(
+            Duration::from_seconds(
                 #[cfg(feature = "std")]
                 2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
                 #[cfg(not(feature = "std"))]

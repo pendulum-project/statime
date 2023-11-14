@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use statime::FuzzMessage;
+use statime::fuzz::FuzzMessage;
 
 fuzz_target!(|data: Vec<u8>| {
     // the default maximum size a fuzzed Vec<_> will be, as per

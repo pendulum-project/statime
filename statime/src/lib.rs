@@ -38,25 +38,17 @@ extern crate std;
 
 mod bmc;
 mod clock;
-mod config;
-mod datastructures;
-mod filters;
-mod port;
+pub mod config;
+pub(crate) mod datastructures;
+pub mod filters;
+pub mod port;
 mod ptp_instance;
-mod time;
+pub mod time;
 
 pub use clock::Clock;
-pub use config::{DelayMechanism, InstanceConfig, PortConfig};
-#[cfg(feature = "fuzz")]
-pub use datastructures::messages::FuzzMessage;
-pub use datastructures::{
-    common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource},
-    datasets::TimePropertiesDS,
-    messages::{SdoId, MAX_DATA_LEN},
-};
-pub use filters::{basic::BasicFilter, Filter};
-pub use port::{
-    InBmca, Measurement, Port, PortAction, PortActionIterator, Running, TimestampContext,
-};
 pub use ptp_instance::PtpInstance;
-pub use time::{Duration, Interval, Time};
+
+#[cfg(feature = "fuzz")]
+pub mod fuzz {
+    pub use crate::datastructures::messages::FuzzMessage;
+}

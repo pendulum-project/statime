@@ -7,6 +7,7 @@ use rand::Rng;
 use state::{MasterState, PortState};
 
 use self::state::SlaveState;
+pub use crate::datastructures::messages::MAX_DATA_LEN;
 use crate::{
     bmc::{
         acceptable_master::AcceptableMasterList,
@@ -21,8 +22,7 @@ use crate::{
     },
     filters::{Filter, FilterUpdate},
     ptp_instance::PtpInstanceState,
-    time::Duration,
-    Time, MAX_DATA_LEN,
+    time::{Duration, Time},
 };
 
 // Needs to be here because of use rules

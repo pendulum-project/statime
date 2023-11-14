@@ -1,6 +1,7 @@
 use core::fmt::Debug;
 
 use crate::{
+    config::PortConfig,
     datastructures::{
         common::PortIdentity,
         datasets::DefaultDS,
@@ -12,7 +13,6 @@ use crate::{
     },
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
-    PortConfig,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]

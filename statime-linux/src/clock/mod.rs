@@ -3,7 +3,11 @@
 use std::path::Path;
 
 use clock_steering::{unix::UnixClock, TimeOffset};
-use statime::{Clock, Duration, Time, TimePropertiesDS};
+use statime::{
+    config::{LeapIndicator, TimePropertiesDS},
+    time::{Duration, Time},
+    Clock,
+};
 
 #[derive(Debug, Clone)]
 pub struct LinuxClock {
@@ -54,7 +58,7 @@ impl LinuxClock {
     }
 }
 
-fn clock_timestamp_to_time(t: clock_steering::Timestamp) -> statime::Time {
+fn clock_timestamp_to_time(t: clock_steering::Timestamp) -> Time {
     Time::from_nanos((t.seconds as u64) * 1_000_000_000 + (t.nanos as u64))
 }
 
@@ -133,9 +137,9 @@ impl Clock for LinuxClock {
         }
 
         UnixClock::CLOCK_REALTIME.set_leap_seconds(match time_properties.leap_indicator() {
-            statime::LeapIndicator::NoLeap => clock_steering::LeapIndicator::NoWarning,
-            statime::LeapIndicator::Leap61 => clock_steering::LeapIndicator::Leap61,
-            statime::LeapIndicator::Leap59 => clock_steering::LeapIndicator::Leap59,
+            LeapIndicator::NoLeap => clock_steering::LeapIndicator::NoWarning,
+            LeapIndicator::Leap61 => clock_steering::LeapIndicator::Leap61,
+            LeapIndicator::Leap59 => clock_steering::LeapIndicator::Leap59,
         })?;
 
         Ok(())

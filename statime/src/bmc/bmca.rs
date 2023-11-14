@@ -14,7 +14,7 @@ use crate::{
         messages::{AnnounceMessage, Header},
     },
     port::state::PortState,
-    Duration,
+    time::Duration,
 };
 
 /// Object implementing the Best Master Clock Algorithm

@@ -1,8 +1,10 @@
 //! Definitions and implementations for the abstracted measurement filters
 
-pub mod basic;
+mod basic;
 
-use crate::{port::Measurement, Clock, Duration};
+pub use basic::BasicFilter;
+
+use crate::{port::Measurement, time::Duration, Clock};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterUpdate {

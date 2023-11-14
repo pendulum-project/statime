@@ -26,20 +26,23 @@ impl PtpClock {
     }
 }
 
-pub fn stm_time_to_statime(timestamp: stm32_eth::ptp::Timestamp) -> statime::Time {
+pub fn stm_time_to_statime(timestamp: stm32_eth::ptp::Timestamp) -> statime::time::Time {
     let seconds: U96F32 = I33F31::from_bits(timestamp.raw()).cast();
     let nanos = seconds * 1_000_000_000u128;
-    statime::Time::from_fixed_nanos(nanos)
+    statime::time::Time::from_fixed_nanos(nanos)
 }
 
 impl statime::Clock for &PtpClock {
     type Error = core::convert::Infallible;
 
-    fn now(&self) -> statime::Time {
+    fn now(&self) -> statime::time::Time {
         stm_time_to_statime(EthernetPTP::get_time())
     }
 
-    fn step_clock(&mut self, offset: statime::Duration) -> Result<statime::Time, Self::Error> {
+    fn step_clock(
+        &mut self,
+        offset: statime::time::Duration,
+    ) -> Result<statime::time::Time, Self::Error> {
         let seconds = offset.nanos() / 1_000_000_000i128;
         let seconds: I33F31 = seconds.cast();
 
@@ -52,7 +55,7 @@ impl statime::Clock for &PtpClock {
         Ok(self.now())
     }
 
-    fn set_frequency(&mut self, ppm: f64) -> Result<statime::Time, Self::Error> {
+    fn set_frequency(&mut self, ppm: f64) -> Result<statime::time::Time, Self::Error> {
         let freq = 1.0 + ppm / 1_000_000.0;
 
         defmt::info!("Ppm offset is: {}. Setting frequency to: {}", ppm, freq);
@@ -69,7 +72,7 @@ impl statime::Clock for &PtpClock {
 
     fn set_properties(
         &mut self,
-        _time_properties_ds: &statime::TimePropertiesDS,
+        _time_properties_ds: &statime::config::TimePropertiesDS,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
