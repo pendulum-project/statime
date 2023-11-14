@@ -3,7 +3,11 @@
 use fixed::traits::LossyInto;
 
 use super::{Filter, FilterUpdate};
-use crate::{port::Measurement, time::Duration, Clock, Time};
+use crate::{
+    port::Measurement,
+    time::{Duration, Time},
+    Clock,
+};
 
 #[derive(Debug)]
 struct PrevStepData {

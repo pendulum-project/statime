@@ -4,10 +4,12 @@ use rand::Rng;
 
 use super::{PortActionIterator, TimestampContext};
 use crate::{
+    config::PortConfig,
     datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
+    filters::Filter,
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
-    Clock, Filter, PortConfig,
+    Clock,
 };
 
 mod master;

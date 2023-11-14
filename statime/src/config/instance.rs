@@ -1,4 +1,4 @@
-use crate::{ClockIdentity, SdoId};
+use crate::config::{ClockIdentity, SdoId};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct InstanceConfig {

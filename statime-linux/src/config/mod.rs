@@ -2,7 +2,10 @@ use std::{fs::read_to_string, os::unix::fs::PermissionsExt, path::Path, str::Fro
 
 use log::warn;
 use serde::{Deserialize, Deserializer};
-use statime::{ClockIdentity, DelayMechanism, Duration, Interval};
+use statime::{
+    config::{ClockIdentity, DelayMechanism},
+    time::{Duration, Interval},
+};
 use timestamped_socket::interface::InterfaceName;
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -94,7 +97,7 @@ where
     )?)))
 }
 
-impl From<PortConfig> for statime::PortConfig<Option<Vec<ClockIdentity>>> {
+impl From<PortConfig> for statime::config::PortConfig<Option<Vec<ClockIdentity>>> {
     fn from(pc: PortConfig) -> Self {
         Self {
             acceptable_master_list: pc.acceptable_master_list,

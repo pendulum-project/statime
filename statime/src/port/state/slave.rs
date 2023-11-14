@@ -1,17 +1,19 @@
 use rand::Rng;
 
 use crate::{
+    config::{DelayMechanism, PortConfig},
     datastructures::{
         common::PortIdentity,
         datasets::DefaultDS,
         messages::{DelayRespMessage, FollowUpMessage, Header, Message, MessageBody, SyncMessage},
     },
+    filters::Filter,
     port::{
         sequence_id::SequenceIdGenerator, Measurement, PortAction, PortActionIterator,
         TimestampContext, TimestampContextInner,
     },
     time::{Duration, Time},
-    Clock, DelayMechanism, Filter, PortConfig,
+    Clock,
 };
 
 #[derive(Debug)]

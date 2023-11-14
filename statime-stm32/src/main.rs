@@ -20,7 +20,7 @@ use smoltcp::{
     socket::dhcpv4,
     wire::{IpCidr, Ipv4Address, Ipv4Cidr},
 };
-use statime::{BasicFilter, PtpInstance};
+use statime::{filters::BasicFilter, port::TimestampContext, PtpInstance};
 use stm32_eth::{dma::PacketId, EthPins, Parts, PartsIn};
 use stm32f7xx_hal::{
     gpio::{Output, Pin, Speed},
@@ -182,7 +182,7 @@ mod app {
         type TimerMsg = (TimerName, core::time::Duration);
         let (timer_sender, timer_receiver) = make_channel!(TimerMsg, 4);
 
-        type PacketIdMsg = (statime::TimestampContext, PacketId);
+        type PacketIdMsg = (TimestampContext, PacketId);
         let (packet_id_sender, packet_id_receiver) = make_channel!(PacketIdMsg, 16);
 
         // Setup context for event handling around the `ptp_port`
@@ -318,7 +318,7 @@ mod app {
     #[task(shared = [net, ptp_port, tx_waker], priority = 0)]
     async fn tx_timestamp_listener(
         mut cx: tx_timestamp_listener::Context,
-        mut packet_id_receiver: Receiver<'static, (statime::TimestampContext, PacketId), 16>,
+        mut packet_id_receiver: Receiver<'static, (TimestampContext, PacketId), 16>,
     ) {
         // Extract state to keep code more readable
         let tx_waker = &mut cx.shared.tx_waker;

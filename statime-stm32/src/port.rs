@@ -8,8 +8,14 @@ use smoltcp::{
 };
 use static_cell::StaticCell;
 use statime::{
-    BasicFilter, Duration, InBmca, InstanceConfig, Interval, PortAction, PortActionIterator,
-    PortConfig, PtpInstance, Running, SdoId, TimestampContext,
+    config::{
+        ClockIdentity, DelayMechanism, InstanceConfig, PortConfig, SdoId, TimePropertiesDS,
+        TimeSource,
+    },
+    filters::BasicFilter,
+    port::{InBmca, PortAction, PortActionIterator, Running, TimestampContext},
+    time::{Duration, Interval, Time},
+    PtpInstance,
 };
 use stm32_eth::dma::PacketId;
 use stm32f7xx_hal::rng::Rng;
@@ -19,11 +25,11 @@ use crate::{
     ptp_clock::PtpClock,
 };
 
-type StmPort<State> = statime::Port<State, (), Rng, &'static PtpClock, BasicFilter>;
+type StmPort<State> = statime::port::Port<State, (), Rng, &'static PtpClock, BasicFilter>;
 
 pub struct Port {
     timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-    packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
+    packet_id_sender: Sender<'static, (TimestampContext, PacketId), 16>,
     event_socket: SocketHandle,
     general_socket: SocketHandle,
     state: PortState,
@@ -32,7 +38,7 @@ pub struct Port {
 impl Port {
     pub fn new(
         timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
-        packet_id_sender: Sender<'static, (statime::TimestampContext, PacketId), 16>,
+        packet_id_sender: Sender<'static, (TimestampContext, PacketId), 16>,
         event_socket: SocketHandle,
         general_socket: SocketHandle,
         state: StmPort<InBmca<'static>>,
@@ -49,7 +55,7 @@ impl Port {
     pub fn handle_event_receive(
         &mut self,
         data: &[u8],
-        timestamp: statime::Time,
+        timestamp: Time,
         net: &mut impl Mutex<T = NetworkStack>,
     ) {
         let mut running_port_state = self.state.take_running();
@@ -81,7 +87,7 @@ impl Port {
     pub fn handle_send_timestamp(
         &mut self,
         context: TimestampContext,
-        timestamp: statime::Time,
+        timestamp: Time,
         net: &mut impl Mutex<T = NetworkStack>,
     ) {
         let mut running_port_state = self.state.take_running();
@@ -103,7 +109,7 @@ impl Port {
 
     fn handle_port_actions(
         &mut self,
-        actions: statime::PortActionIterator<'_>,
+        actions: PortActionIterator<'_>,
         net: &mut impl Mutex<T = NetworkStack>,
     ) {
         // In this function it's likely the case that self.state is in the empty state
@@ -265,24 +271,21 @@ pub fn setup_statime(
     let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp_peripheral));
 
     let instance_config = InstanceConfig {
-        clock_identity: statime::ClockIdentity(eui48_to_eui64(mac_address)),
+        clock_identity: ClockIdentity(eui48_to_eui64(mac_address)),
         priority_1: 255,
         priority_2: 255,
         domain_number: 0,
         slave_only: false,
         sdo_id: unwrap!(SdoId::new(0)),
     };
-    let time_properties_ds = statime::TimePropertiesDS::new_arbitrary_time(
-        false,
-        false,
-        statime::TimeSource::InternalOscillator,
-    );
+    let time_properties_ds =
+        TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
     static PTP_INSTANCE: StaticCell<PtpInstance<BasicFilter>> = StaticCell::new();
     let ptp_instance = &*PTP_INSTANCE.init(PtpInstance::new(instance_config, time_properties_ds));
 
     let port_config = PortConfig {
         acceptable_master_list: (),
-        delay_mechanism: statime::DelayMechanism::E2E {
+        delay_mechanism: DelayMechanism::E2E {
             interval: Interval::from_log_2(-2),
         },
         announce_interval: Interval::from_log_2(1),

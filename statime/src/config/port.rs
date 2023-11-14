@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::{time::Interval, Duration};
+use crate::time::{Duration, Interval};
 
 /// Which delay mechanism a port is using.
 ///

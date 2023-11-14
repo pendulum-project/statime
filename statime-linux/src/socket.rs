@@ -4,7 +4,7 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
-use statime::Time;
+use statime::time::Time;
 use timestamped_socket::{
     interface::InterfaceName,
     networkaddress::{EthernetAddress, MacAddress},
