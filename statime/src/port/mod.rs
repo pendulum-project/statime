@@ -595,9 +595,12 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::DelayMechanism;
     use crate::{
+        config::InstanceConfig,
         datastructures::messages::{AnnounceMessage, Header, PtpVersion},
-        BasicFilter, DelayMechanism, InstanceConfig, Interval,
+        filters::BasicFilter,
+        time::Interval,
     };
 
     struct TestClock;
@@ -615,7 +618,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &crate::TimePropertiesDS,
+            _time_properties_ds: &TimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }

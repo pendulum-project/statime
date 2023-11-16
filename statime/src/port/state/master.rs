@@ -205,15 +205,15 @@ mod tests {
     use fixed::types::{I48F16, U96F32};
 
     use super::*;
+    use crate::config::DelayMechanism;
     use crate::{
         config::InstanceConfig,
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
-            datasets::{CurrentDS, ParentDS},
-            messages::{Header, SdoId},
+            datasets::{CurrentDS, ParentDS, TimePropertiesDS},
+            messages::{Header, SdoId, MAX_DATA_LEN},
         },
-        time::Interval,
-        Duration, TimePropertiesDS, MAX_DATA_LEN,
+        time::{Duration, Interval},
     };
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
 
         let config = PortConfig {
             acceptable_master_list: (),
-            delay_mechanism: crate::DelayMechanism::E2E {
+            delay_mechanism: DelayMechanism::E2E {
                 interval: Interval::TWO_SECONDS,
             },
             announce_interval: Interval::TWO_SECONDS,
@@ -412,14 +412,14 @@ mod tests {
         let mut buffer = [0u8; MAX_DATA_LEN];
         let config = PortConfig {
             acceptable_master_list: (),
-            delay_mechanism: crate::DelayMechanism::E2E {
+            delay_mechanism: DelayMechanism::E2E {
                 interval: Interval::TWO_SECONDS,
             },
             announce_interval: Interval::TWO_SECONDS,
             announce_receipt_timeout: 2,
             sync_interval: Interval::ONE_SECOND,
             master_only: false,
-            delay_asymmetry: crate::Duration::ZERO,
+            delay_asymmetry: Duration::ZERO,
         };
 
         let mut state = MasterState::new();
