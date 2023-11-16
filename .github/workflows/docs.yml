@@ -1,47 +1,41 @@
-name: Generate documentation
+name: docs
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 on:
-    push:
-        branches:
-            - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-    doc:
-        name: Document
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write  # To push a branch
-            pull-requests: write  # To create a PR from that branch
-        steps:
-            -   uses: actions/checkout@v4
-                with:
-                    fetch-depth: 0
-            -   name: Install latest mdbook
-                run: |
-                    tag=$(curl 'https://api.github.com/repos/rust-lang/mdbook/releases/latest' | jq -r '.tag_name')
-                    url="https://github.com/rust-lang/mdbook/releases/download/${tag}/mdbook-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-                    mkdir mdbook
-                    curl -sSL $url | tar -xz --directory=./mdbook
-                    echo `pwd`/mdbook >> $GITHUB_PATH
-            -   name: Install rust
-                uses: actions-rs/toolchain@v1
-                with:
-                    toolchain: nightly
-            -   name: Generate reference manual
-                run: mdbook build docs
-            -   name: Generate API documentation
-                run: cargo +nightly doc --workspace --no-deps --all-features --target-dir docs/api
-            -   name: Deploy GitHub Pages
-                run: |
-                    cd docs
-                    git worktree add gh-pages
-                    git config user.name "Deploy from CI"
-                    git config user.email ""
-                    cd gh-pages
-                    git update-ref -d refs/heads/gh-pages
-                    rm -rf *
-                    mv ../book/* .
-                    mkdir docs
-                    mv ../api/doc/* docs
-                    git add .
-                    git commit -m "Deploy $GITHUB_SHA to gh-pages"
-                    git push --force --set-upstream origin gh-pages
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Build site
+        run: utils/mkdocs.sh --no-bind-port build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@a753861a5debcf57bf8b404356158c8e1e33150c
+        with:
+          path: target/docs/site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@9dbe3824824f8a1377b8e298bafde1a50ede43e5

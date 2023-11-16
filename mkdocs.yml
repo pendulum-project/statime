@@ -1,0 +1,35 @@
+theme:
+  name: material
+  features:
+    - content.tooltips
+    - content.code.copy
+    - content.code.select
+    - navigation.sections
+docs_dir: docs
+site_name: Statime documentation
+site_dir: target/docs/site
+exclude_docs: |
+  /precompiled  # Precompiled assets
+  /includes     # Only included indirectly
+markdown_extensions:
+  - def_list
+  - abbr
+  - attr_list
+  - admonition
+  - pymdownx.snippets:
+      auto_append: [./docs/includes/glossary.md]
+  - pymdownx.escapeall:
+      hardbreak: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.details
+  - pymdownx.superfences
+nav:
+  - Home: index.md
+  - Guide:
+    - guide/setup.md
+  - Man Pages:
+    - statime-linux(8): man/statime-linux.8.md
