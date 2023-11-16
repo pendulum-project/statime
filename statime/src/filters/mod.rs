@@ -4,12 +4,12 @@ mod basic;
 
 pub use basic::BasicFilter;
 
-use crate::{port::Measurement, time::Duration, Clock};
+use crate::{port::Measurement, Clock};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterUpdate {
     pub next_update: Option<core::time::Duration>,
-    pub mean_delay: Option<Duration>,
+    pub mean_delay: Option<crate::time::Duration>,
 }
 
 /// A filter for post-processing time measurements.
@@ -18,7 +18,7 @@ pub struct FilterUpdate {
 /// average out the input a bit so minor network variations are not immediately
 /// reflected in the synchronization of the clock.
 ///
-/// This crate provides a simple [`BasicFilter`](basic::BasicFilter) which is
+/// This crate provides a simple [`BasicFilter`] which is
 /// suitable for most needs, but users can implement their own if desired.
 pub trait Filter {
     type Config: Clone;

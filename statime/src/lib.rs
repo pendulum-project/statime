@@ -13,7 +13,7 @@
 //! the library.
 //!
 //! The `statime` crate defines a [`Clock`] interface that provide access to the
-//! system clock. The [`NetworkRuntime`] and [`NetworkPort`]
+//! system clock. The [`PtpInstance`] and [`Port`](`port::Port`)
 //! abstractions provide the needed glue to access the network.
 //!
 //! On modern linux kernels, the `statime-linux` crate provides ready to use
