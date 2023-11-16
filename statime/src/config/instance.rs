@@ -1,5 +1,6 @@
 use crate::config::{ClockIdentity, SdoId};
 
+// TODO: Could this implement Default? or have a with_id or similar?
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct InstanceConfig {
     pub clock_identity: ClockIdentity,
