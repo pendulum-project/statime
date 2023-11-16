@@ -300,9 +300,8 @@ pub(crate) enum RecommendedState {
 mod tests {
     use super::*;
     use crate::{
-        config::InstanceConfig,
+        config::{ClockIdentity, InstanceConfig},
         datastructures::messages::{Header, PtpVersion},
-        ClockIdentity,
     };
 
     fn default_announce_message_header() -> Header {

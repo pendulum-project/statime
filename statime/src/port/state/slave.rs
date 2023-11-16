@@ -428,14 +428,16 @@ impl<F> SlaveState<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::TimePropertiesDS;
     use crate::{
         config::InstanceConfig,
+        datastructures::messages::MAX_DATA_LEN,
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             messages::{Header, SdoId},
         },
         filters::FilterUpdate,
-        Interval, MAX_DATA_LEN,
+        time::Interval,
     };
 
     struct TestFilter {
@@ -487,7 +489,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &crate::TimePropertiesDS,
+            _time_properties_ds: &TimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
