@@ -71,9 +71,8 @@ impl clap::builder::TypedValueParser for SdoIdParser {
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
-    /// Time interval between Sync messages, see: 7.7.2.3
-    /// Default init value is 0, see: A.9.4.2
-    #[clap(long, short = 'c', default_value = "config.toml")]
+    /// Configuration file to use
+    #[clap(long = "config", short = 'c', default_value = "config.toml")]
     config_file: Option<PathBuf>,
 }
 
