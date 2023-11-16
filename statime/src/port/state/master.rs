@@ -205,9 +205,8 @@ mod tests {
     use fixed::types::{I48F16, U96F32};
 
     use super::*;
-    use crate::config::DelayMechanism;
     use crate::{
-        config::InstanceConfig,
+        config::{DelayMechanism, InstanceConfig},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             datasets::{CurrentDS, ParentDS, TimePropertiesDS},

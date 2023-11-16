@@ -428,13 +428,11 @@ impl<F> SlaveState<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::TimePropertiesDS;
     use crate::{
-        config::InstanceConfig,
-        datastructures::messages::MAX_DATA_LEN,
+        config::{InstanceConfig, TimePropertiesDS},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
-            messages::{Header, SdoId},
+            messages::{Header, SdoId, MAX_DATA_LEN},
         },
         filters::FilterUpdate,
         time::Interval,

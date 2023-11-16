@@ -4,8 +4,11 @@ mod port;
 pub use instance::InstanceConfig;
 pub use port::{DelayMechanism, PortConfig};
 
-pub use crate::datastructures::{
-    common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource},
-    datasets::TimePropertiesDS,
-    messages::SdoId,
+pub use crate::{
+    bmc::acceptable_master::AcceptableMasterList,
+    datastructures::{
+        common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource},
+        datasets::TimePropertiesDS,
+        messages::SdoId,
+    },
 };

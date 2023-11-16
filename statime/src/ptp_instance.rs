@@ -25,43 +25,60 @@ use crate::{
 /// It provides all the logic for both ordinary and boundary clock mode.
 ///
 /// # Example
-/// Assuming we already have a network runtime and clock runtime, an ordinary
-/// clock can be run by first creating all the datasets, then creating the port,
-/// then finally setting up the instance and starting it:
 ///
-/// ```ignore
-/// let default_ds = DefaultDS::new_ordinary_clock(
-///     clock_identity,
-///     128,
-///     128,
-///     0,
-///     false,
-///     SdoId::new(0).unwrap(),
-/// );
-/// let time_properties_ds =
-/// TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
-/// let port_ds = PortDS::new(
-///     PortIdentity {
-///         clock_identity,
-///         port_number: 1,
-///     },
-///     1,
-///     1,
-///     3,
-///     0,
-///     DelayMechanism::E2E,
-///     1,
-/// );
-/// let port = Port::new(port_ds, &mut network_runtime, interface_name).await;
-/// let mut instance = PtpInstance::new_ordinary_clock(
-///     default_ds,
+/// ```no_run
+/// # struct MockClock;
+/// # impl statime::Clock for MockClock {
+/// #     type Error = ();
+/// #     fn now(&self) -> statime::time::Time {
+/// #         unimplemented!()
+/// #     }
+/// #     fn step_clock(&mut self, _: statime::time::Duration) -> Result<statime::time::Time, Self::Error> {
+/// #         unimplemented!()
+/// #     }
+/// #     fn set_frequency(&mut self, _: f64) -> Result<statime::time::Time, Self::Error> {
+/// #         unimplemented!()
+/// #     }
+/// #     fn set_properties(&mut self, _: &TimePropertiesDS) -> Result<(), Self::Error> {
+/// #         unimplemented!()
+/// #     }
+/// # }
+/// # mod system {
+/// #     pub fn get_mac() -> [u8; 6] { unimplemented!() }
+/// #     pub fn sleep(time: core::time::Duration) { unimplemented!() }
+/// # }
+/// # let port_config: statime::config::PortConfig<()> = unimplemented!();
+/// # let filter_config = unimplemented!();
+/// # let clock: MockClock = unimplemented!();
+/// # let rng: rand::rngs::mock::StepRng = unimplemented!();
+/// #
+/// use statime::PtpInstance;
+/// use statime::config::{ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
+/// use statime::filters::BasicFilter;
+///
+/// let instance_config = InstanceConfig {
+///     clock_identity: ClockIdentity::from_mac_address(system::get_mac()),
+///     priority_1: 128,
+///     priority_2: 128,
+///     domain_number: 0,
+///     slave_only: false,
+///     sdo_id: Default::default(),
+/// };
+/// let time_properties_ds = TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
+///
+/// let mut instance = PtpInstance::<BasicFilter>::new(
+///     instance_config,
 ///     time_properties_ds,
-///     port,
-///     local_clock,
-///     BasicFilter::new(0.25),
 /// );
 ///
-/// instance.run(&TimerImpl).await;
+/// let mut port = instance.add_port(port_config, filter_config, clock, rng);
+///
+/// // Send of port to its own thread/task to do its work
+///
+/// loop {
+///     instance.bmca(&mut [&mut port]);
+///     system::sleep(instance.bmca_interval());
+/// }
 /// ```
 pub struct PtpInstance<F> {
     state: AtomicRefCell<PtpInstanceState>,

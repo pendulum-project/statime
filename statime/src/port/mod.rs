@@ -56,6 +56,171 @@ pub(crate) mod state;
 /// A single port of the PTP instance
 ///
 /// One of these needs to be created per port of the PTP instance.
+///
+/// # Example
+///
+/// ## Initialization
+/// ```no_run
+/// # mod system {
+/// #     pub struct Clock;
+/// #     impl statime::Clock for Clock {
+/// #         type Error = ();
+/// #         fn now(&self) -> statime::time::Time {
+/// #             unimplemented!()
+/// #         }
+/// #         fn step_clock(&mut self, _: statime::time::Duration) -> Result<statime::time::Time, Self::Error> {
+/// #             unimplemented!()
+/// #         }
+/// #         fn set_frequency(&mut self, _: f64) -> Result<statime::time::Time, Self::Error> {
+/// #             unimplemented!()
+/// #         }
+/// #         fn set_properties(&mut self, _: &statime::config::TimePropertiesDS) -> Result<(), Self::Error> {
+/// #             unimplemented!()
+/// #         }
+/// #     }
+/// # }
+/// use rand::thread_rng;
+/// use statime::config::{DelayMechanism, PortConfig};
+/// use statime::filters::BasicFilter;
+/// use statime::PtpInstance;
+/// use statime::time::Interval;
+///
+/// # let (instance_config, time_properties_ds) = unimplemented!();
+/// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds);
+///
+/// // TODO make these values sensible
+/// let interval = Interval::from_log_2(-2); // 2^(-2)s = 250ms
+/// let port_config = PortConfig {
+///     acceptable_master_list: (), // Accept any
+///     delay_mechanism: DelayMechanism::E2E { interval },
+///     announce_interval: interval,
+///     announce_receipt_timeout: 0,
+///     sync_interval: interval,
+///     master_only: false,
+///     delay_asymmetry: Default::default(),
+/// };
+/// let filter_config = 1.0;
+/// let clock = system::Clock {};
+/// let rng = thread_rng();
+///
+/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
+///
+/// // To handle events for the port it needs to change to running mode
+/// let (running_port, actions) = port_in_bmca.end_bmca();
+///
+/// // This returns the first actions that need to be handled for the port
+/// # fn handle_actions<T>(_:T){}
+/// handle_actions(actions);
+/// ```
+///
+/// ## Handling actions
+/// ```no_run
+/// use statime::port::{PortAction, PortActionIterator, TimestampContext};
+/// use statime::time::Time;
+///
+/// # mod system {
+/// #     pub struct Timer;
+/// #     impl Timer {
+/// #         pub fn expire_in(&mut self, time: core::time::Duration) {}
+/// #     }
+/// #     pub struct UdpSocket;
+/// #     impl UdpSocket {
+/// #         pub fn send(&mut self, buf: &[u8]) -> statime::time::Time { unimplemented!() }
+/// #     }
+/// # }
+/// struct MyPortResources {
+///     announce_timer: system::Timer,
+///     sync_timer: system::Timer,
+///     delay_req_timer: system::Timer,
+///     announce_receipt_timer: system::Timer,
+///     filter_update_timer: system::Timer,
+///     time_critical_socket: system::UdpSocket,
+///     general_socket: system::UdpSocket,
+///     send_timestamp: Option<(TimestampContext, Time)>
+/// }
+///
+/// fn handle_actions(resources: &mut MyPortResources, actions: PortActionIterator) {
+///     for action in actions {
+///         match action {
+///             PortAction::SendEvent { context, data } => {
+///                 let timestamp = resources.time_critical_socket.send(data);
+///                 resources.send_timestamp = Some((context, timestamp));
+///             }
+///             PortAction::SendGeneral { data } => {
+///                 resources.general_socket.send(data);
+///             }
+///             PortAction::ResetAnnounceTimer { duration } => {
+///                 resources.announce_timer.expire_in(duration)
+///             }
+///             PortAction::ResetSyncTimer { duration } => resources.sync_timer.expire_in(duration),
+///             PortAction::ResetDelayRequestTimer { duration } => {
+///                 resources.delay_req_timer.expire_in(duration)
+///             }
+///             PortAction::ResetAnnounceReceiptTimer { duration } => {
+///                 resources.announce_receipt_timer.expire_in(duration)
+///             }
+///             PortAction::ResetFilterUpdateTimer { duration } => {
+///                 resources.filter_update_timer.expire_in(duration)
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// ## Handling system events
+/// ```no_run
+/// # mod system {
+/// #    pub struct Timer;
+/// #    impl Timer {
+/// #        pub fn has_expired(&self) -> bool { true }
+/// #    }
+/// #    pub struct UdpSocket;
+/// #    impl UdpSocket {
+/// #         pub fn recv(&mut self) -> Option<(&'static [u8], statime::time::Time)> { unimplemented!() }
+/// #    }
+/// # }
+/// # struct MyPortResources {
+/// #     announce_timer: system::Timer,
+/// #     sync_timer: system::Timer,
+/// #     delay_req_timer: system::Timer,
+/// #     announce_receipt_timer: system::Timer,
+/// #     filter_update_timer: system::Timer,
+/// #     time_critical_socket: system::UdpSocket,
+/// #     general_socket: system::UdpSocket,
+/// #     send_timestamp: Option<(statime::port::TimestampContext, statime::time::Time)>
+/// # }
+///
+/// use rand::Rng;
+/// use statime::Clock;
+/// use statime::config::AcceptableMasterList;
+/// use statime::filters::Filter;
+/// use statime::port::{Port, PortActionIterator, Running};
+///
+/// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter>) {
+///     let actions = if resources.announce_timer.has_expired() {
+///         running_port.handle_announce_timer()
+///     } else if resources.sync_timer.has_expired() {
+///         running_port.handle_sync_timer()
+///     } else if resources.delay_req_timer.has_expired() {
+///         running_port.handle_delay_request_timer()
+///     } else if resources.announce_receipt_timer.has_expired() {
+///         running_port.handle_announce_receipt_timer()
+///     } else if resources.filter_update_timer.has_expired() {
+///         running_port.handle_filter_update_timer()
+///     } else if let Some((data, timestamp)) = resources.time_critical_socket.recv() {
+///         running_port.handle_event_receive(data, timestamp)
+///     } else if let Some((data, _timestamp)) = resources.general_socket.recv() {
+///         running_port.handle_general_receive(data)
+///     } else if let Some((context, timestamp)) = resources.send_timestamp.take() {
+///         running_port.handle_send_timestamp(context, timestamp)
+///     } else {
+///         PortActionIterator::empty()
+///     };
+///
+/// #   fn handle_actions<T,U>(_:T,_:U){}
+///     handle_actions(resources, actions);
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Port<L, A, R, C, F: Filter> {
     config: PortConfig<()>,
@@ -595,9 +760,8 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::DelayMechanism;
     use crate::{
-        config::InstanceConfig,
+        config::{DelayMechanism, InstanceConfig},
         datastructures::messages::{AnnounceMessage, Header, PtpVersion},
         filters::BasicFilter,
         time::Interval,
