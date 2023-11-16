@@ -18,21 +18,30 @@
 .hy
 .SH NAME
 .PP
-\f[V]statime-linux\f[R] - \&...
+\f[V]statime-linux\f[R] - The Statime-linux PTP daemon
 .SH SYNOPSIS
 .PP
+\f[V]statime-linux\f[R] [\f[V]-c\f[R] \f[I]path\f[R]]
+.PD 0
+.P
+.PD
 \f[V]statime-linux\f[R] \f[V]-h\f[R]
 .PD 0
 .P
 .PD
-\f[V]statime-linux\f[R] \f[V]-v\f[R]
+\f[V]statime-linux\f[R] \f[V]-V\f[R]
 .SH DESCRIPTION
 .PP
 \&...
 .SH OPTIONS
 .TP
+\f[V]-c\f[R] \f[I]path\f[R], \f[V]--config\f[R]=\f[I]path\f[R]
+Path to the configuration file for the statime-linux daemon.
+If not specified this defaults to \f[V]config.toml\f[R] in the current
+working directory.
+.TP
 \f[V]-h\f[R], \f[V]--help\f[R]
 Display usage instructions.
 .TP
-\f[V]-v\f[R], \f[V]--version\f[R]
+\f[V]-V\f[R], \f[V]--version\f[R]
 Display version information.
