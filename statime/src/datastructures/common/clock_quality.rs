@@ -2,7 +2,7 @@ use super::clock_accuracy::ClockAccuracy;
 use crate::datastructures::{WireFormat, WireFormatError};
 
 /// A description of the accuracy and type of a clock.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockQuality {
     /// The PTP clock class.
     ///
@@ -20,6 +20,19 @@ pub struct ClockQuality {
     /// 2-log of the variance (in seconds^2) of the clock when not synchronized.
     /// See IEEE1588-2019 section 7.6.3.5 for more details.
     pub offset_scaled_log_variance: u16,
+}
+
+impl Default for ClockQuality {
+    fn default() -> Self {
+        Self {
+            clock_class: 248,
+            clock_accuracy: Default::default(),
+            // See 7.6.3.3 for the description of the calculation procedure.
+            // We estimate clock variance of desktop to be no worse than
+            // 2^-23 seconds^2, based on experience from ntpd-rs
+            offset_scaled_log_variance: 0x8000 - (23 * 256),
+        }
+    }
 }
 
 impl WireFormat for ClockQuality {
