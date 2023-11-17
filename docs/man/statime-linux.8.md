@@ -18,7 +18,7 @@ title: STATIME-LINUX(8) statime 0.1.0 | statime
 # OPTIONS
 `-c` *path*, `--config`=*path*
 :   Path to the configuration file for the statime-linux daemon. If not
-    specified this defaults to `config.toml` in the current working directory.
+    specified this defaults to `/etc/statime/statime.toml`.
 
 `-h`, `--help`
 :   Display usage instructions.

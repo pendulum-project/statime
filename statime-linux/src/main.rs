@@ -72,7 +72,11 @@ impl clap::builder::TypedValueParser for SdoIdParser {
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     /// Configuration file to use
-    #[clap(long = "config", short = 'c', default_value = "config.toml")]
+    #[clap(
+        long = "config",
+        short = 'c',
+        default_value = "/etc/statime/statime.toml"
+    )]
     config_file: Option<PathBuf>,
 }
 

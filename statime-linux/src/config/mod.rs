@@ -28,6 +28,7 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PortConfig {
     pub interface: InterfaceName,
     #[serde(default, deserialize_with = "deserialize_acceptable_master_list")]

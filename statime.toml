@@ -1,0 +1,12 @@
+loglevel = "info" # Other values include trace, debug, warn and error
+
+# which ptp network to participate in?
+sdo-id = 0
+domain = 0
+
+# Add one of these per network interface in your system
+#[[port]]
+#interface = "<interfacename>"
+#network-mode = "ipv4" #can also be ipv6 or ethernet
+# If the network interface has hardware clock support, you can enable it with
+#hardware-clock = "/dev/ptp<hardware clock number>"
