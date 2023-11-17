@@ -10,7 +10,7 @@ use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
-    filters::{BasicFilter, Filter},
+    filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
@@ -184,7 +184,7 @@ async fn clock_task(
 
     measurement_timer.as_mut().reset(std::time::Duration::ZERO);
 
-    let mut filter = BasicFilter::new(0.25);
+    let mut filter = KalmanFilter::new(KalmanConfiguration::default());
 
     let mut current_mode = *mode_receiver.borrow_and_update();
     let mut filter_clock = match current_mode {
@@ -235,7 +235,7 @@ async fn clock_task(
             _ = mode_receiver.changed() => {
                 let new_mode = *mode_receiver.borrow_and_update();
                 if new_mode != current_mode {
-                    let mut new_filter = BasicFilter::new(0.25);
+                    let mut new_filter = KalmanFilter::new(KalmanConfiguration::default());
                     std::mem::swap(&mut filter, &mut new_filter);
                     new_filter.demobilize(&mut filter_clock);
                     match new_mode {
@@ -323,7 +323,12 @@ async fn actual_main() {
             }
         };
         let rng = StdRng::from_entropy();
-        let port = instance.add_port(port_config.into(), 0.25, port_clock.clone(), rng);
+        let port = instance.add_port(
+            port_config.into(),
+            KalmanConfiguration::default(),
+            port_clock.clone(),
+            rng,
+        );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -397,7 +402,7 @@ async fn actual_main() {
 }
 
 async fn run(
-    instance: &'static PtpInstance<BasicFilter>,
+    instance: &'static PtpInstance<KalmanFilter>,
     bmca_notify_sender: tokio::sync::watch::Sender<bool>,
     mut main_task_receivers: Vec<Receiver<BmcaPort>>,
     main_task_senders: Vec<Sender<BmcaPort>>,
@@ -458,7 +463,7 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<InBmca<'static>, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, BasicFilter>;
+type BmcaPort = Port<InBmca<'static>, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, KalmanFilter>;
 
 // the Port task
 //
