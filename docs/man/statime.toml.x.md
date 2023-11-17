@@ -19,6 +19,39 @@ will be indicated by each configuration setting shown.
 
 # CONFIGURATION
 
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct Config {
+    #[serde(
+        default = "default_loglevel",
+        deserialize_with = "deserialize_loglevel"
+    )]
+    pub loglevel: log::LevelFilter,
+    #[serde(default = "default_sdo_id")]
+    pub sdo_id: u16,
+    #[serde(default = "default_domain")]
+    pub domain: u8,
+    #[serde(rename = "port")]
+    pub ports: Vec<PortConfig>,
+}
+
+
+`identity` = *clock identity* (**unset**)
+:   The identity of this clock. 
+    A clock identity is encoded as a 16-character hexadecimal string, for example 
+    `identity = "00FFFFFFFFFFFFFB"`
+
+`domain` = *priority* (**0**)
+:   The PTP domain of this instance. All instances in domain are synchronized to the Grandmaster 
+    Clock of the domain, but are not necessarily synchronized to PTP clocks in another domain.
+
+`priority1` = *priority* (**128**)
+:   A tie breaker for the best master clock algorithm in the range `0..256`.
+
+`priority2` = *priority* (**128**)
+:   A tie breaker for the best master clock algorithm in the range `0..256`.
+
 ## `[[port]]` 
 
 `interface` = *interface name*
