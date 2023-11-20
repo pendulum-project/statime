@@ -4,7 +4,7 @@ set -eo pipefail
 
 docs_dir="docs/man"
 output_dir="${1:-"docs/precompiled/man"}"
-files=("statime-linux.8")
+files=("statime.8")
 
 mkdir -p "$output_dir"
 
