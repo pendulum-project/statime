@@ -32,4 +32,4 @@ nav:
   - Guide:
     - guide/setup.md
   - Man Pages:
-    - statime-linux(8): man/statime-linux.8.md
+    - statime(8): man/statime.8.md
