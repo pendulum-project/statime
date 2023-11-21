@@ -366,4 +366,12 @@ mod tests {
             assert_eq!(deserialized_data, object_representation);
         }
     }
+
+    #[test]
+    fn sdo_id_checks() {
+        let sdo_id = SdoId::try_from(0xfff).unwrap();
+        assert_eq!(0xfff, u16::from(sdo_id));
+
+        assert!(SdoId::try_from(0x1000).is_err());
+    }
 }
