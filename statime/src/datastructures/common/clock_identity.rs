@@ -2,16 +2,25 @@ use crate::datastructures::{WireFormat, WireFormatError};
 
 /// The identity of a PTP node.
 ///
-/// Must have a unique value for each node in a ptp network. For notes on
-/// generating these, see IEEE1588-2019 section 7.5.2.2
+/// All ptp clocks in a network need a unique clock identity. A common approach
+/// is to use a mac address of the device to generate a unique identifier (see
+/// [`from_mac_address`](`Self::from_mac_address`)).
+///
+/// For more details, see *IEEE1588-2019 section 7.5.2.2.2*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord, Hash)]
 pub struct ClockIdentity(pub [u8; 8]);
 
 impl ClockIdentity {
-    /// Create a `ClockIdentity` from a mac address
+    /// Create a [`ClockIdentity`] from a mac address.
     ///
-    /// This fills the first six bytes with the mac address and the rest with
-    /// zeroes.
+    /// Fills the first six bytes with the mac address and the rest with zeroes.
+    ///
+    /// # Example
+    /// ```
+    /// # use statime::config::ClockIdentity;
+    /// let id = ClockIdentity::from_mac_address([0xA, 0xB, 0xC, 0xD, 0xE, 0xF]);
+    /// assert_eq!(id.0, [0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 0x0, 0x0]);
+    /// ```
     pub fn from_mac_address(addr: [u8; 6]) -> Self {
         let mut this = Self([0; 8]);
 

@@ -52,8 +52,9 @@ impl clap::builder::TypedValueParser for SdoIdParser {
         let inner = clap::value_parser!(u16);
         let val = inner.parse_ref(cmd, arg, value)?;
 
-        match SdoId::new(val) {
-            None => {
+        match SdoId::try_from(val) {
+            Ok(v) => Ok(v),
+            Err(()) => {
                 let mut err = clap::Error::new(ErrorKind::ValueValidation).with_cmd(cmd);
                 if let Some(arg) = arg {
                     err.insert(
@@ -67,7 +68,6 @@ impl clap::builder::TypedValueParser for SdoIdParser {
                 );
                 Err(err)
             }
-            Some(v) => Ok(v),
         }
     }
 }
@@ -278,7 +278,7 @@ async fn actual_main() {
         priority_2: config.priority2,
         domain_number: config.domain,
         slave_only: false,
-        sdo_id: SdoId::new(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
+        sdo_id: SdoId::try_from(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
     };
 
     let time_properties_ds =

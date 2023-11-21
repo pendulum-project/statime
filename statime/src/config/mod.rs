@@ -1,3 +1,10 @@
+//! # Instance
+//! * `InstanceConfig`
+//! * `TimePropertiesDS`
+//!
+//! # Port
+//! * `PortConfig`
+
 mod instance;
 mod port;
 
