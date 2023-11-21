@@ -142,7 +142,20 @@ impl Default for Header {
 
 /// A wrapper type for PTP Sdo Identifiers.
 ///
-/// This is a separate type as sdo identifiers should be in the range 0-4095
+/// Because `SdoId`s are 12 bit values they always lie within `0..=0xFFF`.
+///
+/// For more details, see *IEEE1588-2019 table 2 in section 7.1.4*.
+///
+/// # Example
+/// ```
+/// # use statime::config::SdoId;
+/// assert_eq!(SdoId::default(), SdoId::try_from(0x000).unwrap());
+///
+/// let sdo_id = SdoId::try_from(0x100).unwrap();
+/// assert_eq!(u16::from(sdo_id), 0x100);
+///
+/// assert!(SdoId::try_from(0x1000).is_err());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct SdoId(u16);
 
@@ -153,20 +166,30 @@ impl core::fmt::Display for SdoId {
 }
 
 impl SdoId {
-    /// Create a new sdo id
-    ///
-    /// This function only returns an `SdoId` instance if the given identifier
-    /// is actually between 0 and 4095. Otherwise, `None` is returned.
-    pub fn new(sdo_id: u16) -> Option<Self> {
-        (0..=0x1000).contains(&sdo_id).then_some(Self(sdo_id))
-    }
-
     const fn high_byte(self) -> u8 {
         (self.0 >> 8) as u8
     }
 
     const fn low_byte(self) -> u8 {
         self.0 as u8
+    }
+}
+
+impl TryFrom<u16> for SdoId {
+    type Error = ();
+
+    /// Turn a `u16` into a `SdoId` ensuring it is in the range `0..=0xFFF`.
+    fn try_from(sdo_id: u16) -> Result<Self, Self::Error> {
+        (0..=0xfff)
+            .contains(&sdo_id)
+            .then_some(Self(sdo_id))
+            .ok_or(())
+    }
+}
+
+impl From<SdoId> for u16 {
+    fn from(value: SdoId) -> Self {
+        value.0
     }
 }
 

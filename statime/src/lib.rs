@@ -20,16 +20,6 @@
 //! implementations of these interfaces. For other platforms the user will need
 //! to implement these themselves.
 //!
-//! # Clock identities
-//!
-//! All ptp clocks in a network need a unique clock identity. One way to achieve
-//! this is to use (one of) the device's mac address to generate this
-//! identifier. As this requires platform specific code to get the mac address,
-//! this library does not implement this. Rather, direct access is given to the
-//! clock identity type, and the user can create one from a mac address by
-//! storing it in the first six bytes of the clock identifier, setting the
-//! remaining bytes to 0. For more details on the exact specification of the
-//! generation procedure, see IEEE1588-2019 section 7.5.2.2.2
 //!
 //! --------
 //!
