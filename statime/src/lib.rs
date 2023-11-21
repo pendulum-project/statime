@@ -30,6 +30,23 @@
 //! storing it in the first six bytes of the clock identifier, setting the
 //! remaining bytes to 0. For more details on the exact specification of the
 //! generation procedure, see IEEE1588-2019 section 7.5.2.2.2
+//!
+//! --------
+//!
+//! # What is this?
+//! * What it statime?
+//! * What is PTP?
+//! * Where can I get more information?
+//!
+//! # How do I use this?
+//! * Configurations
+//! * Setup Interface
+//! * Setup Ports
+//! * Running the Ports
+//! * Running the BMCA
+//!
+//! # How can I verify/test my implementation?
+//! * Run it against statime-linux?
 
 #![no_std]
 
