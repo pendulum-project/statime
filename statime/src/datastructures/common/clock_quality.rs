@@ -11,14 +11,15 @@ pub struct ClockQuality {
     /// clock never takes time from another source. A value of 6 is a good
     /// option for a node with an external time source.
     ///
-    /// For other potential values, see IEEE1588-2019 section 7.6.2.5
+    /// For other potential values, see *IEEE1588-2019 section 7.6.2.5*.
     pub clock_class: u8,
 
     /// The accuracy of the clock
     pub clock_accuracy: ClockAccuracy,
 
     /// 2-log of the variance (in seconds^2) of the clock when not synchronized.
-    /// See IEEE1588-2019 section 7.6.3.5 for more details.
+    ///
+    /// See *IEEE1588-2019 section 7.6.3.5* for more details.
     pub offset_scaled_log_variance: u16,
 }
 
