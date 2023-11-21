@@ -1,0 +1,34 @@
+#!/bin/sh
+set -e
+
+STATIME_CONF_DIR="/etc/statime"
+
+case "$1" in
+purge)
+    # Per https://www.debian.org/doc/debian-policy/ch-files.html#behavior
+    # "configuration files must be preserved when the package is removed, and
+    #  only deleted when the package is purged."
+    if [ -d ${STATIME_CONF_DIR} ]; then
+        rm -r ${STATIME_CONF_DIR}
+    fi
+    ;;
+esac
+
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+
+if [ "$1" = "remove" ]; then
+    if [ -x "/usr/bin/deb-systemd-helper" ]; then
+        deb-systemd-helper mask statime.service >/dev/null || true
+    fi
+fi
+
+if [ "$1" = "purge" ]; then
+    if [ -x "/usr/bin/deb-systemd-helper" ]; then
+        deb-systemd-helper purge statime.service >/dev/null || true
+        deb-systemd-helper unmask statime.service >/dev/null || true
+    fi
+fi
+
+#DEBHELPER#
