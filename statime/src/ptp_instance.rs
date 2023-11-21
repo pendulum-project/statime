@@ -47,13 +47,13 @@ use crate::{
 /// #     pub fn get_mac() -> [u8; 6] { unimplemented!() }
 /// #     pub fn sleep(time: core::time::Duration) { unimplemented!() }
 /// # }
-/// # let port_config: statime::config::PortConfig<()> = unimplemented!();
+/// # let port_config: statime::config::PortConfig<AcceptAnyMaster> = unimplemented!();
 /// # let filter_config = unimplemented!();
 /// # let clock: MockClock = unimplemented!();
 /// # let rng: rand::rngs::mock::StepRng = unimplemented!();
 /// #
 /// use statime::PtpInstance;
-/// use statime::config::{ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
+/// use statime::config::{AcceptAnyMaster, ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
 /// use statime::filters::BasicFilter;
 ///
 /// let instance_config = InstanceConfig {

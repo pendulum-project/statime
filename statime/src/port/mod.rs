@@ -761,6 +761,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
 mod tests {
     use super::*;
     use crate::{
+        bmc::acceptable_master::AcceptAnyMaster,
         config::{DelayMechanism, InstanceConfig},
         datastructures::messages::{AnnounceMessage, Header, PtpVersion},
         filters::BasicFilter,
@@ -853,7 +854,7 @@ mod tests {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             &state,
             PortConfig {
-                acceptable_master_list: (),
+                acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
                     interval: Interval::from_log_2(1),
                 },
@@ -931,7 +932,7 @@ mod tests {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             &state,
             PortConfig {
-                acceptable_master_list: (),
+                acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
                     interval: Interval::from_log_2(1),
                 },

@@ -1,6 +1,8 @@
 use rand::Rng;
 
 use crate::time::{Duration, Interval};
+#[cfg(doc)]
+use crate::{config::AcceptableMasterList, port::Port};
 
 /// Which delay mechanism a port is using.
 ///
@@ -19,14 +21,29 @@ pub enum DelayMechanism {
 /// as part of [crate::port::Port].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PortConfig<A> {
+    /// A list that contains all nodes that this [`Port`] will accept as a
+    /// master.
+    ///
+    /// This should implement the [`AcceptableMasterList`] trait.
     pub acceptable_master_list: A,
+
+    /// The mechanism used to measure the delay at this [`Port`].
     pub delay_mechanism: DelayMechanism,
+
+    /// The time between announcements.
     pub announce_interval: Interval,
-    // more like announce_message_retries. Specifies how many announce_intervals to wait until the
-    // announce message expires.
+
+    /// Specifies how many [`announce_interval`](`Self::announce_interval`)s to
+    /// wait until the announce message expires.
     pub announce_receipt_timeout: u8,
+
+    /// Time between two sync messages when this [`Port`] is in master mode.
     pub sync_interval: Interval,
+
+    /// Never let this [`Port`] become a slave.
     pub master_only: bool,
+
+    /// The estimated asymmetry in the link connected to this [`Port`]
     pub delay_asymmetry: Duration,
     // Notes:
     // Fields specific for delay mechanism are kept as part of [DelayMechanism].

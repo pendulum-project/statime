@@ -9,8 +9,8 @@ use smoltcp::{
 use static_cell::StaticCell;
 use statime::{
     config::{
-        ClockIdentity, DelayMechanism, InstanceConfig, PortConfig, SdoId, TimePropertiesDS,
-        TimeSource,
+        AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig, SdoId,
+        TimePropertiesDS, TimeSource,
     },
     filters::BasicFilter,
     port::{InBmca, PortAction, PortActionIterator, Running, TimestampContext},
@@ -20,12 +20,10 @@ use statime::{
 use stm32_eth::dma::PacketId;
 use stm32f7xx_hal::rng::Rng;
 
-use crate::{
-    ethernet::{eui48_to_eui64, NetworkStack},
-    ptp_clock::PtpClock,
-};
+use crate::{ethernet::NetworkStack, ptp_clock::PtpClock};
 
-type StmPort<State> = statime::port::Port<State, (), Rng, &'static PtpClock, BasicFilter>;
+type StmPort<State> =
+    statime::port::Port<State, AcceptAnyMaster, Rng, &'static PtpClock, BasicFilter>;
 
 pub struct Port {
     timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
@@ -271,12 +269,12 @@ pub fn setup_statime(
     let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp_peripheral));
 
     let instance_config = InstanceConfig {
-        clock_identity: ClockIdentity(eui48_to_eui64(mac_address)),
+        clock_identity: ClockIdentity::from_mac_address(mac_address),
         priority_1: 255,
         priority_2: 255,
         domain_number: 0,
         slave_only: false,
-        sdo_id: unwrap!(SdoId::new(0)),
+        sdo_id: SdoId::default(),
     };
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
@@ -284,7 +282,7 @@ pub fn setup_statime(
     let ptp_instance = &*PTP_INSTANCE.init(PtpInstance::new(instance_config, time_properties_ds));
 
     let port_config = PortConfig {
-        acceptable_master_list: (),
+        acceptable_master_list: AcceptAnyMaster,
         delay_mechanism: DelayMechanism::E2E {
             interval: Interval::from_log_2(-2),
         },

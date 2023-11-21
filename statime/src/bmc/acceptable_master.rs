@@ -1,10 +1,15 @@
 use crate::config::ClockIdentity;
 
+/// A list of [`ClockIdentity`]s a [`Port`](`crate::port::Port`) may accept as a
+/// master clock.
 pub trait AcceptableMasterList {
     fn is_acceptable(&self, identity: ClockIdentity) -> bool;
 }
 
-impl AcceptableMasterList for () {
+/// An [`AcceptableMasterList`] that accepts any [`ClockIdentity`] as a master
+/// clock.
+pub struct AcceptAnyMaster;
+impl AcceptableMasterList for AcceptAnyMaster {
     fn is_acceptable(&self, _identity: ClockIdentity) -> bool {
         true
     }

@@ -247,20 +247,3 @@ pub fn generate_mac_address() -> [u8; 6] {
         nic[2],
     ]
 }
-
-/// Convert a mac address (or formally EUI-48) to a EUI-64
-///
-/// TODO check reference
-/// Conversion follows the [Guidelines for Use of Extended Unique Identifier (EUI), Organizationally Unique Identifier (OUI), and Company ID (CID)](https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/eui.pdf)
-pub fn eui48_to_eui64(address: [u8; 6]) -> [u8; 8] {
-    [
-        address[0] ^ 0b00000010,
-        address[1],
-        address[2],
-        0xff,
-        0xfe,
-        address[3],
-        address[4],
-        address[5],
-    ]
-}

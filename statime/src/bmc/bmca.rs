@@ -300,6 +300,7 @@ pub(crate) enum RecommendedState {
 mod tests {
     use super::*;
     use crate::{
+        bmc::acceptable_master::AcceptAnyMaster,
         config::{ClockIdentity, InstanceConfig},
         datastructures::messages::{Header, PtpVersion},
     };
@@ -361,7 +362,11 @@ mod tests {
 
     #[test]
     fn test_master_registration() {
-        let mut bmca = Bmca::new((), TimeInterval(100.into()), PortIdentity::default());
+        let mut bmca = Bmca::new(
+            AcceptAnyMaster,
+            TimeInterval(100.into()),
+            PortIdentity::default(),
+        );
         let mut announce = default_announce_message();
         announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
 
