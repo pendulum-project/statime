@@ -1,0 +1,67 @@
+post_install_script = '''
+#!/bin/bash -e
+#RPM_SYSTEMD_MACROS#
+
+if [ $EUID -ne 0 ]; then
+    echo >&2 "ERROR: statime postinst script must be run as root"
+    exit 1
+fi
+
+STATIME_USER=statime
+STATIME_HOME_DIR="/var/lib/statime"
+STATIME_HOME_DIR_PERMS=700
+
+create_user() {
+    if ! id ${STATIME_USER} > /dev/null 2>&1; then
+        # According to the CentOS 7 useradd man page:
+        # --user-group causes a group by the same name as the user to be created
+        # --create-home should force creation of a home dir even for a system account.
+        useradd --home-dir ${STATIME_HOME_DIR} --system --create-home --user-group ${STATIME_USER}
+    fi
+    # Ensure that the home directory has the correct ownership
+    chown -R ${STATIME_USER}:${STATIME_USER} ${STATIME_HOME_DIR}
+    # Ensure that the home directory has the correct permissions
+    chmod ${STATIME_HOME_DIR_PERMS} ${STATIME_HOME_DIR}
+}
+
+init_systemd_service() {
+    systemd_post statime.service
+    systemd_triggers
+}
+
+link_man_page() {
+#    if [ ! -f "/usr/share/man/man5/statime.toml.5" ]; then
+#        (cd "/usr/share/man/man5" && ln -s "statime-toml.5" "statime.toml.5")
+#    fi
+}
+
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    create_user
+    link_man_page
+    init_systemd_service
+fi
+'''
+
+pre_uninstall_script = '''
+#!/bin/bash -e
+#RPM_SYSTEMD_MACROS#
+
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    # Run commands equivalent to what the RPM systemd macros would do
+    systemd_preun statime.service
+    systemd_triggers
+fi
+'''
+
+post_uninstall_script = '''
+#!/bin/bash -e
+#RPM_SYSTEMD_MACROS#
+
+if [ $1 -ge 1 ] ; then
+    # Run commands equivalent to what the RPM systemd macros would do
+    systemd_postun_with_restart statime.service
+    systemd_triggers
+fi
+'''

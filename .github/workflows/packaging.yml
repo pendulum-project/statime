@@ -1,0 +1,30 @@
+name: packaging
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - 'release/**'
+  workflow_dispatch:
+
+jobs:
+  package:
+    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v7
+    with:
+      workspace_package: statime-linux
+
+      package_build_rules: |
+        pkg: statime
+        image:
+          - "rockylinux:8"
+          - "ubuntu:xenial"
+        target: x86_64
+
+      package_test_scripts_path: pkg/test-scripts/test-statime.sh
+
+      rpm_scriptlets_path: pkg/rpm/scriptlets.toml
+
+      rpm_extra_build_packages: git
+      deb_extra_build_packages: git
