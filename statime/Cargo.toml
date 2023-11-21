@@ -1,20 +1,15 @@
 [package]
 name = "statime"
-version = "0.1.0"
-authors = [
-    "Dion Dokter <dion@tweedegolf.com>",
-    "Ruben Nijveld <ruben@tweedegolf.com>",
-    "David Venhoek <david@tweedegolf.com>",
-    "Bram Bruines <bram@tweedegolf.com>",
-    "Rick van der Wal <rick@tweedegolf.com>"
-]
-license = "MIT OR Apache-2.0"
-edition = "2021"
-description = "Pure rust implementation of a ptp ordinary clock"
-homepage = "https://github.com/tweedegolf/statime"
-repository = "https://github.com/tweedegolf/statime"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+readme = "README.md"
+description = "Precision Time Protocol implementation library for embedded and desktops"
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
 
 [features]
 default = ["std"]
@@ -22,10 +17,10 @@ std = []
 fuzz = ["std"]
 
 [dependencies]
-arrayvec = { version = "0.7.4", default-features = false }
-az = "1.2.1"
-fixed = "1.24"
-libm = "0.2.8"
-log = { version = "0.4.20", default-features = false }
-rand = { version = "0.8.5", default-features = false }
-atomic_refcell = "0.1.13"
+arrayvec.workspace = true
+az.workspace = true
+fixed.workspace = true
+libm.workspace = true
+log = { workspace = true, default-features = false}
+rand = { workspace = true, default-features = false }
+atomic_refcell.workspace = true
