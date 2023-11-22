@@ -1,7 +1,7 @@
 [package]
 name = "statime-linux"
 readme = "README.md"
-description = "Linux daemon for the Statime Precision Time Protocol implementation"
+description = "Linux daemon for the Statime Precision Time Protocol library"
 authors.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -41,6 +41,9 @@ copyright = "Copyright (c) 2022-2023 Tweede Golf and Contributors"
 license-file = "../pkg/deb/COPYRIGHT-debian"
 maintainer = "Statime Maintainers <statime-maintainer@tweedegolf.com>"
 maintainer-scripts = "../pkg/deb/"
+extended-description = """
+Statime is a work in progress Rust implementation of PTP version 2.1 (IEEE 1588-2019).
+It currently implements support for acting as a master and an ordinary or a boundary clock."""
 assets = [
   ["target/release/statime", "/usr/bin/statime", "755"],
   ["docs/precompiled/man/statime.8", "/usr/share/man/man8/statime.8", "644"],
