@@ -29,16 +29,16 @@ init_systemd_service() {
     systemd_triggers
 }
 
-link_man_page() {
+#link_man_page() {
 #    if [ ! -f "/usr/share/man/man5/statime.toml.5" ]; then
 #        (cd "/usr/share/man/man5" && ln -s "statime-toml.5" "statime.toml.5")
 #    fi
-}
+#}
 
 if [ $1 -eq 1 ] ; then
     # Initial installation
     create_user
-    link_man_page
+#    link_man_page
     init_systemd_service
 fi
 '''
