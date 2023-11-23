@@ -16,7 +16,11 @@ use super::{
     datasets::DefaultDS,
     WireFormatError,
 };
-use crate::ptp_instance::PtpInstanceState;
+use crate::{
+    config::LeapIndicator,
+    ptp_instance::PtpInstanceState,
+    time::{Interval, Time},
+};
 
 mod announce;
 mod control_field;
@@ -74,11 +78,6 @@ impl TryFrom<u8> for MessageType {
 
 #[cfg(feature = "fuzz")]
 pub use fuzz::FuzzMessage;
-
-use crate::{
-    config::LeapIndicator,
-    time::{Interval, Time},
-};
 
 #[cfg(feature = "fuzz")]
 mod fuzz {
