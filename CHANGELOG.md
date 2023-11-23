@@ -2,4 +2,4 @@
 
 ## [unreleased]
 
-[unreleased]: https://github.com/pendulum-project/ntpd-rs/compare/v0.1.0...main
+[unreleased]: https://github.com/pendulum-project/statime/compare/v0.1.0...main
