@@ -18,7 +18,6 @@ jobs:
       package_build_rules: |
         pkg: statime
         image:
-          - "rockylinux:8"
           - "ubuntu:xenial"
         target: x86_64
 
