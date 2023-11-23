@@ -12,7 +12,7 @@ case $1 in
       echo -e "\nSTATIME HELP OUTPUT:"
       /usr/bin/statime --help
 
-      # # Ensure that the systemd service is running
-      # systemctl is-active statime.service --quiet
+      # # Ensure that the systemd service is not running by default
+      # ! systemctl is-active statime.service --quiet
     ;;
 esac
