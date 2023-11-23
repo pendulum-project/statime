@@ -53,6 +53,18 @@ impl Time {
         }
     }
 
+    /// Construdt a [`Duration`] from nanoseconds and fractions of nanosecods
+    ///
+    /// `subnanos` are the bits after the decimal seperator. e.g. 0.5ns = `1 <<
+    /// 31`
+    ///
+    /// # Example
+    /// ```
+    /// use az::Az;
+    /// use fixed::types::I96F32;
+    /// # use statime::time::Time;
+    /// assert_eq!(Time::from_nanos_subnanos(0, 1 << 31), Time::from_fixed_nanos(0.5.az::<I96F32>()))
+    /// ```
     pub fn from_nanos_subnanos(nanos: u64, subnanos: u32) -> Self {
         let bits = (nanos as u128) << 32 | (subnanos as u128);
         let inner = U96F32::from_bits(bits);

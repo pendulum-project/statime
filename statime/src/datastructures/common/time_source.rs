@@ -1,7 +1,11 @@
 /// What the time values for a system are derived from
 ///
 /// This enum encodes the root source of a system's time values. For most use
-/// cases, the default `InternalOscillator` will suffice.
+/// cases, the default [`InternalOscillator`](`Self::InternalOscillator`) will
+/// suffice.
+///
+/// For more details see *IEEE1588-2019 section 7.6.2.8*
+#[allow(missing_docs)] // These varaiants are pretty self explaining
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeSource {
     AtomicClock,

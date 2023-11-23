@@ -1,3 +1,7 @@
+//! Abstraction of a network [`Port`] of a device.
+//!
+//! See [`Port`] for a detailed description.
+
 use core::ops::Deref;
 
 use arrayvec::ArrayVec;
@@ -8,6 +12,8 @@ use state::{MasterState, PortState};
 
 use self::state::SlaveState;
 pub use crate::datastructures::messages::MAX_DATA_LEN;
+#[cfg(doc)]
+use crate::PtpInstance;
 use crate::{
     bmc::{
         acceptable_master::AcceptableMasterList,
@@ -55,11 +61,35 @@ pub(crate) mod state;
 
 /// A single port of the PTP instance
 ///
-/// One of these needs to be created per port of the PTP instance.
+/// One of these needs to be created per port of the PTP instance. They are
+/// created by calling [`PtpInstance::add_port`].
+///
+/// # Generics
+/// A [`Port`] is generic over:
+/// * **`L`**: The state of the `Port`, either [`InBmca`], or [`Running`].
+/// * **`A`**: The type of the [`PortConfig::acceptable_master_list`] which
+///   should implement [`AcceptableMasterList`]
+/// * **`R`**: The type of the random number generator ([`Rng`]) used to
+///   randomize timing
+/// * **`C`**: The type of the [`Clock`] used by this [`Port`]
+/// * **`F`**: The type of the [`Filter`] used by this [`Port`]
+///
+///
+/// ## Type States
+/// A [`Port`] can be in two states. Either in [`Running`] allowing access to
+/// the [`handle_*`](`Port::handle_send_timestamp`) methods. Or in [`InBmca`]
+/// state where it can be used with a [`PtpInstance`](`crate::PtpInstance`) to
+/// run the best master clock algotithm (BMCA).
+///
+/// To transition from [`InBmca`] to [`Running`] use [`Port::end_bmca`]. To
+/// transition from [`Running`] to [`InBmca`] use [`Port::start_bmca`].
 ///
 /// # Example
 ///
 /// ## Initialization
+/// A [`Port`] can be created from a [`PtpInstance`]. It requires a
+/// [`PortConfig`], a [`Filter::Config`], a [`Clock`], and a [`Rng`].
+///
 /// ```no_run
 /// # mod system {
 /// #     pub struct Clock;
@@ -80,7 +110,7 @@ pub(crate) mod state;
 /// #     }
 /// # }
 /// use rand::thread_rng;
-/// use statime::config::{DelayMechanism, PortConfig};
+/// use statime::config::{AcceptAnyMaster, DelayMechanism, PortConfig};
 /// use statime::filters::BasicFilter;
 /// use statime::PtpInstance;
 /// use statime::time::Interval;
@@ -91,7 +121,7 @@ pub(crate) mod state;
 /// // TODO make these values sensible
 /// let interval = Interval::from_log_2(-2); // 2^(-2)s = 250ms
 /// let port_config = PortConfig {
-///     acceptable_master_list: (), // Accept any
+///     acceptable_master_list: AcceptAnyMaster,
 ///     delay_mechanism: DelayMechanism::E2E { interval },
 ///     announce_interval: interval,
 ///     announce_receipt_timeout: 0,
@@ -111,9 +141,15 @@ pub(crate) mod state;
 /// // This returns the first actions that need to be handled for the port
 /// # fn handle_actions<T>(_:T){}
 /// handle_actions(actions);
+///
+/// # running_port.start_bmca(); // Make sure we check `A` bound
 /// ```
 ///
 /// ## Handling actions
+/// The [`Port`] informs the user about any actions it needs the user to handle
+/// via [`PortAction`]s returned from its methods. The user is responsible for
+/// handling these events in their system specific way.
+///
 /// ```no_run
 /// use statime::port::{PortAction, PortActionIterator, TimestampContext};
 /// use statime::time::Time;
@@ -168,6 +204,10 @@ pub(crate) mod state;
 /// ```
 ///
 /// ## Handling system events
+/// After the initialization the user has to inform the [`Port`] about any
+/// events relevant to it via the [`handle_*`](`Port::handle_send_timestamp`)
+/// methods.
+///
 /// ```no_run
 /// # mod system {
 /// #    pub struct Timer;
@@ -236,12 +276,14 @@ pub struct Port<L, A, R, C, F: Filter> {
     rng: R,
 }
 
+/// Type state of [`Port`] entered by [`Port::end_bmca`]
 #[derive(Debug)]
 pub struct Running<'a> {
     state_refcell: &'a AtomicRefCell<PtpInstanceState>,
     state: AtomicRef<'a, PtpInstanceState>,
 }
 
+/// Type state of [`Port`] entered by [`Port::start_bmca`]
 #[derive(Debug)]
 pub struct InBmca<'a> {
     pending_action: PortActionIterator<'static>,
@@ -249,8 +291,15 @@ pub struct InBmca<'a> {
     state_refcell: &'a AtomicRefCell<PtpInstanceState>,
 }
 
-// Making this non-copy and non-clone ensures a single handle_send_timestamp
-// per SendEvent
+/// Identification of a packet that should be sent out.
+///
+/// The caller receives this from a [`PortAction::SendEvent`] and should return
+/// it to the [`Port`] with [`Port::handle_send_timestamp`] once the transmit
+/// timestamp of that packet is known.
+///
+/// This type is non-copy and non-clone on purpose to ensures a single
+/// [`handle_send_timestamp`](`Port::handle_send_timestamp`) per
+/// [`SendEvent`](`PortAction::SendEvent`).
 #[derive(Debug)]
 pub struct TimestampContext {
     inner: TimestampContextInner,
@@ -262,36 +311,45 @@ enum TimestampContextInner {
     DelayReq { id: u16 },
 }
 
+/// An action the [`Port`] needs the user to perform
 #[derive(Debug)]
+#[must_use]
+#[allow(missing_docs)] // Explaining the fields as well as the variants does not add value
 pub enum PortAction<'a> {
+    /// Send a time-critical packet
+    ///
+    /// Once the packet is sent and the transmit timestamp known the user should
+    /// return the given [`TimestampContext`] using
+    /// [`Port::handle_send_timestamp`].
     SendEvent {
         context: TimestampContext,
         data: &'a [u8],
     },
-    SendGeneral {
-        data: &'a [u8],
-    },
-    ResetAnnounceTimer {
-        duration: core::time::Duration,
-    },
-    ResetSyncTimer {
-        duration: core::time::Duration,
-    },
-    ResetDelayRequestTimer {
-        duration: core::time::Duration,
-    },
-    ResetAnnounceReceiptTimer {
-        duration: core::time::Duration,
-    },
-    ResetFilterUpdateTimer {
-        duration: core::time::Duration,
-    },
+    /// Send a general packet
+    ///
+    /// For a packet sent this way no timestamp needs to be captured.
+    SendGeneral { data: &'a [u8] },
+    /// Call [`Port::handle_announce_timer`] in `duration` from now
+    ResetAnnounceTimer { duration: core::time::Duration },
+    /// Call [`Port::handle_sync_timer`] in `duration` from now
+    ResetSyncTimer { duration: core::time::Duration },
+    /// Call [`Port::handle_delay_request_timer`] in `duration` from now
+    ResetDelayRequestTimer { duration: core::time::Duration },
+    /// Call [`Port::handle_announce_receipt_timer`] in `duration` from now
+    ResetAnnounceReceiptTimer { duration: core::time::Duration },
+    /// Call [`Port::handle_filter_update_timer`] in `duration` from now
+    ResetFilterUpdateTimer { duration: core::time::Duration },
 }
 
 const MAX_ACTIONS: usize = 2;
 
-/// Guarantees to end user: Any set of actions will only ever contain a single
-/// event send
+/// An Iterator ove [`PortAction`]s
+///
+/// These are returned by [`Port`] when ever the library needs the user to
+/// perform actions to the system.
+///
+/// **Guarantees to end user:** Any set of actions will only ever contain a
+/// single event send
 #[derive(Debug)]
 #[must_use]
 pub struct PortActionIterator<'a> {
@@ -299,6 +357,10 @@ pub struct PortActionIterator<'a> {
 }
 
 impl<'a> PortActionIterator<'a> {
+    /// Get an empty Iterator
+    ///
+    /// This can for example be used to have a default value in chained `if`
+    /// statements.
     pub fn empty() -> Self {
         Self {
             internal: ArrayVec::new().into_iter(),
@@ -327,7 +389,10 @@ impl<'a> Iterator for PortActionIterator<'a> {
 }
 
 impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
-    // Send timestamp for last event message became available
+    /// Inform the port about a transmit timestamp being available
+    ///
+    /// `context` is the handle of the packet that was send from the
+    /// [`PortAction::SendEvent`] that caused the send.
     pub fn handle_send_timestamp(
         &mut self,
         context: TimestampContext,
@@ -345,7 +410,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         actions
     }
 
-    // Handle the announce timer going of
+    /// Handle the announce timer going of
     pub fn handle_announce_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_announce(
             self.lifecycle.state.deref(),
@@ -355,7 +420,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         )
     }
 
-    // Handle the sync timer going of
+    /// Handle the sync timer going of
     pub fn handle_sync_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_sync(
             &self.config,
@@ -365,7 +430,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         )
     }
 
-    // Handle the sync timer going of
+    /// Handle the delay request timer going of
     pub fn handle_delay_request_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_delay_request(
             &mut self.rng,
@@ -376,7 +441,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         )
     }
 
-    // Handle the announce receipt timer going off
+    /// Handle the announce receipt timer going off
     pub fn handle_announce_receipt_timer(&mut self) -> PortActionIterator<'_> {
         // we didn't hear announce messages from other masters, so become master
         // ourselves
@@ -396,12 +461,13 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         ]
     }
 
+    /// Handle the filter update timer going off
     pub fn handle_filter_update_timer(&mut self) -> PortActionIterator {
         self.port_state.handle_filter_update(&mut self.clock)
     }
 
-    // Start a BMCA cycle and ensure this happens instantly from the perspective of
-    // the port
+    /// Set this [`Port`] into [`InBmca`] mode to use it with
+    /// [`PtpInstance::bmca`].
     pub fn start_bmca(self) -> Port<InBmca<'a>, A, R, C, F> {
         Port {
             port_state: self.port_state,
@@ -420,7 +486,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         }
     }
 
-    // Handle a message over the event channel
+    /// Handle a time critical receive
     pub fn handle_event_receive(&mut self, data: &[u8], timestamp: Time) -> PortActionIterator {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
@@ -451,7 +517,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         }
     }
 
-    // Handle a general ptp message
+    /// Handle a general ptp message
     pub fn handle_general_receive(&mut self, data: &[u8]) -> PortActionIterator {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
@@ -494,7 +560,8 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 }
 
 impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
-    // End a BMCA cycle and make the port available again
+    /// End a BMCA cycle and make the
+    /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
     pub fn end_bmca(self) -> (Port<Running<'a>, A, R, C, F>, PortActionIterator<'static>) {
         (
             Port {
@@ -530,6 +597,7 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
 }
 
 impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
+    /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
     }

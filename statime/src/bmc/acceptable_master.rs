@@ -3,6 +3,7 @@ use crate::config::ClockIdentity;
 /// A list of [`ClockIdentity`]s a [`Port`](`crate::port::Port`) may accept as a
 /// master clock.
 pub trait AcceptableMasterList {
+    /// Return whether the clock with `identity` may be a master to this `Port`
     fn is_acceptable(&self, identity: ClockIdentity) -> bool;
 }
 

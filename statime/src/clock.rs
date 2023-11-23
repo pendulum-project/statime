@@ -17,6 +17,7 @@ use crate::{
 /// On most operating systems, this will be provided for by the OS, but on some
 /// platforms this may require extra logic.
 pub trait Clock {
+    /// Type of the error the methods of this [`Clock`] may return
     type Error: core::fmt::Debug;
 
     /// Get the current time of the clock

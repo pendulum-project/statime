@@ -1,10 +1,11 @@
 use crate::datastructures::common::{LeapIndicator, TimeSource};
 
-/// A concrete implementation of the PTP Time Properties dataset (IEEE1588-2019
-/// section 8.2.4
+/// A concrete implementation of the PTP Time Properties dataset
 ///
 /// This dataset describes the timescale currently in use, as well as any
 /// upcoming leap seconds on that timescale.
+///
+/// For more details see *IEEE1588-2019 section 8.2.4*.
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TimePropertiesDS {
     pub(crate) current_utc_offset: Option<i16>,
@@ -63,15 +64,19 @@ impl TimePropertiesDS {
         }
     }
 
-    /// Is the current timescale the ptp (utc-derived) timescale?
+    /// Is this timescale a ptp (utc-derived) timescale?
     pub fn is_ptp(&self) -> bool {
         self.ptp_timescale
     }
 
+    /// Information on upcoming leap seconds
     pub fn leap_indicator(&self) -> LeapIndicator {
         self.leap_indicator
     }
 
+    /// Current offset to UTC caused by leap seconds
+    ///
+    /// Returns `None` if this time scale is not referenced to UTC
     pub fn utc_offset(&self) -> Option<i16> {
         self.current_utc_offset
     }
