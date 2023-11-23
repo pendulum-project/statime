@@ -2,14 +2,13 @@
 
 mod basic;
 
+use crate::{port::Measurement, time::Duration, Clock};
 pub use basic::BasicFilter;
-
-use crate::{port::Measurement, Clock};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterUpdate {
     pub next_update: Option<core::time::Duration>,
-    pub mean_delay: Option<crate::time::Duration>,
+    pub mean_delay: Option<Duration>,
 }
 
 /// A filter for post-processing time measurements.
