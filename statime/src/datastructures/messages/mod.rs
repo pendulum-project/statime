@@ -35,6 +35,10 @@ mod p_delay_resp_follow_up;
 mod signalling;
 mod sync;
 
+/// Maximum length of a packet
+///
+/// This can be used to preallocate buffers that can always fit packets send by
+/// `statime`.
 pub const MAX_DATA_LEN: usize = 255;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +85,7 @@ pub use fuzz::FuzzMessage;
 
 #[cfg(feature = "fuzz")]
 mod fuzz {
+    #![allow(missing_docs)] // These are only used for internal fuzzing
     use super::*;
     use crate::datastructures::{common::Tlv, WireFormatError};
 

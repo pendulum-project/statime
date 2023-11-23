@@ -11,9 +11,10 @@ use crate::{config::AcceptableMasterList, port::Port};
 pub enum DelayMechanism {
     /// End to end delay mechanism. Delay measurement is done directly to the
     /// chosen master, across potential transparent nodes in between.
-    ///
-    /// the interval corresponds to the PortDS logMinDelayReqInterval
-    E2E { interval: Interval },
+    E2E {
+        /// The time between sending two delay requests
+        interval: Interval,
+    },
     // No support for other delay mechanisms
 }
 
@@ -51,13 +52,16 @@ pub struct PortConfig<A> {
 }
 
 impl<A> PortConfig<A> {
+    /// Minimum time between two delay request messages
     pub fn min_delay_req_interval(&self) -> Interval {
         match self.delay_mechanism {
             DelayMechanism::E2E { interval } => interval,
         }
     }
 
-    // section 9.2.6.12
+    /// Time between two announce messages
+    ///
+    /// For more information see *IEEE1588-2019 section 9.2.6.12*
     pub fn announce_duration(&self, rng: &mut impl Rng) -> core::time::Duration {
         // add some randomness so that not all timers expire at the same time
         let factor = 1.0 + rng.sample::<f64, _>(rand::distributions::Open01);

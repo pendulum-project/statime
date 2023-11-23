@@ -25,6 +25,7 @@ pub struct Duration {
 }
 
 impl Duration {
+    /// A duration of zero seconds
     pub const ZERO: Duration = Duration {
         inner: I96F32::ZERO,
     };
@@ -70,6 +71,7 @@ impl Duration {
         self.inner
     }
 
+    /// Get the total amount of nanoseconds dropping any sub nanosecond parts
     pub fn nanos_rounded(&self) -> i128 {
         self.nanos().lossy_into()
     }

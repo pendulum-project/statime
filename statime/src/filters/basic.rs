@@ -16,7 +16,7 @@ struct PrevStepData {
     correction: Duration,
 }
 
-/// A simple averaging filter
+/// A simple averaging filter.
 ///
 /// This filter uses simple averaging to determine what the clock control
 /// outputs should be.

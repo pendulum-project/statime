@@ -67,16 +67,19 @@
 //! # Cargo Features
 //! This crate exposes two features `std` and `fuzz`. `std` enables a dependency
 //! on the Rust standard library providing:
-//! * `std::error::Error` implementations for error types
+//! * [`std::error::Error`] implementations for error types
 //! * Implementations of the [`config::AcceptableMasterList`] trait on types in
-//!   `std`
-//! * Usage of methods on `f32` and `f64` directly from `std` instead of `libm`
+//!   [`std`]
+//! * Usage of methods on [`f32`] and [`f64`] directly from [`std`] instead of
+//!   [`libm`]
 //!
 //! The `fuzz` feature exposes internal types for fuzzing implementations in the
 //! `statime::fuzz` module.
 
 #![no_std]
-
+#![deny(missing_docs)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![warn(rustdoc::unescaped_backticks)]
 #[cfg(feature = "std")]
 extern crate std;
 
@@ -92,6 +95,9 @@ pub mod time;
 pub use clock::Clock;
 pub use ptp_instance::PtpInstance;
 
+/// Helper types used for fuzzing
+///
+/// Enabled by the `fuzz` `feature`
 #[cfg(feature = "fuzz")]
 pub mod fuzz {
     pub use crate::datastructures::messages::FuzzMessage;

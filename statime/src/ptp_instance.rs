@@ -144,6 +144,8 @@ impl PtpInstanceState {
 }
 
 impl<F> PtpInstance<F> {
+    /// Construct a new [`PtpInstance`] with the given config and time
+    /// properties
     pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
         let default_ds = DefaultDS::new(config);
         Self {
@@ -193,6 +195,10 @@ impl<F: Filter> PtpInstance<F> {
         )
     }
 
+    /// Run the best master clock algorithm (BMCA)
+    ///
+    /// The caller must pass all the ports that were created on this instance in
+    /// the slice!
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
@@ -208,6 +214,7 @@ impl<F: Filter> PtpInstance<F> {
         )
     }
 
+    /// Time to wait between calls to [`PtpInstance::bmca`]
     pub fn bmca_interval(&self) -> core::time::Duration {
         core::time::Duration::from_secs_f64(
             #[cfg(feature = "std")]

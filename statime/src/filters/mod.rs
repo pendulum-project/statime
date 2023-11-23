@@ -2,12 +2,19 @@
 
 mod basic;
 
-use crate::{port::Measurement, time::Duration, Clock};
 pub use basic::BasicFilter;
 
+use crate::{port::Measurement, time::Duration, Clock};
+
+/// Informs the caller when to [`update`](`Filter::update`) the [`Filter`]
+/// again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterUpdate {
+    /// Duration until the [`Filter::update`] should be called again.
+    ///
+    /// If `None` [`Filter::update`] does not need to be called agin.
     pub next_update: Option<core::time::Duration>,
+    /// Mean delay measured on this link if known.
     pub mean_delay: Option<Duration>,
 }
 
@@ -20,6 +27,10 @@ pub struct FilterUpdate {
 /// This crate provides a simple [`BasicFilter`] which is
 /// suitable for most needs, but users can implement their own if desired.
 pub trait Filter {
+    /// Configuration for this [`Filter`]
+    ///
+    /// This is used to construct a new [`Filter`] instance using
+    /// [`new`](`Filter::new`).
     type Config: Clone;
 
     /// Create a new instance of the filter.
