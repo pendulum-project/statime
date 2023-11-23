@@ -30,8 +30,8 @@ tokio = { workspace = true, features = ["net", "rt-multi-thread", "time", "macro
 rand = { workspace = true, default-features = false, features = ["std", "std_rng"] }
 serde.workspace = true
 
-clock-steering = { git = "https://github.com/pendulum-project/clock-steering.git", rev = "716a540" }
-timestamped-socket = { git =  "https://github.com/pendulum-project/timestamped-socket.git", rev = "d0e4ed7", features = ["serde"] }
+clock-steering.workspace = true
+timestamped-socket.workspace = true
 
 [package.metadata.deb]
 name = "statime"
