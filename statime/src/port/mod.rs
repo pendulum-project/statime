@@ -343,7 +343,7 @@ pub enum PortAction<'a> {
 
 const MAX_ACTIONS: usize = 2;
 
-/// An Iterator ove [`PortAction`]s
+/// An Iterator over [`PortAction`]s
 ///
 /// These are returned by [`Port`] when ever the library needs the user to
 /// perform actions to the system.
@@ -410,7 +410,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         actions
     }
 
-    /// Handle the announce timer going of
+    /// Handle the announce timer going off
     pub fn handle_announce_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_announce(
             self.lifecycle.state.deref(),
@@ -420,7 +420,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         )
     }
 
-    /// Handle the sync timer going of
+    /// Handle the sync timer going off
     pub fn handle_sync_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_sync(
             &self.config,
@@ -430,7 +430,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         )
     }
 
-    /// Handle the delay request timer going of
+    /// Handle the delay request timer going off
     pub fn handle_delay_request_timer(&mut self) -> PortActionIterator<'_> {
         self.port_state.send_delay_request(
             &mut self.rng,
@@ -486,7 +486,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         }
     }
 
-    /// Handle a time critical receive
+    /// Handle a message over the event channel
     pub fn handle_event_receive(&mut self, data: &[u8], timestamp: Time) -> PortActionIterator {
         let message = match Message::deserialize(data) {
             Ok(message) => message,

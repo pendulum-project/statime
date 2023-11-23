@@ -6,13 +6,15 @@ pub use basic::BasicFilter;
 
 use crate::{port::Measurement, time::Duration, Clock};
 
-/// Informs the caller when to [`update`](`Filter::update`) the [`Filter`]
-/// again.
+/// Information on the result of the [`Filter`] and the actions it needs from
+/// its environment
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FilterUpdate {
     /// Duration until the [`Filter::update`] should be called again.
     ///
-    /// If `None` [`Filter::update`] does not need to be called agin.
+    /// * If **`Some`** [`Filter::update`] should be called in the given
+    ///   [`Duration`](`core::time::Duration`) from now.
+    /// * If **`None`** [`Filter::update`] the timer should not be changed.
     pub next_update: Option<core::time::Duration>,
     /// Mean delay measured on this link if known.
     pub mean_delay: Option<Duration>,
