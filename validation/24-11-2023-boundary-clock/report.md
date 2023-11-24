@@ -31,6 +31,6 @@ This shows the offset of the clock of the i210 when synchronized via a boundary 
 
 ## Conclusions
 
-The results are in line with those seen in the earlier [hardware timestamping validation results](../24-05-2022-hardware-timestamping/measurement_report.pdf), which was expected as no significant changes have occured to the way we adjust the clock. The observed sawtooth patterns indicate that there is signficant gain to be had from improvements in this area.
+The results are in line with those seen in the earlier [hardware timestamping validation results](../24-05-2022-hardware-timestamping/measurement_report.pdf), which was expected as no significant changes have occured to how we use the measurements to adjust the clock. The observed sawtooth patterns indicate that we can make significant gains by improving how we use measurements to adjust the clock, and improvements in that are currently under development.
 
 With regards to the impact of the boundary clock, this seems to be limited with the current software, making the synchronization about 200ns worse. However, in light of the observed sawtooth patterns it is hard to determine to what degree this is from just the increased frequency of the sawtooth, and what part is actual stochastic worsening.
