@@ -26,7 +26,7 @@ use statime_linux::{
     },
 };
 use timestamped_socket::{
-    interface::InterfaceIterator,
+    interface::interfaces,
     networkaddress::{EthernetAddress, NetworkAddress},
     socket::{InterfaceTimestampMode, Open, Socket},
 };
@@ -812,9 +812,10 @@ async fn handle_actions_ethernet(
 }
 
 fn get_clock_id() -> Option<[u8; 8]> {
-    let candidates = InterfaceIterator::new()
+    let candidates = interfaces()
         .unwrap()
-        .filter_map(|data| data.mac);
+        .into_iter()
+        .filter_map(|(_, data)| data.mac());
 
     for mac in candidates {
         // Ignore multicast and locally administered mac addresses
