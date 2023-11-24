@@ -13,11 +13,11 @@ network-mode = "ipv4" # or "ipv6" or "ethernet"
 to the configuration file in `/etc/statime/statime.toml`. This will tell statime to create a PTP port for that network interface.
 
 ## Hardware timestamping
-If the network interface support hardware timestamping for a specific ptp hardware clock, this can be enabled by specifying the hardware clock of the network interface:
+If the network interface supports hardware timestamping for a specific PTP hardware clock, this can be enabled by specifying the hardware clock of the network interface:
 ```toml
 hardware-clock = "/path/to/hardware/clock/device"
 ```
-Statime will then enable hardware timestamping, and automatically synchronize the hardware clock and the system clock as needed. To determine which hardware clock belongs to an interface, ethtool can be used:
+Statime will then enable hardware timestamping, and automatically synchronize the hardware clock and the system clock as needed. To determine which hardware clock belongs to an interface, `ethtool` can be used:
 ```
 > ethtool -T <ifname>
 Time stamping parameters for <ifname>:
@@ -40,12 +40,12 @@ Here, the number after `PTP Hardware Clock` indicates which hardware clock devic
 
 # Starting the daemon
 
-We can now start the statime deamon through systemd with
+We can now start the statime daemon through systemd with
 ```
 > systemctl start statime
 ```
 
-If everything is configured well, and there is a ptp time source available in your network, the status of the demon should look something like
+If everything is configured well, and there is a PTP time source available in your network, the status of the daemon should look something like:
 ```
 > systemctl status statime
 ● statime.service - Statime linux
