@@ -170,7 +170,8 @@ checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 [[package]]
 name = "clock-steering"
 version = "0.1.0"
-source = "git+https://github.com/pendulum-project/clock-steering.git?rev=716a540#716a540af0678a5aeaee21509d490bbfb19263fb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80ac48dbcd3a6fa19104a04f468da9680dac59f7456159511490d438a501e9e1"
 dependencies = [
  "libc",
 ]
@@ -529,7 +530,8 @@ dependencies = [
 [[package]]
 name = "timestamped-socket"
 version = "0.1.0"
-source = "git+https://github.com/pendulum-project/timestamped-socket.git?rev=d0e4ed7#d0e4ed7fa43dbcf665e39437de3ebf91923e7d30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caaff75f66683c9953194a55b9ed214d93cb4c99ab333623dff91e2bae7860c6"
 dependencies = [
  "libc",
  "serde",
