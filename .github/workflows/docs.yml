@@ -36,6 +36,9 @@ jobs:
       - name: Copy API docs
         run: cp -R target/doc target/docs/site/api
 
+      - name: Remove the lockfile
+        run: rm -rf target/docs/site/api/.lock
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@a753861a5debcf57bf8b404356158c8e1e33150c
         with:
