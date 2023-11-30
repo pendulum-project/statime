@@ -2,8 +2,8 @@
 
 [![codecov](https://codecov.io/gh/pendulum-project/statime/branch/main/graph/badge.svg?token=QCO6NKS64J)](https://codecov.io/gh/pendulum-project/statime)
 [![book](https://shields.io/badge/manual-main-blue)](https://pendulum-project.github.io/statime/)
-[![book](https://shields.io/badge/docs.rs-statime-green)](https://docs.rs/statime)
-[![book](https://shields.io/badge/docs.rs-statime_linux-green)](https://docs.rs/statime_linux)
+[![book](https://shields.io/badge/docs.rs-statime-green)](https://pendulum-project.github.io/statime/docs/statime)
+[![book](https://shields.io/badge/docs.rs-statime_linux-green)](https://pendulum-project.github.io/statime/docs/statime_linux)
 
 Statime is a library providing an implementation of PTP version 2.1 (IEEE1588-2019). It provides all the building blocks to setup PTP ordinary and boundary clocks.
 
@@ -14,7 +14,7 @@ On modern Linux kernels, the `statime-linux` crate provides ready to use impleme
 The `statime-stm32` crate gives an example of how to use statime on an embedded target.
 
 <p align="center">
-  <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
+<img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
 </p>
 
 The `statime-linux` crate provides a binary for Linux implementing an ordinary or boundary clock. It will need sufficient permissions to change the system clock to use. The easiest way to start it is through sudo:
