@@ -23,7 +23,7 @@ sudo ./target/debug/statime-linux -i <network_interface>
 
 ## Structure
 
-The `statime` library has been built in a way to try and be platform-agnostic. To do that, the network and clock have been abstracted. The `statime-linux` library provides implementations of these abstractions for linux-based platforms. For other platforms, this needs to be provided by the user. For more details, see [the documentation](https://pendulum-project.github.io/statime/docs/statime)
+The `statime` library has been built in a way to try and be platform-agnostic. To do that, the network and clock have been abstracted. The `statime-linux` library provides implementations of these abstractions for linux-based platforms. For other platforms, this needs to be provided by the user. For more details, see [the documentation](https://docs.statime.pendulum-project.org/api/statime/)
 
 ## Rust version
 
