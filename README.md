@@ -1,9 +1,8 @@
 # Statime
 
 [![codecov](https://codecov.io/gh/pendulum-project/statime/branch/main/graph/badge.svg?token=QCO6NKS64J)](https://codecov.io/gh/pendulum-project/statime)
-[![book](https://shields.io/badge/manual-main-blue)](https://pendulum-project.github.io/statime/)
-[![book](https://shields.io/badge/docs.rs-statime-green)](https://pendulum-project.github.io/statime/docs/statime)
-[![book](https://shields.io/badge/docs.rs-statime_linux-green)](https://pendulum-project.github.io/statime/docs/statime_linux)
+[![book](https://shields.io/badge/manual-main-blue)](https://docs.statime.pendulum-project.org/)
+[![book](https://shields.io/badge/docs.rs-statime-green)](https://docs.statime.pendulum-project.org/api/statime/)
 
 Statime is a library providing an implementation of PTP version 2.1 (IEEE1588-2019). It provides all the building blocks to setup PTP ordinary and boundary clocks.
 
