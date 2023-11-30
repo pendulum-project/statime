@@ -420,7 +420,7 @@ impl<F> SlaveState<F> {
             ..
         } = self.delay_state
         {
-            let raw_delay_offset = send_time - recv_time;
+            let raw_delay_offset = send_time - recv_time + delay_asymmetry;
             result.event_time = send_time;
             result.raw_delay_offset = Some(raw_delay_offset);
 
