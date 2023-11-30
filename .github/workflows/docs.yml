@@ -21,8 +21,20 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build docs
+        run: cargo doc -p statime --lib --no-deps
+
       - name: Build site
         run: utils/mkdocs.sh --no-bind-port build
+
+      - name: Copy API docs
+        run: cp -R target/doc target/docs/site/api
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@a753861a5debcf57bf8b404356158c8e1e33150c
