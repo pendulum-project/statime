@@ -8,7 +8,7 @@ use crate::{
     datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
     filters::Filter,
     ptp_instance::PtpInstanceState,
-    time::{Interval, Time},
+    time::{Duration, Interval, Time},
     Clock,
 };
 
@@ -28,8 +28,10 @@ pub(crate) enum PortState<F> {
 }
 
 impl<F: Filter> PortState<F> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_timestamp<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         context: TimestampContext,
         timestamp: Time,
         port_identity: PortIdentity,
@@ -38,7 +40,9 @@ impl<F: Filter> PortState<F> {
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match self {
-            PortState::Slave(slave) => slave.handle_timestamp(context, timestamp, clock),
+            PortState::Slave(slave) => {
+                slave.handle_timestamp(delay_asymmetry, context, timestamp, clock)
+            }
             PortState::Master(master) => {
                 master.handle_timestamp(context, timestamp, port_identity, default_ds, buffer)
             }
@@ -46,8 +50,10 @@ impl<F: Filter> PortState<F> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_event_receive<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         message: Message,
         timestamp: Time,
         min_delay_req_interval: Interval,
@@ -63,13 +69,16 @@ impl<F: Filter> PortState<F> {
                 port_identity,
                 buffer,
             ),
-            PortState::Slave(slave) => slave.handle_event_receive(message, timestamp, clock),
+            PortState::Slave(slave) => {
+                slave.handle_event_receive(delay_asymmetry, message, timestamp, clock)
+            }
             PortState::Listening | PortState::Passive => actions![],
         }
     }
 
     pub(crate) fn handle_general_receive<C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         message: Message,
         port_identity: PortIdentity,
         clock: &mut C,
@@ -81,7 +90,9 @@ impl<F: Filter> PortState<F> {
                 }
                 actions![]
             }
-            PortState::Slave(slave) => slave.handle_general_receive(message, port_identity, clock),
+            PortState::Slave(slave) => {
+                slave.handle_general_receive(delay_asymmetry, message, port_identity, clock)
+            }
             PortState::Listening | PortState::Passive => {
                 actions![]
             }

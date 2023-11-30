@@ -70,8 +70,12 @@ impl<F: Filter> SlaveState<F> {
         }
     }
 
-    fn handle_time_measurement<'a, C: Clock>(&mut self, clock: &mut C) -> PortActionIterator<'a> {
-        if let Some(measurement) = self.extract_measurement() {
+    fn handle_time_measurement<'a, C: Clock>(
+        &mut self,
+        delay_asymmetry: Duration,
+        clock: &mut C,
+    ) -> PortActionIterator<'a> {
+        if let Some(measurement) = self.extract_measurement(delay_asymmetry) {
             // If the received message allowed the (slave) state to calculate its offset
             // from the master, update the local clock
             let filter_updates = self.filter.measurement(measurement, clock);
@@ -86,6 +90,7 @@ impl<F: Filter> SlaveState<F> {
 
     pub(crate) fn handle_timestamp<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         context: TimestampContext,
         timestamp: Time,
         clock: &mut C,
@@ -93,7 +98,7 @@ impl<F: Filter> SlaveState<F> {
         match context.inner {
             crate::port::TimestampContextInner::DelayReq { id } => {
                 // handle our send timestamp on a delay request message
-                self.handle_delay_timestamp(id, timestamp, clock)
+                self.handle_delay_timestamp(delay_asymmetry, id, timestamp, clock)
             }
             _ => {
                 log::error!("Unexpected timestamp");
@@ -104,6 +109,7 @@ impl<F: Filter> SlaveState<F> {
 
     fn handle_delay_timestamp<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         timestamp_id: u16,
         timestamp: Time,
         clock: &mut C,
@@ -123,7 +129,7 @@ impl<F: Filter> SlaveState<F> {
                 ..
             } if id == timestamp_id => {
                 *send_time = Some(timestamp);
-                self.handle_time_measurement(clock)
+                self.handle_time_measurement(delay_asymmetry, clock)
             }
             _ => {
                 log::warn!("Late timestamp for delay request ignored");
@@ -134,6 +140,7 @@ impl<F: Filter> SlaveState<F> {
 
     pub(crate) fn handle_event_receive<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         message: Message,
         timestamp: Time,
         clock: &mut C,
@@ -146,7 +153,9 @@ impl<F: Filter> SlaveState<F> {
         }
 
         match message.body {
-            MessageBody::Sync(sync) => self.handle_sync(header, sync, timestamp, clock),
+            MessageBody::Sync(sync) => {
+                self.handle_sync(delay_asymmetry, header, sync, timestamp, clock)
+            }
             _ => {
                 log::warn!("Unexpected message {:?}", message);
                 actions![]
@@ -156,6 +165,7 @@ impl<F: Filter> SlaveState<F> {
 
     pub(crate) fn handle_general_receive<C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         message: Message,
         port_identity: PortIdentity,
         clock: &mut C,
@@ -168,9 +178,11 @@ impl<F: Filter> SlaveState<F> {
         }
 
         match message.body {
-            MessageBody::FollowUp(message) => self.handle_follow_up(header, message, clock),
+            MessageBody::FollowUp(message) => {
+                self.handle_follow_up(delay_asymmetry, header, message, clock)
+            }
             MessageBody::DelayResp(message) => {
-                self.handle_delay_resp(header, message, port_identity, clock)
+                self.handle_delay_resp(delay_asymmetry, header, message, port_identity, clock)
             }
             _ => {
                 log::warn!("Unexpected message {:?}", message);
@@ -192,6 +204,7 @@ impl<F: Filter> SlaveState<F> {
 
     fn handle_sync<'a, C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         header: &Header,
         message: SyncMessage,
         recv_time: Time,
@@ -220,7 +233,7 @@ impl<F: Filter> SlaveState<F> {
                     ..
                 } if id == header.sequence_id => {
                     *recv_time = Some(corrected_recv_time);
-                    self.handle_time_measurement(clock)
+                    self.handle_time_measurement(delay_asymmetry, clock)
                 }
                 _ => {
                     self.sync_state = SyncState::Measuring {
@@ -244,7 +257,7 @@ impl<F: Filter> SlaveState<F> {
                         send_time: Some(Time::from(message.origin_timestamp)),
                         recv_time: Some(corrected_recv_time),
                     };
-                    self.handle_time_measurement(clock)
+                    self.handle_time_measurement(delay_asymmetry, clock)
                 }
             }
         }
@@ -252,6 +265,7 @@ impl<F: Filter> SlaveState<F> {
 
     fn handle_follow_up<C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         header: &Header,
         message: FollowUpMessage,
         clock: &mut C,
@@ -277,7 +291,7 @@ impl<F: Filter> SlaveState<F> {
                 ..
             } if id == header.sequence_id => {
                 *send_time = Some(packet_send_time);
-                self.handle_time_measurement(clock)
+                self.handle_time_measurement(delay_asymmetry, clock)
             }
             _ => {
                 self.sync_state = SyncState::Measuring {
@@ -285,13 +299,14 @@ impl<F: Filter> SlaveState<F> {
                     send_time: Some(packet_send_time),
                     recv_time: None,
                 };
-                self.handle_time_measurement(clock)
+                self.handle_time_measurement(delay_asymmetry, clock)
             }
         }
     }
 
     fn handle_delay_resp<C: Clock>(
         &mut self,
+        delay_asymmetry: Duration,
         header: &Header,
         message: DelayRespMessage,
         port_identity: PortIdentity,
@@ -320,7 +335,7 @@ impl<F: Filter> SlaveState<F> {
                 *recv_time = Some(
                     Time::from(message.receive_timestamp) - Duration::from(header.correction_field),
                 );
-                self.handle_time_measurement(clock)
+                self.handle_time_measurement(delay_asymmetry, clock)
             }
             _ => {
                 log::warn!("Unexpected DelayResp message");
@@ -380,7 +395,7 @@ impl<F> SlaveState<F> {
         ]
     }
 
-    fn extract_measurement(&mut self) -> Option<Measurement> {
+    fn extract_measurement(&mut self, delay_asymmetry: Duration) -> Option<Measurement> {
         let mut result = Measurement::default();
 
         if let SyncState::Measuring {
@@ -389,7 +404,7 @@ impl<F> SlaveState<F> {
             ..
         } = self.sync_state
         {
-            let raw_sync_offset = recv_time - send_time;
+            let raw_sync_offset = recv_time - send_time - delay_asymmetry;
             result.event_time = recv_time;
             result.raw_sync_offset = Some(raw_sync_offset);
 
@@ -513,6 +528,7 @@ mod tests {
         });
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body,
@@ -543,6 +559,7 @@ mod tests {
         };
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body: MessageBody::Sync(SyncMessage {
@@ -564,6 +581,7 @@ mod tests {
         };
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body: MessageBody::FollowUp(FollowUpMessage {
@@ -585,6 +603,46 @@ mod tests {
                 offset: Some(Duration::from_micros(-53)),
                 delay: None,
                 raw_sync_offset: Some(Duration::from_micros(47)),
+                raw_delay_offset: None,
+            })
+        );
+    }
+
+    #[test]
+    fn test_delay_asymmetry() {
+        let mut state = SlaveState::<TestFilter>::new(Default::default(), ());
+        state.mean_delay = Some(Duration::from_micros(100));
+
+        let header = Header {
+            two_step_flag: false,
+            correction_field: TimeInterval(1000.into()),
+            ..Default::default()
+        };
+
+        let body = MessageBody::Sync(SyncMessage {
+            origin_timestamp: Time::from_micros(0).into(),
+        });
+
+        let mut action = state.handle_event_receive(
+            Duration::from_micros(100),
+            Message {
+                header,
+                body,
+                suffix: TlvSet::default(),
+            },
+            Time::from_micros(50),
+            &mut TestClock,
+        );
+
+        assert!(action.next().is_none());
+        drop(action);
+        assert_eq!(
+            state.filter.last_measurement.take(),
+            Some(Measurement {
+                event_time: Time::from_micros(49),
+                offset: Some(Duration::from_micros(-151)),
+                delay: None,
+                raw_sync_offset: Some(Duration::from_micros(-51)),
                 raw_delay_offset: None,
             })
         );
@@ -626,6 +684,7 @@ mod tests {
         };
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body: MessageBody::Sync(SyncMessage {
@@ -676,7 +735,12 @@ mod tests {
             _ => panic!("Incorrect message type"),
         };
 
-        let mut action = state.handle_timestamp(context, Time::from_micros(100), &mut TestClock);
+        let mut action = state.handle_timestamp(
+            Duration::ZERO,
+            context,
+            Time::from_micros(100),
+            &mut TestClock,
+        );
         assert!(action.next().is_none());
         drop(action);
         assert_eq!(state.filter.last_measurement.take(), None);
@@ -693,6 +757,7 @@ mod tests {
         });
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body,
@@ -726,6 +791,7 @@ mod tests {
         };
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header,
                 body: MessageBody::Sync(SyncMessage {
@@ -767,11 +833,17 @@ mod tests {
             _ => panic!("Incorrect message type"),
         };
 
-        let mut action = state.handle_timestamp(context, Time::from_micros(1100), &mut TestClock);
+        let mut action = state.handle_timestamp(
+            Duration::ZERO,
+            context,
+            Time::from_micros(1100),
+            &mut TestClock,
+        );
         assert!(action.next().is_none());
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     correction_field: TimeInterval(2000.into()),
@@ -800,6 +872,7 @@ mod tests {
         );
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     correction_field: TimeInterval(2000.into()),
@@ -838,6 +911,7 @@ mod tests {
         state.mean_delay = Some(Duration::from_micros(100));
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     sequence_id: 15,
@@ -859,6 +933,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     two_step_flag: true,
@@ -894,6 +969,7 @@ mod tests {
         state.mean_delay = Some(Duration::from_micros(100));
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     two_step_flag: true,
@@ -914,6 +990,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     sequence_id: 14,
@@ -935,6 +1012,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     sequence_id: 15,
@@ -962,6 +1040,7 @@ mod tests {
         state.mean_delay = Some(Duration::from_micros(100));
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     two_step_flag: true,
@@ -983,6 +1062,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     two_step_flag: true,
@@ -1003,6 +1083,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     sequence_id: 15,
@@ -1063,6 +1144,7 @@ mod tests {
         };
 
         let mut action = state.handle_event_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     two_step_flag: false,
@@ -1108,7 +1190,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let mut action = state.handle_timestamp(context, Time::from_micros(100), &mut TestClock);
+        let mut action = state.handle_timestamp(
+            Duration::ZERO,
+            context,
+            Time::from_micros(100),
+            &mut TestClock,
+        );
 
         assert!(action.next().is_none());
         assert_eq!(state.filter.last_measurement.take(), None);
@@ -1122,6 +1209,7 @@ mod tests {
         };
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     correction_field: TimeInterval(2000.into()),
@@ -1147,6 +1235,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     correction_field: TimeInterval(2000.into()),
@@ -1169,6 +1258,7 @@ mod tests {
         assert_eq!(state.filter.last_measurement.take(), None);
 
         let mut action = state.handle_general_receive(
+            Duration::ZERO,
             Message {
                 header: Header {
                     correction_field: TimeInterval(2000.into()),
