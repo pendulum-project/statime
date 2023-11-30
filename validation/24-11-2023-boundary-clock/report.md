@@ -22,11 +22,11 @@ For this data we then calculated both the mean and the sample standard deviation
 
 ## Results
 
-![plot of offset to grand master clock for direct connection](i210-direct-offset.png)
+![plot of offset to grand master clock for direct connection](i210-direct-offset.png?raw=true)
 The above shows the offset of the clock of the i210 when synchronized directly to the grandmaster. This has a sample standard deviation of $1.4$ microseconds, though the sawtooth means it is not at all normally distributed.
 
 
-![plot of offset to grand master clock for connection via boundary](i210-bc-offset.png)
+![plot of offset to grand master clock for connection via boundary](i210-bc-offset.png?raw=true)
 This shows the offset of the clock of the i210 when synchronized via a boundary clock. This has a sample standard deviation of $1.6$ microseconds. Note that the sawtooth here is quite a bit faster than in the direct synchronization case.
 
 ## Conclusions
