@@ -399,6 +399,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         timestamp: Time,
     ) -> PortActionIterator<'_> {
         let actions = self.port_state.handle_timestamp(
+            self.config.delay_asymmetry,
             context,
             timestamp,
             self.port_identity,
@@ -505,6 +506,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
         if message.is_event() {
             self.port_state.handle_event_receive(
+                self.config.delay_asymmetry,
                 message,
                 timestamp,
                 self.config.min_delay_req_interval(),
@@ -551,10 +553,12 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                     actions![]
                 }
             }
-            _ => {
-                self.port_state
-                    .handle_general_receive(message, self.port_identity, &mut self.clock)
-            }
+            _ => self.port_state.handle_general_receive(
+                self.config.delay_asymmetry,
+                message,
+                self.port_identity,
+                &mut self.clock,
+            ),
         }
     }
 }
