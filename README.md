@@ -5,17 +5,20 @@
 [![book](https://shields.io/badge/docs.rs-statime-green)](https://pendulum-project.github.io/statime/docs/statime)
 [![book](https://shields.io/badge/docs.rs-statime_linux-green)](https://pendulum-project.github.io/statime/docs/statime_linux)
 
-Statime is a work in progress Rust implementation of PTP version 2.1 (IEEE 1588-2019). It currently implements support for acting as a master and an ordinary or a boundary clock. Note that we are planning a refactor of the codebase, and that the public interface is likely to change.
+Statime is an implementation of PTP version 2.1 (IEEE 1588-2019). It currently implements support for acting as a master and an ordinary or a boundary clock.
 
 <p align="center">
 <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
 </p>
 
-The statime-linux crate also provides a binary for linux implementing an ordinary clock. It will need sufficient permissions to change the system clock to use. The easiest way to start it is through sudo: `sudo ./target/debug/statime-linux -i <network_interface>`.
+The statime-linux crate provides a binary for Linux implementing an ordinary or boundary clock. It will need sufficient permissions to change the system clock to use. The easiest way to start it is through sudo:
+```
+sudo ./target/debug/statime-linux -i <network_interface>
+```
 
 ## Structure
 
-The library has been built in a way to try and be platform-agnostic. To do that, the network and clock have been abstracted. The `statime-linux` library provides implementations of these abstractions for linux-based platforms. For other platforms, this needs to be provided by the user. For more details, see [the documentation](https://pendulum-project.github.io/statime/docs/statime)
+The `statime` library has been built in a way to try and be platform-agnostic. To do that, the network and clock have been abstracted. The `statime-linux` library provides implementations of these abstractions for linux-based platforms. For other platforms, this needs to be provided by the user. For more details, see [the documentation](https://pendulum-project.github.io/statime/docs/statime)
 
 ## Rust version
 
