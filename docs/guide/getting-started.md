@@ -1,8 +1,10 @@
-# Installing statime
+# Getting started
+
+## Installing statime
 
 We recommend installing statime through our precompiled binary packages, available on the [release page](https://github.com/pendulum-project/statime). These can be installed through the standard methods for your linux installation, and will provide a binary, as well as a skeleton configuration and systemd unit for statime.
 
-# Configuring interfaces
+## Configuring interfaces
 
 Before we start statime, we first need to tell it which network interfaces we want it to use. For each network interface, add a section like
 ```toml
@@ -12,7 +14,7 @@ network-mode = "ipv4" # or "ipv6" or "ethernet"
 ```
 to the configuration file in `/etc/statime/statime.toml`. This will tell statime to create a PTP port for that network interface.
 
-## Hardware timestamping
+### Hardware timestamping
 If the network interface supports hardware timestamping for a specific PTP hardware clock, this can be enabled by specifying the hardware clock of the network interface:
 ```toml
 hardware-clock = "/path/to/hardware/clock/device"
@@ -38,7 +40,7 @@ Hardware Receive Filter Modes:
 ```
 Here, the number after `PTP Hardware Clock` indicates which hardware clock device should be used. The 0 in this case means `/dev/ptp0`.
 
-# Starting the daemon
+## Starting the daemon
 
 We can now start the statime daemon through systemd with
 ```
@@ -71,6 +73,6 @@ nov 24 09:49:46 magnesium statime[13032]: [08:49:46.6230144.500732422][statime::
 nov 24 09:49:46 magnesium statime[13032]: [08:49:46.6230444.90814209][statime::filters::basic][INFO] Offset to master: 4.85575e4ns, corrected with phase change -1.2139375e4ns and freq change -8.688730125938628e-2ppm
 ```
 
-# Further steps
+## Further steps
 
 Further information on configuration options for statime can be found in the [man page](../man/statime.8.md)

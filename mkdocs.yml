@@ -28,8 +28,7 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
 nav:
-  - Home: index.md
   - Guide:
-    - guide/setup.md
+    - guide/getting-started.md
   - Man Pages:
     - statime(8): man/statime.8.md
