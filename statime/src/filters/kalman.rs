@@ -1,4 +1,6 @@
 use super::matrix::{Matrix, Vector};
+#[allow(unused_imports)]
+use crate::float_polyfill::FloatPolyfill;
 use crate::{
     filters::Filter,
     port::Measurement,
