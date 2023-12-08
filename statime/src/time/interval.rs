@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use crate::float_polyfill::FloatPolyfill;
+
 /// A log2 representation of seconds used to describe the pacing of events in
 /// PTP
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -69,12 +72,6 @@ impl Interval {
         core::time::Duration::from_secs_f64(self.seconds())
     }
 
-    #[cfg(not(feature = "std"))]
-    fn as_f64(self) -> f64 {
-        libm::pow(2.0f64, self.0 as f64)
-    }
-
-    #[cfg(feature = "std")]
     fn as_f64(self) -> f64 {
         2.0f64.powi(self.0 as i32)
     }

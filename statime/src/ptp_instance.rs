@@ -6,6 +6,8 @@ use core::{
 use atomic_refcell::AtomicRefCell;
 use rand::Rng;
 
+#[allow(unused_imports)]
+use crate::float_polyfill::FloatPolyfill;
 use crate::{
     bmc::{acceptable_master::AcceptableMasterList, bmca::Bmca},
     clock::Clock,
@@ -206,10 +208,7 @@ impl<F: Filter> PtpInstance<F> {
         self.state.borrow_mut().bmca(
             ports,
             Duration::from_seconds(
-                #[cfg(feature = "std")]
                 2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
-                #[cfg(not(feature = "std"))]
-                libm::pow(2f64, self.log_bmca_interval.load(Ordering::Relaxed) as f64),
             ),
         )
     }
@@ -217,10 +216,7 @@ impl<F: Filter> PtpInstance<F> {
     /// Time to wait between calls to [`PtpInstance::bmca`]
     pub fn bmca_interval(&self) -> core::time::Duration {
         core::time::Duration::from_secs_f64(
-            #[cfg(feature = "std")]
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
-            #[cfg(not(feature = "std"))]
-            libm::pow(2f64, self.log_bmca_interval.load(Ordering::Relaxed) as f64),
         )
     }
 }

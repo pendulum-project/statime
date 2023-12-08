@@ -13,6 +13,8 @@ use fixed::{
 
 use super::Interval;
 use crate::datastructures::common::TimeInterval;
+#[allow(unused_imports)]
+use crate::float_polyfill::FloatPolyfill;
 
 /// A duration is a span of time that can also be negative.
 ///
@@ -93,7 +95,7 @@ impl Duration {
 
     /// Converts a log interval (as defined by the PTP spec) to a duration
     pub fn from_log_interval(log_interval: i8) -> Self {
-        let seconds = libm::pow(2.0f64, log_interval as f64);
+        let seconds = 2.0f64.powi(log_interval as i32);
         let nanos = seconds * 1_000_000_000.0;
         Self::from_fixed_nanos(nanos)
     }
