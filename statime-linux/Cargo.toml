@@ -15,6 +15,10 @@ rust-version.workspace = true
 name = "statime"
 path = "src/main.rs"
 
+[[bin]]
+name = "statime-metrics-exporter"
+path = "bin/statime-metrics-exporter.rs"
+
 [dependencies]
 statime.workspace = true
 

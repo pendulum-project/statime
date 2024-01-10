@@ -1,5 +1,6 @@
 use std::{
     fs::read_to_string,
+    net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -33,6 +34,8 @@ pub struct Config {
     pub priority2: u8,
     #[serde(rename = "port")]
     pub ports: Vec<PortConfig>,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -212,11 +215,52 @@ fn default_delay_mechanism() -> i8 {
     0
 }
 
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct ObservabilityConfig {
+    #[serde(
+        default = "default_loglevel",
+        deserialize_with = "deserialize_loglevel"
+    )]
+    pub loglevel: log::LevelFilter,
+    #[serde(default)]
+    pub observation_path: Option<PathBuf>,
+    #[serde(default = "default_observation_permissions")]
+    pub observation_permissions: u32,
+    #[serde(default = "default_metrics_exporter_listen")]
+    pub metrics_exporter_listen: SocketAddr,
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            loglevel: default_observability_loglevel(),
+            observation_path: Default::default(),
+            observation_permissions: default_observation_permissions(),
+            metrics_exporter_listen: default_metrics_exporter_listen(),
+        }
+    }
+}
+
+const fn default_observability_loglevel() -> log::LevelFilter {
+    log::LevelFilter::Info
+}
+
+const fn default_observation_permissions() -> u32 {
+    0o666
+}
+
+fn default_metrics_exporter_listen() -> SocketAddr {
+    "127.0.0.1:9975".parse().unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
     use timestamped_socket::interface::InterfaceName;
+
+    use crate::config::ObservabilityConfig;
 
     // Minimal amount of config results in default values
     #[test]
@@ -247,6 +291,7 @@ interface = "enp0s31f6"
             priority1: 128,
             priority2: 128,
             ports: vec![expected_port],
+            observability: ObservabilityConfig::default(),
         };
 
         let actual = toml::from_str(MINIMAL_CONFIG).unwrap();
