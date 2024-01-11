@@ -7,7 +7,7 @@ use std::time::Instant;
 use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
 
-use crate::metrics::exporter::ObservableState;
+use crate::metrics::exporter::{ObservableState, ProgramData};
 
 pub async fn spawn(
     config: &super::config::ObservabilityConfig,
@@ -42,7 +42,9 @@ async fn observer(config: super::config::ObservabilityConfig) -> std::io::Result
     loop {
         let (mut stream, _addr) = peers_listener.accept().await?;
 
-        let observe = ObservableState { test: "test metric".to_string() };
+        let observe = ObservableState {
+            program: ProgramData::with_uptime(start_time.elapsed().as_secs_f64()),
+        };
 
         write_json(&mut stream, &observe).await?;
     }
