@@ -1,16 +1,44 @@
-use std::path::{PathBuf, Path};
-use std::fmt::Write;
 use clap::Parser;
-use tokio::net::{TcpListener, UnixStream};
-use tokio::io::AsyncWriteExt;
-use tokio::io::AsyncReadExt;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
+use std::path::{Path, PathBuf};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::net::{TcpListener, UnixStream};
 
 use crate::config::Config;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
-    pub test: String,
+    pub program: ProgramData,
+}
+
+impl ProgramData {
+    pub fn with_uptime(uptime_seconds: f64) -> ProgramData {
+        ProgramData {
+            uptime_seconds,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProgramData {
+    pub version: String,
+    pub build_commit: String,
+    pub build_commit_date: String,
+    pub uptime_seconds: f64,
+}
+
+impl Default for ProgramData {
+    fn default() -> Self {
+        Self {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            build_commit: env!("STATIME_GIT_REV").to_owned(),
+            build_commit_date: env!("STATIME_GIT_DATE").to_owned(),
+            uptime_seconds: 0.0,
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -34,7 +62,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
     };
-    
+
+    crate::setup_logger(config.loglevel)?;
+
     let observation_socket_path = match config.observability.observation_path {
         Some(path) => path,
         None => {
@@ -44,7 +74,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     println!(
-        "starting ntp-metrics-exporter on {}",
+        "starting statime-metrics-exporter on {}",
         &config.observability.metrics_exporter_listen
     );
 
@@ -61,7 +91,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(e) => {
                 log::warn!("error: {e}");
-                eprintln!("{e}");
                 const ERROR_REPONSE: &str = concat!(
                     "HTTP/1.1 500 Internal Server Error\r\n",
                     "content-type: text/plain\r\n",
@@ -97,10 +126,9 @@ where
     T: serde::Deserialize<'a>,
 {
     buffer.clear();
-    
+
     let n = stream.read_buf(buffer).await?;
     buffer.truncate(n);
-
     serde_json::from_slice(buffer)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
 }
@@ -108,8 +136,7 @@ where
 async fn handler(buf: &mut String, observation_socket_path: &Path) -> std::io::Result<()> {
     let mut stream = tokio::net::UnixStream::connect(observation_socket_path).await?;
     let mut msg = Vec::with_capacity(16 * 1024);
-    let observable_state: ObservableState =
-        read_json(&mut stream, &mut msg).await?;
+    let observable_state: ObservableState = read_json(&mut stream, &mut msg).await?;
 
     format_response(buf, &observable_state)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "formatting error"))
@@ -155,14 +182,22 @@ impl MetricType {
 }
 
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
-    
     format_metric(
         w,
-        "statime_test_label",
-        "Statime test description",
+        "statime_uptime",
+        "The time that statime has been running",
         MetricType::Counter,
         None,
-        vec![Measurement { labels: vec![("Test label", "test".to_string())], value: &state.test }, ],
+        vec![
+            Measurement {
+                labels: vec![
+                    ("version", state.program.version.clone()),
+                    ("build_commit", state.program.build_commit.clone()),
+                    ("build_commit_date", state.program.build_commit_date.clone()),
+                ],
+                value: state.program.uptime_seconds,
+            },
+        ],
     )?;
 
     w.write_str("# EOF\n")?;
