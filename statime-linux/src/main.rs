@@ -6,7 +6,6 @@ use std::{
 };
 
 use clap::Parser;
-use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
@@ -357,11 +356,8 @@ async fn actual_main() {
         }
     }
 
-    // The observer for the metrics exporter    
-    statime_linux::observer::spawn(
-        &config.observability,
-    )
-        .await;
+    // The observer for the metrics exporter
+    statime_linux::observer::spawn(&config.observability).await;
 
     run(
         instance,
@@ -385,7 +381,7 @@ async fn run(
     // run bmca over all of the ports at the same time. The ports don't perform
     // their normal actions at this time: bmca is stop-the-world!
     let mut bmca_timer = pin!(Timer::new());
-    
+
     loop {
         // reset bmca timer
         bmca_timer.as_mut().reset(instance.bmca_interval());

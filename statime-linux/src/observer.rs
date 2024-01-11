@@ -1,17 +1,15 @@
 use std::fs::Permissions;
-use tokio::io::AsyncWriteExt;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::time::Instant;
+use tokio::io::AsyncWriteExt;
 
 use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
 
 use crate::metrics::exporter::{ObservableState, ProgramData};
 
-pub async fn spawn(
-    config: &super::config::ObservabilityConfig,
-) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(config: &super::config::ObservabilityConfig) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
         let result = observer(config).await;

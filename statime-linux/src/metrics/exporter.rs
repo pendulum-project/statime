@@ -186,18 +186,16 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
         w,
         "statime_uptime",
         "The time that statime has been running",
-        MetricType::Counter,
-        None,
-        vec![
-            Measurement {
-                labels: vec![
-                    ("version", state.program.version.clone()),
-                    ("build_commit", state.program.build_commit.clone()),
-                    ("build_commit_date", state.program.build_commit_date.clone()),
-                ],
-                value: state.program.uptime_seconds,
-            },
-        ],
+        MetricType::Gauge,
+        Some(Unit::Seconds),
+        vec![Measurement {
+            labels: vec![
+                ("version", state.program.version.clone()),
+                ("build_commit", state.program.build_commit.clone()),
+                ("build_commit_date", state.program.build_commit_date.clone()),
+            ],
+            value: state.program.uptime_seconds,
+        }],
     )?;
 
     w.write_str("# EOF\n")?;
