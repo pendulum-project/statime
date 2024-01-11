@@ -133,7 +133,7 @@ pub enum NetworkMode {
 impl Config {
     /// Parse config from file
     pub fn from_file(file: &Path) -> Result<Config, ConfigError> {
-        let meta = std::fs::metadata(file).unwrap();
+        let meta = std::fs::metadata(file).map_err(ConfigError::Io)?;
         let perm = meta.permissions();
 
         if perm.mode() as libc::mode_t & libc::S_IWOTH != 0 {

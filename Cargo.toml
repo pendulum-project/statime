@@ -39,6 +39,7 @@ toml = ">=0.5.0, <0.9.0"
 tokio = "1.33"
 rand = { version = "0.8.5", default-features = false }
 serde = { version = "1.0.192", features = ["derive"] }
+serde_json.workspace = { version = "1.0.111" }
 az = "1.2.1"
 fixed = "1.24"
 libm = "0.2.8"

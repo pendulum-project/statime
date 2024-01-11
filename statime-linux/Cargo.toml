@@ -30,9 +30,10 @@ libc.workspace = true
 log = { workspace = true, default-features = true }
 pin-project-lite.workspace = true
 toml.workspace = true
-tokio = { workspace = true, features = ["net", "rt-multi-thread", "time", "macros", "sync"] }
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "time", "macros", "sync", "io-util"] }
 rand = { workspace = true, default-features = false, features = ["std", "std_rng"] }
 serde.workspace = true
+serde_json.workspace = true
 
 clock-steering.workspace = true
 timestamped-socket.workspace = true
