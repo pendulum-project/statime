@@ -147,6 +147,7 @@ struct Measurement<T> {
     value: T,
 }
 
+#[allow(dead_code)]
 impl<T> Measurement<T> {
     fn simple(value: T) -> Vec<Measurement<T>> {
         vec![Measurement {
@@ -167,6 +168,7 @@ impl Unit {
     }
 }
 
+#[allow(dead_code)]
 enum MetricType {
     Gauge,
     Counter,
