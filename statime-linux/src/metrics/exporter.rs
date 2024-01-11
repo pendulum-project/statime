@@ -155,13 +155,14 @@ impl MetricType {
 }
 
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
+    
     format_metric(
         w,
-        "ntp_server_nts_denied_packets_total",
-        "Number of denied NTS packets",
+        "statime_test_label",
+        "Statime test description",
         MetricType::Counter,
         None,
-        vec![Measurement { labels: vec![("Test label", "test".to_string())], value: 33 }, ],
+        vec![Measurement { labels: vec![("Test label", "test".to_string())], value: &state.test }, ],
     )?;
 
     w.write_str("# EOF\n")?;

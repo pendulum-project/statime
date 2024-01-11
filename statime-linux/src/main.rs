@@ -390,6 +390,12 @@ async fn actual_main() {
         }
     }
 
+    // The observer for the metrics exporter    
+    statime_linux::observer::spawn(
+        &config.observability,
+    )
+        .await;
+
     run(
         instance,
         bmca_notify_sender,
@@ -412,7 +418,7 @@ async fn run(
     // run bmca over all of the ports at the same time. The ports don't perform
     // their normal actions at this time: bmca is stop-the-world!
     let mut bmca_timer = pin!(Timer::new());
-
+    
     loop {
         // reset bmca timer
         bmca_timer.as_mut().reset(instance.bmca_interval());
