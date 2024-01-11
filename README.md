@@ -37,7 +37,7 @@ cargo +nightly build
 ```
 and then run it as root with
 ```
-sudo ./target/debug/statime-linux -i <ETHERNET INTERFACE NAME>
+sudo ./target/debug/statime -i <ETHERNET INTERFACE NAME>
 ```
 
 ## PTPd setup for testing
