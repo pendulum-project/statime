@@ -267,6 +267,8 @@ async fn actual_main() {
     let mut clock_name_map = HashMap::new();
     let mut clock_port_map = Vec::with_capacity(config.ports.len());
 
+    let mut ports = Vec::with_capacity(config.ports.len());
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -299,11 +301,10 @@ async fn actual_main() {
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
         let (port_task_sender, main_task_receiver) = tokio::sync::mpsc::channel(1);
 
-        main_task_sender
-            .send(port)
-            .await
-            .expect("space in channel buffer");
-
+        // We can't send the port yet, since that may start running on the port,
+        // inhibiting write access to the instance and making it impossible to
+        // create more ports.
+        ports.push(port);
         main_task_senders.push(main_task_sender);
         main_task_receivers.push(main_task_receiver);
 
@@ -354,6 +355,14 @@ async fn actual_main() {
                 ));
             }
         }
+    }
+
+    // All ports created, so we can start running them.
+    for (i, port) in ports.into_iter().enumerate() {
+        main_task_senders[i]
+            .send(port)
+            .await
+            .expect("space in channel buffer");
     }
 
     // The observer for the metrics exporter
