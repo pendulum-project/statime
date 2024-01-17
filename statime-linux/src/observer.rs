@@ -12,7 +12,7 @@ use crate::{
     metrics::exporter::{ObservableState, ProgramData, DefaultDS},
 };
 
-pub async fn spawn(config: Config) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(config: &Config) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
         let result = observer(config).await;
@@ -47,7 +47,7 @@ async fn observer(
 
         let observe = ObservableState {
             program: ProgramData::with_uptime(start_time.elapsed().as_secs_f64()),
-            default_ds: DefaultDS::asdf(&config),
+            default_ds: DefaultDS::from_config(&config),
         };
 
         write_json(&mut stream, &observe).await?;

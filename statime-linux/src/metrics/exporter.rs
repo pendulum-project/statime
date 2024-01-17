@@ -22,7 +22,7 @@ pub struct DefaultDS {
 }
 
 impl DefaultDS {
-    pub fn asdf(config: &Config) -> Self {
+    pub fn from_config(config: &Config) -> Self {
         Self {
             //clock_identity: config.identity
             number_ports: config.ports.len() as u16,
@@ -216,7 +216,15 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
             value: state.program.uptime_seconds,
         }],
     )?;
-
+    format_metric(
+        w,
+        "number_ports",
+        "The amount of ports assigned",
+        MetricType::Gauge,
+        None,
+        Measurement::simple(state.default_ds.number_ports),
+    )?;
+    
     w.write_str("# EOF\n")?;
     Ok(())
 }

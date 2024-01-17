@@ -269,6 +269,9 @@ async fn actual_main() {
 
     let mut ports = Vec::with_capacity(config.ports.len());
 
+    // The observer for the metrics exporter
+    statime_linux::observer::spawn(&config).await;
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -364,9 +367,6 @@ async fn actual_main() {
             .await
             .expect("space in channel buffer");
     }
-
-    // The observer for the metrics exporter
-    statime_linux::observer::spawn(&config.observability).await;
 
     run(
         instance,
