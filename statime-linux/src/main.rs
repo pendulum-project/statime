@@ -6,7 +6,6 @@ use std::{
 };
 
 use clap::Parser;
-use fern::colors::Color;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
@@ -82,39 +81,6 @@ pub struct Args {
         default_value = "/etc/statime/statime.toml"
     )]
     config_file: Option<PathBuf>,
-}
-
-fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
-    let colors = fern::colors::ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        .info(Color::BrightGreen)
-        .debug(Color::BrightBlue)
-        .trace(Color::BrightBlack);
-
-    fern::Dispatch::new()
-        .format(move |out, message, record| {
-            use std::time::{SystemTime, UNIX_EPOCH};
-
-            let delta = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-
-            let h = delta.as_secs() % (24 * 60 * 60) / (60 * 60);
-            let m = delta.as_secs() % (60 * 60) / 60;
-            let s = delta.as_secs() % 60;
-            let f = delta.as_secs_f64().fract() * 1e7;
-
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                format_args!("[{h:02}:{m:02}:{s:02}.{f:07}]"),
-                record.target(),
-                colors.color(record.level()),
-                message
-            ))
-        })
-        .level(level)
-        .chain(std::io::stdout())
-        .apply()?;
-    Ok(())
 }
 
 pin_project_lite::pin_project! {
@@ -264,7 +230,7 @@ async fn actual_main() {
     )
     .unwrap_or_else(|e| panic!("error loading config: {e}"));
 
-    setup_logger(config.loglevel).expect("could not setup logging");
+    statime_linux::setup_logger(config.loglevel).expect("could not setup logging");
 
     let clock_identity = config.identity.unwrap_or(ClockIdentity(
         get_clock_id().expect("could not get clock identity"),
@@ -398,6 +364,9 @@ async fn actual_main() {
             .await
             .expect("space in channel buffer");
     }
+
+    // The observer for the metrics exporter
+    statime_linux::observer::spawn(&config.observability).await;
 
     run(
         instance,
