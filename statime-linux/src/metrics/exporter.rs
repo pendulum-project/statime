@@ -22,9 +22,11 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::exporter::Args;
-    use clap::Parser;
     use std::path::Path;
+
+    use clap::Parser;
+
+    use crate::metrics::exporter::Args;
 
     const BINARY: &str = "/usr/bin/statime-metrics-exporter";
 
