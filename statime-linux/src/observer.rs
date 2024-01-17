@@ -7,9 +7,12 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
 
-use crate::metrics::exporter::{ObservableState, ProgramData};
+use crate::{
+    config::Config,
+    metrics::exporter::{ObservableState, ProgramData, DefaultDS},
+};
 
-pub async fn spawn(config: &super::config::ObservabilityConfig) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(config: Config) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
         let result = observer(config).await;
@@ -21,11 +24,13 @@ pub async fn spawn(config: &super::config::ObservabilityConfig) -> JoinHandle<st
     })
 }
 
-async fn observer(config: super::config::ObservabilityConfig) -> std::io::Result<()> {
+async fn observer(
+    config: Config,
+) -> std::io::Result<()> {
     let start_time = Instant::now();
 
-    let path = match config.observation_path {
-        Some(path) => path,
+    let path = match config.observability.observation_path {
+        Some(ref path) => path,
         None => return Ok(()),
     };
 
@@ -33,7 +38,7 @@ async fn observer(config: super::config::ObservabilityConfig) -> std::io::Result
     // by default, the socket inherits root permissions, but the client should not need
     // elevated permissions to read from the socket. So we explicitly set the permissions
     let permissions: std::fs::Permissions =
-        PermissionsExt::from_mode(config.observation_permissions);
+        PermissionsExt::from_mode(config.observability.observation_permissions);
 
     let peers_listener = create_unix_socket_with_permissions(&path, permissions)?;
 
@@ -42,6 +47,7 @@ async fn observer(config: super::config::ObservabilityConfig) -> std::io::Result
 
         let observe = ObservableState {
             program: ProgramData::with_uptime(start_time.elapsed().as_secs_f64()),
+            default_ds: DefaultDS::asdf(&config),
         };
 
         write_json(&mut stream, &observe).await?;

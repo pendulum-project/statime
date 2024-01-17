@@ -11,13 +11,21 @@ use crate::config::Config;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
     pub program: ProgramData,
+    pub default_ds: DefaultDS,
 }
 
-impl ProgramData {
-    pub fn with_uptime(uptime_seconds: f64) -> ProgramData {
-        ProgramData {
-            uptime_seconds,
-            ..Default::default()
+/// defailtDS as specified by 8.2.1.1 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DefaultDS {
+    //pub clock_identity: Option<String>,
+    pub number_ports: u16,
+}
+
+impl DefaultDS {
+    pub fn asdf(config: &Config) -> Self {
+        Self {
+            //clock_identity: config.identity
+            number_ports: config.ports.len() as u16,
         }
     }
 }
@@ -28,6 +36,15 @@ pub struct ProgramData {
     pub build_commit: String,
     pub build_commit_date: String,
     pub uptime_seconds: f64,
+}
+
+impl ProgramData {
+    pub fn with_uptime(uptime_seconds: f64) -> ProgramData {
+        ProgramData {
+            uptime_seconds,
+            ..Default::default()
+        }
+    }
 }
 
 impl Default for ProgramData {
