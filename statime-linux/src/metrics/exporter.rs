@@ -26,6 +26,13 @@ impl DefaultDS {
         Self {
             //clock_identity: config.identity
             number_ports: config.ports.len() as u16,
+}
+
+impl ProgramData {
+    pub fn with_uptime(uptime_seconds: f64) -> ProgramData {
+        ProgramData {
+            uptime_seconds,
+            ..Default::default()
         }
     }
 }
@@ -216,6 +223,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
             value: state.program.uptime_seconds,
         }],
     )?;
+
     format_metric(
         w,
         "number_ports",
