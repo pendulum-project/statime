@@ -368,12 +368,6 @@ async fn actual_main() {
             .expect("space in channel buffer");
     }
 
-<<<<<<< HEAD
-=======
-    // The observer for the metrics exporter
-    statime_linux::observer::spawn(&config.observability).await;
-
->>>>>>> origin
     run(
         instance,
         bmca_notify_sender,
