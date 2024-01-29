@@ -29,7 +29,7 @@ will be indicated by each configuration setting shown.
 :   The PTP domain of this instance. All instances in domain are synchronized to the Grandmaster
     Clock of the domain, but are not necessarily synchronized to PTP clocks in another domain.
 
-`sdo_id` = *u12* (**0**)
+`sdo-id` = *u12* (**0**)
 :   The "source domain identity" of this PTP instance. Together with the `domain` it identifies a domain.
 
 `priority1` = *priority* (**128**)
@@ -43,34 +43,34 @@ will be indicated by each configuration setting shown.
 `interface` = *interface name*
 :   The network interface of this PTP port. For instance `"lo"` or `"enp0s31f6"`
 
-`announce_interval` = *interval* (**1**)
+`announce-interval` = *interval* (**1**)
 :   How often an announce message is sent by a master.
     Defined as an exponent of 2, so a value of 1 means every 2^1 = 2 seconds.
 
-`sync_interval` = *interval* (**0**)
+`sync-interval` = *interval* (**0**)
 :   How often sync message is sent by a master.
     Defined as an exponent of 2, so a value of 0 means every 2^0 = 1 seconds.
 
-`announce_receipt_timeout` = *number of announce intervals* (**3**)
+`announce-receipt-timeout` = *number of announce intervals* (**3**)
 :   Number of announce intervals to wait for announce messages from other masters before the port becomes master itself.
 
-`delay_asymmetry` = *nanoseconds* (**0**)
+`delay-asymmetry` = *nanoseconds* (**0**)
 :   Correct for a difference between slave-to-master and master-to-slave propagation time.
     The value is positive when the slave-to-master propagation time is longer than the master-to-slave propagation time.
 
-`delay_mechanism` = *interval* (**0**)
+`delay-mechanism` = *interval* (**0**)
 :   How often delay request messages are sent by a slave in end-to-end mode.
     Currently the only supported delay mechanism is end-to-end (E2E).
     Defined as an exponent of 2, so a value of 0 means every 2^0 = 1 seconds
 
-`master_only` = *bool* (**false**)
+`master-only` = *bool* (**false**)
 :   The port is always a master instance, and will never become a slave instance.
 
-`hardware_clock` = *path* (**unset**)
+`hardware-clock` = *path* (**unset**)
 :   Path to a hardware clock device, for instance `"/dev/ptp0"`.
 
-`acceptable_master_list` = [ *clock identity*, .. ] (**unset**)
+`acceptable-master-list` = [ *clock identity*, .. ] (**unset**)
 :   List of clock identities that this port will accept as its master.
     A clock identity is encoded as a 16-character hexadecimal string, for example
-    `acceptable_master_list = ["00FFFFFFFFFFFFFB"]`.
+    `acceptable-master-list = ["00FFFFFFFFFFFFFB"]`.
     The default is to accept all clock identities.
