@@ -7,27 +7,12 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, UnixStream};
 
 use crate::config::Config;
+use statime::ObservableInstanceState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
     pub program: ProgramData,
-    pub default_ds: DefaultDS,
-}
-
-/// defailtDS as specified by 8.2.1.1 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DefaultDS {
-    //pub clock_identity: Option<String>,
-    pub number_ports: u16,
-}
-
-impl DefaultDS {
-    pub fn from_config(config: &Config) -> Self {
-        Self {
-            //clock_identity: config.identity
-            number_ports: config.ports.len() as u16,
-        }
-    }
+    pub instance: Option<ObservableInstanceState>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -223,9 +208,12 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
         "The amount of ports assigned",
         MetricType::Gauge,
         None,
-        Measurement::simple(state.default_ds.number_ports),
+        vec![Measurement {
+            labels: vec![("test", "asdf".to_string())],
+            value: format!("{:?}", state.instance),
+        }],
     )?;
-    
+
     w.write_str("# EOF\n")?;
     Ok(())
 }

@@ -2,6 +2,7 @@ use std::fs::Permissions;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::time::Instant;
+use statime::ObservableInstanceState;
 use tokio::io::AsyncWriteExt;
 
 use tokio::net::UnixStream;
@@ -9,13 +10,13 @@ use tokio::task::JoinHandle;
 
 use crate::{
     config::Config,
-    metrics::exporter::{ObservableState, ProgramData, DefaultDS},
+    metrics::exporter::{ObservableState, ProgramData},
 };
 
-pub async fn spawn(config: &Config) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(config: &Config, instance_reader: tokio::sync::watch::Receiver<Option<ObservableInstanceState>>) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
-        let result = observer(config).await;
+        let result = observer(config, instance_reader).await;
         if let Err(ref e) = result {
             log::warn!("Abnormal termination of the state observer: {e}");
             log::warn!("The state observer will not be available");
@@ -26,6 +27,7 @@ pub async fn spawn(config: &Config) -> JoinHandle<std::io::Result<()>> {
 
 async fn observer(
     config: Config,
+    instance_reader: tokio::sync::watch::Receiver<Option<ObservableInstanceState>>
 ) -> std::io::Result<()> {
     let start_time = Instant::now();
 
@@ -40,14 +42,14 @@ async fn observer(
     let permissions: std::fs::Permissions =
         PermissionsExt::from_mode(config.observability.observation_permissions);
 
-    let peers_listener = create_unix_socket_with_permissions(&path, permissions)?;
+    let peers_listener = create_unix_socket_with_permissions(path, permissions)?;
 
     loop {
         let (mut stream, _addr) = peers_listener.accept().await?;
 
         let observe = ObservableState {
             program: ProgramData::with_uptime(start_time.elapsed().as_secs_f64()),
-            default_ds: DefaultDS::from_config(&config),
+            instance: instance_reader.borrow().to_owned(),
         };
 
         write_json(&mut stream, &observe).await?;

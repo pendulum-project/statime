@@ -8,6 +8,7 @@ use crate::datastructures::{WireFormat, WireFormatError};
 ///
 /// For more details, see *IEEE1588-2019 section 7.5.2.2.2*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClockIdentity(pub [u8; 8]);
 
 impl ClockIdentity {

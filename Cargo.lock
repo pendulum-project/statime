@@ -517,6 +517,8 @@ dependencies = [
  "libm",
  "log",
  "rand",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

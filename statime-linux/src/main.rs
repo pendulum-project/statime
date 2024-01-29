@@ -250,12 +250,19 @@ async fn actual_main() {
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
+    let (instance_sender, instance_receiver) =
+        tokio::sync::watch::channel(None);
+
     // Leak to get a static reference, the ptp instance will be around for the rest
     // of the program anyway
     let instance = Box::leak(Box::new(PtpInstance::new(
         instance_config,
         time_properties_ds,
+        instance_sender,
     )));
+        
+    // The observer for the metrics exporter
+    statime_linux::observer::spawn(&config, instance_receiver).await;
 
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
 
@@ -268,9 +275,6 @@ async fn actual_main() {
     let mut clock_port_map = Vec::with_capacity(config.ports.len());
 
     let mut ports = Vec::with_capacity(config.ports.len());
-
-    // The observer for the metrics exporter
-    statime_linux::observer::spawn(&config).await;
 
     for port_config in config.ports {
         let interface = port_config.interface;

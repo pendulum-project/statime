@@ -18,7 +18,7 @@ use crate::{
     },
     filters::Filter,
     port::{InBmca, Port},
-    time::Duration,
+    time::Duration, ObservableInstanceState,
 };
 
 /// A PTP node.
@@ -85,6 +85,7 @@ use crate::{
 pub struct PtpInstance<F> {
     state: AtomicRefCell<PtpInstanceState>,
     log_bmca_interval: AtomicI8,
+    instance_sender: tokio::sync::watch::Sender<Option<ObservableInstanceState>>,
     _filter: PhantomData<F>,
 }
 
@@ -148,7 +149,11 @@ impl PtpInstanceState {
 impl<F> PtpInstance<F> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
-    pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
+    pub fn new(
+        config: InstanceConfig,
+        time_properties_ds: TimePropertiesDS,
+        instance_sender: tokio::sync::watch::Sender<Option<ObservableInstanceState>>,
+    ) -> Self {
         let default_ds = DefaultDS::new(config);
         Self {
             state: AtomicRefCell::new(PtpInstanceState {
@@ -158,6 +163,7 @@ impl<F> PtpInstance<F> {
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),
+            instance_sender,
             _filter: PhantomData,
         }
     }
@@ -187,6 +193,12 @@ impl<F: Filter> PtpInstance<F> {
             port_number: state.default_ds.number_ports,
         };
         state.default_ds.number_ports += 1;
+
+        // Don't care if there's no receiver
+        let _ = self.instance_sender.send(Some(ObservableInstanceState {
+            default_ds: state.default_ds.into(),
+        }));
+
         Port::new(
             &self.state,
             config,
@@ -218,5 +230,16 @@ impl<F: Filter> PtpInstance<F> {
         core::time::Duration::from_secs_f64(
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
+    }
+
+    /// Read the current instance state in a serializable format
+    pub fn observe_state(&self) -> ObservableInstanceState {
+        let state = self.state.borrow();
+        ObservableInstanceState {
+            default_ds: state.default_ds.into(),
+            //current_ds: state.current_ds,
+            //parent_ds: state.parent_ds.clone(),
+            //time_properties_ds: state.time_properties_ds,
+        }
     }
 }

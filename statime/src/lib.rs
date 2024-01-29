@@ -96,10 +96,55 @@ pub mod time;
 pub use clock::Clock;
 pub use ptp_instance::PtpInstance;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Helper types used for fuzzing
 ///
 /// Enabled by the `fuzz` `feature`
 #[cfg(feature = "fuzz")]
 pub mod fuzz {
     pub use crate::datastructures::messages::FuzzMessage;
+}
+
+/// Observable version of the InstanceState struct
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct ObservableInstanceState {
+    default_ds: ObservableDefaultDS
+}
+
+/// Observable version of the InstanceState struct
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct ObservableDefaultDS {
+    /// 
+    pub clock_identity: config::ClockIdentity,
+    /// 
+    pub number_ports: u16,
+    /// 
+    pub clock_quality: config::ClockQuality,
+    /// 
+    pub priority_1: u8,
+    /// 
+    pub priority_2: u8,
+    /// 
+    pub domain_number: u8,
+    /// 
+    pub slave_only: bool,
+    /// 
+    pub sdo_id: config::SdoId,
+}
+
+impl From<datastructures::datasets::DefaultDS> for ObservableDefaultDS {
+    fn from(v: datastructures::datasets::DefaultDS) -> Self {
+        Self {
+            clock_identity: v.clock_identity,
+            number_ports: v.number_ports,
+            clock_quality: v.clock_quality,
+            priority_1: v.priority_1,
+            priority_2: v.priority_2,
+            domain_number: v.domain_number,
+            slave_only: v.slave_only,
+            sdo_id: v.sdo_id,
+        }
+}
 }
