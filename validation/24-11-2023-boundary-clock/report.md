@@ -18,7 +18,7 @@ All machines except for the grandmaster used statime commit hash c8561310 as the
 
 For each test, all machines were turned on in their respective configuration, and the entire setup was then given at least 2 hours to fully stabilize. Then the time difference between the grandmaster and the i210 were measured every second over a time period of 2 hours.
 
-For this data we then calculated both the mean and the sample standard deviation. The mean represents a measure of assymetry in the setup, and will be ignored in the rest of this text as it can be easily corrected for. The sample standard deviation provides us with a measure of the quality of the synchronization.
+For this data we then calculated both the mean and the sample standard deviation. The mean represents a measure of asymetry in the setup, and will be ignored in the rest of this text as it can be easily corrected for. The sample standard deviation provides us with a measure of the quality of the synchronization.
 
 ## Results
 
