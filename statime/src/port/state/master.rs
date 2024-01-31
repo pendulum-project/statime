@@ -3,13 +3,13 @@ use core::fmt::Debug;
 use crate::{
     config::PortConfig,
     datastructures::{
-        common::PortIdentity,
+        common::{PortIdentity, TlvSetBuilder},
         datasets::DefaultDS,
-        messages::{DelayReqMessage, Header, Message, MessageBody},
+        messages::{DelayReqMessage, Header, Message, MessageBody, MAX_DATA_LEN},
     },
     port::{
-        sequence_id::SequenceIdGenerator, PortAction, PortActionIterator, TimestampContext,
-        TimestampContextInner,
+        sequence_id::SequenceIdGenerator, ForwardedTLVProvider, PortAction, PortActionIterator,
+        TimestampContext, TimestampContextInner,
     },
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
@@ -110,9 +110,31 @@ impl MasterState {
         global: &PtpInstanceState,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
+        tlv_provider: &mut impl ForwardedTLVProvider,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         log::trace!("sending announce message");
+
+        let mut tlv_buffer = [0; MAX_DATA_LEN];
+        let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
+
+        let mut message =
+            Message::announce(global, port_identity, self.announce_seq_ids.generate());
+        let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
+
+        while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
+            assert!(tlv.size() < tlv_margin);
+            if global.parent_ds.parent_port_identity != tlv.sender_identity {
+                // Ignore, shouldn't be forwarded
+                continue;
+            }
+
+            tlv_margin -= tlv.size();
+            // Will not fail as previous checks ensure sufficient space in buffer.
+            tlv_builder.add(tlv.tlv).unwrap();
+        }
+
+        message.suffix = tlv_builder.build();
 
         let packet_length =
             match Message::announce(global, port_identity, self.announce_seq_ids.generate())
@@ -212,6 +234,7 @@ mod tests {
             datasets::{CurrentDS, ParentDS, TimePropertiesDS},
             messages::{Header, SdoId, MAX_DATA_LEN},
         },
+        port::NoForwardedTLVs,
         time::{Duration, Interval},
     };
 
@@ -359,8 +382,13 @@ mod tests {
         };
         let mut state = MasterState::new();
 
-        let mut actions =
-            state.send_announce(&global, &config, PortIdentity::default(), &mut buffer);
+        let mut actions = state.send_announce(
+            &global,
+            &config,
+            PortIdentity::default(),
+            &mut NoForwardedTLVs,
+            &mut buffer,
+        );
 
         assert!(matches!(
             actions.next(),
@@ -382,8 +410,13 @@ mod tests {
 
         assert_eq!(msg.grandmaster_priority_1, 15);
 
-        let mut actions =
-            state.send_announce(&global, &config, PortIdentity::default(), &mut buffer);
+        let mut actions = state.send_announce(
+            &global,
+            &config,
+            PortIdentity::default(),
+            &mut NoForwardedTLVs,
+            &mut buffer,
+        );
 
         assert!(matches!(
             actions.next(),
