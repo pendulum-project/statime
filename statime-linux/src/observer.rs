@@ -2,7 +2,7 @@ use std::fs::Permissions;
 use std::os::unix::prelude::PermissionsExt;
 use std::path::Path;
 use std::time::Instant;
-use statime::ObservableInstanceState;
+use statime::observability::ObservableInstanceState;
 use tokio::io::AsyncWriteExt;
 
 use tokio::net::UnixStream;

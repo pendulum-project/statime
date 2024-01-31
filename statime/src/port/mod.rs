@@ -116,7 +116,7 @@ pub(crate) mod state;
 /// use statime::time::Interval;
 ///
 /// # let (instance_config, time_properties_ds) = unimplemented!();
-/// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds);
+/// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds, instance_sender);
 ///
 /// // TODO make these values sensible
 /// let interval = Interval::from_log_2(-2); // 2^(-2)s = 250ms

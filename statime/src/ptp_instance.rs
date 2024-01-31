@@ -17,8 +17,9 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
     filters::Filter,
+    observability::ObservableInstanceState,
     port::{InBmca, Port},
-    time::Duration, ObservableInstanceState,
+    time::Duration,
 };
 
 /// A PTP node.
@@ -71,6 +72,7 @@ use crate::{
 /// let mut instance = PtpInstance::<BasicFilter>::new(
 ///     instance_config,
 ///     time_properties_ds,
+///     instance_sender,
 /// );
 ///
 /// let mut port = instance.add_port(port_config, filter_config, clock, rng);

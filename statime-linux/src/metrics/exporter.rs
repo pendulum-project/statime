@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, UnixStream};
 
 use crate::config::Config;
-use statime::ObservableInstanceState;
+use statime::observability::ObservableInstanceState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
