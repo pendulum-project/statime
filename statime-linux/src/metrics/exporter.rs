@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, UnixStream};
 
 use crate::config::Config;
-use statime::observability::ObservableInstanceState;
+use statime::observability::{ObservableDefaultDS, ObservableInstanceState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
@@ -185,10 +185,67 @@ impl MetricType {
     }
 }
 
+fn format_default_ds(
+    w: &mut impl std::fmt::Write,
+    default_ds: &ObservableDefaultDS,
+) -> std::fmt::Result {
+    let clock_identity = format!("{}", default_ds.clock_identity);
+
+    format_metric(
+        w,
+        "number_ports",
+        "The amount of ports assigned",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: vec![("clock_identity", clock_identity.clone())],
+            value: default_ds.number_ports,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "quality_class",
+        "The PTP clock class",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: vec![("clock_identity", clock_identity.clone())],
+            value: default_ds.clock_quality.clock_class,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "quality_accuracy",
+        "The quality of the clock",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: vec![("clock_identity", clock_identity.clone())],
+            value: default_ds.clock_quality.clock_accuracy.to_primitive(),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "quality_offset_scaled_log_variance",
+        "2-log of the variance (in seconds^2) of the clock when not synchronized",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: vec![("clock_identity", clock_identity.clone())],
+            value: default_ds.clock_quality.offset_scaled_log_variance,
+        }],
+    )?;
+
+    Ok(())
+}
+
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
     format_metric(
         w,
-        "statime_uptime",
+        "uptime",
         "The time that statime has been running",
         MetricType::Gauge,
         Some(Unit::Seconds),
@@ -202,17 +259,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
         }],
     )?;
 
-    format_metric(
-        w,
-        "number_ports",
-        "The amount of ports assigned",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: vec![("test", "asdf".to_string())],
-            value: format!("{:?}", state.instance),
-        }],
-    )?;
+    format_default_ds(w, &state.instance.unwrap().default_ds)?;
 
     w.write_str("# EOF\n")?;
     Ok(())
@@ -227,9 +274,9 @@ fn format_metric<T: std::fmt::Display>(
     measurements: Vec<Measurement<T>>,
 ) -> std::fmt::Result {
     let name = if let Some(unit) = unit {
-        format!("{}_{}", name, unit.as_str())
+        format!("statime_{}_{}", name, unit.as_str())
     } else {
-        name.to_owned()
+        format!("statime_{}", name)
     };
 
     // write help text

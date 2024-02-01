@@ -46,6 +46,21 @@ impl WireFormat for ClockIdentity {
     }
 }
 
+#[cfg(feature = "std")]
+impl core::fmt::Display for ClockIdentity {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for (i, val) in self.0.iter().enumerate() {
+            if i != 0 {
+                write!(f, ":")?;
+            }
+            
+            write!(f, "{:02x}", val)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
