@@ -54,6 +54,7 @@ use crate::{
 /// # let filter_config = unimplemented!();
 /// # let clock: MockClock = unimplemented!();
 /// # let rng: rand::rngs::mock::StepRng = unimplemented!();
+/// # let instance_sender = unimplemented!();
 /// #
 /// use statime::PtpInstance;
 /// use statime::config::{AcceptAnyMaster, ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
