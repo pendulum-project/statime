@@ -14,7 +14,7 @@ use statime::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
-    PtpInstance,
+    PtpInstance, observability::ObservableInstanceState,
 };
 use statime_linux::{
     clock::LinuxClock,
@@ -250,15 +250,11 @@ async fn actual_main() {
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
-    let (instance_sender, instance_receiver) =
-        tokio::sync::watch::channel(None);
-
     // Leak to get a static reference, the ptp instance will be around for the rest
     // of the program anyway
     let instance = Box::leak(Box::new(PtpInstance::new(
         instance_config,
         time_properties_ds,
-        instance_sender,
     )));
         
     // The observer for the metrics exporter

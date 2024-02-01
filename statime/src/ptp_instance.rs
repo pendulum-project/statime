@@ -17,7 +17,7 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::ObservableInstanceState,
+    observability::{ObservableInstanceState, ObservableDefaultDS},
     port::{InBmca, Port},
     time::Duration,
 };
@@ -54,7 +54,6 @@ use crate::{
 /// # let filter_config = unimplemented!();
 /// # let clock: MockClock = unimplemented!();
 /// # let rng: rand::rngs::mock::StepRng = unimplemented!();
-/// # let instance_sender = unimplemented!();
 /// #
 /// use statime::PtpInstance;
 /// use statime::config::{AcceptAnyMaster, ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
@@ -69,6 +68,7 @@ use crate::{
 ///     sdo_id: Default::default(),
 /// };
 /// let time_properties_ds = TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
+/// let instance_sender = ;
 ///
 /// let mut instance = PtpInstance::<BasicFilter>::new(
 ///     instance_config,
@@ -88,7 +88,7 @@ use crate::{
 pub struct PtpInstance<F> {
     state: AtomicRefCell<PtpInstanceState>,
     log_bmca_interval: AtomicI8,
-    instance_sender: tokio::sync::watch::Sender<Option<ObservableInstanceState>>,
+    instance_sender: tokio::sync::watch::Sender<ObservableInstanceState>,
     _filter: PhantomData<F>,
 }
 
@@ -155,10 +155,13 @@ impl<F> PtpInstance<F> {
     pub fn new(
         config: InstanceConfig,
         time_properties_ds: TimePropertiesDS,
-        instance_sender: tokio::sync::watch::Sender<Option<ObservableInstanceState>>,
-    ) -> Self {
+    ) -> (Self, tokio::sync::watch::Receiver<ObservableInstanceState>) {
         let default_ds = DefaultDS::new(config);
-        Self {
+
+        let (instance_sender, instance_receiver) =
+            tokio::sync::watch::channel(ObservableInstanceState { default_ds: ObservableDefaultDS::from(default_ds) });
+        
+        (Self {
             state: AtomicRefCell::new(PtpInstanceState {
                 default_ds,
                 current_ds: Default::default(),
@@ -168,7 +171,7 @@ impl<F> PtpInstance<F> {
             log_bmca_interval: AtomicI8::new(i8::MAX),
             instance_sender,
             _filter: PhantomData,
-        }
+        }, instance_receiver)
     }
 }
 
@@ -198,9 +201,9 @@ impl<F: Filter> PtpInstance<F> {
         state.default_ds.number_ports += 1;
 
         // Don't care if there's no receiver
-        let _ = self.instance_sender.send(Some(ObservableInstanceState {
+        let _ = self.instance_sender.send(ObservableInstanceState {
             default_ds: state.default_ds.into(),
-        }));
+        });
 
         Port::new(
             &self.state,
