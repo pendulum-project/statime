@@ -12,9 +12,10 @@ publish.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std", "serde"]
+default = ["std", "ring", "serde"]
 std = []
 fuzz = ["std"]
+ring = ["dep:ring"]
 serde = ["dep:serde", "arrayvec/serde"]
 
 [dependencies]
@@ -25,6 +26,7 @@ libm.workspace = true
 log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
 serde = { workspace = true, optional = true }
+ring = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_test.workspace = true
