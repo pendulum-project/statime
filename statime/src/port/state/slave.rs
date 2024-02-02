@@ -2,10 +2,14 @@ use rand::Rng;
 
 use crate::{
     config::{DelayMechanism, PortConfig},
+    crypto::SecurityAssociationProvider,
     datastructures::{
         common::PortIdentity,
         datasets::DefaultDS,
-        messages::{DelayRespMessage, FollowUpMessage, Header, Message, MessageBody, SyncMessage},
+        messages::{
+            DelayRespMessage, FollowUpMessage, Header, Message, MessageBody, SyncMessage,
+            MAX_DATA_LEN,
+        },
     },
     filters::Filter,
     port::{
@@ -354,11 +358,21 @@ impl<F> SlaveState<F> {
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         log::debug!("Starting new delay measurement");
 
         let delay_id = self.delay_req_ids.generate();
-        let delay_req = Message::delay_req(default_ds, port_identity, delay_id);
+        let mut delay_req = Message::delay_req(default_ds, port_identity, delay_id);
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = port_config.spp {
+            if delay_req
+                .add_signature(spp, provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign delay request, sending without signature");
+            }
+        }
 
         let message_length = match delay_req.serialize(buffer) {
             Ok(length) => length,
@@ -445,6 +459,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{InstanceConfig, TimePropertiesDS},
+        crypto::NoSecurityProvider,
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             messages::{Header, SdoId, MAX_DATA_LEN},
@@ -675,6 +690,7 @@ mod tests {
             sync_interval: Interval::ONE_SECOND,
             master_only: Default::default(),
             delay_asymmetry: Default::default(),
+            spp: None,
         };
 
         let header = Header {
@@ -714,6 +730,7 @@ mod tests {
             port_identity,
             &default_ds,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::ResetDelayRequestTimer { .. }) = action.next() else {
@@ -812,6 +829,7 @@ mod tests {
             port_identity,
             &default_ds,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::ResetDelayRequestTimer { .. }) = action.next() else {
@@ -1141,6 +1159,7 @@ mod tests {
             sync_interval: Interval::ONE_SECOND,
             master_only: Default::default(),
             delay_asymmetry: Default::default(),
+            spp: None,
         };
 
         let mut action = state.handle_event_receive(
@@ -1180,6 +1199,7 @@ mod tests {
             port_identity,
             &default_ds,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::ResetDelayRequestTimer { .. }) = action.next() else {

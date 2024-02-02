@@ -5,6 +5,7 @@ use rand::Rng;
 use super::{ForwardedTLVProvider, PortActionIterator, TimestampContext};
 use crate::{
     config::PortConfig,
+    crypto::SecurityAssociationProvider,
     datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
     filters::Filter,
     ptp_instance::PtpInstanceState,
@@ -31,21 +32,28 @@ impl<F: Filter> PortState<F> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_timestamp<'a, C: Clock>(
         &mut self,
-        delay_asymmetry: Duration,
+        config: &PortConfig<()>,
         context: TimestampContext,
         timestamp: Time,
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         clock: &mut C,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match self {
             PortState::Slave(slave) => {
-                slave.handle_timestamp(delay_asymmetry, context, timestamp, clock)
+                slave.handle_timestamp(config.delay_asymmetry, context, timestamp, clock)
             }
-            PortState::Master(master) => {
-                master.handle_timestamp(context, timestamp, port_identity, default_ds, buffer)
-            }
+            PortState::Master(master) => master.handle_timestamp(
+                config,
+                context,
+                timestamp,
+                port_identity,
+                default_ds,
+                buffer,
+                provider,
+            ),
             PortState::Listening | PortState::Passive => actions![],
         }
     }
@@ -53,24 +61,27 @@ impl<F: Filter> PortState<F> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_event_receive<'a, C: Clock>(
         &mut self,
-        delay_asymmetry: Duration,
+        config: &PortConfig<()>,
         message: Message,
         timestamp: Time,
         min_delay_req_interval: Interval,
         port_identity: PortIdentity,
         clock: &mut C,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match self {
             PortState::Master(master) => master.handle_event_receive(
+                config,
                 message,
                 timestamp,
                 min_delay_req_interval,
                 port_identity,
                 buffer,
+                provider,
             ),
             PortState::Slave(slave) => {
-                slave.handle_event_receive(delay_asymmetry, message, timestamp, clock)
+                slave.handle_event_receive(config.delay_asymmetry, message, timestamp, clock)
             }
             PortState::Listening | PortState::Passive => actions![],
         }
@@ -123,10 +134,11 @@ impl<F> PortState<F> {
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match self {
             PortState::Master(master) => {
-                master.send_sync(config, port_identity, default_ds, buffer)
+                master.send_sync(config, port_identity, default_ds, buffer, provider)
             }
             PortState::Slave(_) | PortState::Listening | PortState::Passive => {
                 actions![]
@@ -141,11 +153,17 @@ impl<F> PortState<F> {
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match self {
-            PortState::Slave(slave) => {
-                slave.send_delay_request(rng, port_config, port_identity, default_ds, buffer)
-            }
+            PortState::Slave(slave) => slave.send_delay_request(
+                rng,
+                port_config,
+                port_identity,
+                default_ds,
+                buffer,
+                provider,
+            ),
             PortState::Master(_) | PortState::Listening | PortState::Passive => {
                 actions![]
             }
@@ -159,11 +177,17 @@ impl<F> PortState<F> {
         port_identity: PortIdentity,
         tlv_provider: &mut impl ForwardedTLVProvider,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match self {
-            PortState::Master(master) => {
-                master.send_announce(global, config, port_identity, tlv_provider, buffer)
-            }
+            PortState::Master(master) => master.send_announce(
+                global,
+                config,
+                port_identity,
+                tlv_provider,
+                buffer,
+                provider,
+            ),
             PortState::Slave(_) | PortState::Listening | PortState::Passive => actions![],
         }
     }
