@@ -24,6 +24,7 @@ use crate::{
     },
     clock::Clock,
     config::PortConfig,
+    crypto::SecurityAssociationProvider,
     datastructures::{
         common::PortIdentity,
         messages::{Message, MessageBody},
@@ -121,6 +122,7 @@ pub(crate) mod state;
 /// use statime::filters::BasicFilter;
 /// use statime::PtpInstance;
 /// use statime::time::Interval;
+/// use statime::crypto::NoSecurityProvider;
 ///
 /// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds);
 ///
@@ -134,12 +136,13 @@ pub(crate) mod state;
 ///     sync_interval: interval,
 ///     master_only: false,
 ///     delay_asymmetry: Default::default(),
+///     spp: None,
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
 /// let rng = thread_rng();
 ///
-/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
+/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng, NoSecurityProvider);
 ///
 /// // To handle events for the port it needs to change to running mode
 /// let (running_port, actions) = port_in_bmca.end_bmca();
@@ -242,8 +245,9 @@ pub(crate) mod state;
 /// use statime::config::AcceptableMasterList;
 /// use statime::filters::Filter;
 /// use statime::port::{NoForwardedTLVs, Port, PortActionIterator, Running};
+/// use statime::crypto::SecurityAssociationProvider;
 ///
-/// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter>) {
+/// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter, impl SecurityAssociationProvider>) {
 ///     let actions = if resources.announce_timer.has_expired() {
 ///         running_port.handle_announce_timer(&mut NoForwardedTLVs)
 ///     } else if resources.sync_timer.has_expired() {
@@ -269,7 +273,7 @@ pub(crate) mod state;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
+pub struct Port<'a, L, A, R, C, F: Filter, P, S = RefCell<PtpInstanceState>> {
     config: PortConfig<()>,
     filter_config: F::Config,
     clock: C,
@@ -282,6 +286,7 @@ pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
     rng: R,
+    security_provider: P,
     // Age of the last announce message that triggered
     // multiport disable. Once this gets larger than the
     // port announce interval, we can once again become
@@ -328,8 +333,8 @@ pub struct InBmca {
     local_best: Option<BestAnnounceMessage>,
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>
-    Port<'a, Running, A, R, C, F, S>
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P: SecurityAssociationProvider, S: PtpInstanceStateMutex>
+    Port<'a, Running, A, R, C, F, P, S>
 {
     /// Inform the port about a transmit timestamp being available
     ///
@@ -406,7 +411,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
     /// [`PtpInstance::bmca`].
-    pub fn start_bmca(self) -> Port<'a, InBmca, A, R, C, F, S> {
+    pub fn start_bmca(self) -> Port<'a, InBmca, A, R, C, F, P, S> {
         Port {
             port_state: self.port_state,
             instance_state: self.instance_state,
@@ -430,6 +435,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
             filter: self.filter,
             mean_delay: self.mean_delay,
             peer_delay_state: self.peer_delay_state,
+            security_provider: self.security_provider,
         }
     }
 
@@ -449,6 +455,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
                 return ControlFlow::Break(actions![]);
             }
         };
+
+        if self.config.spp.is_some() && !message.verify_signed(&self.security_provider) {
+            return ControlFlow::Break(actions![]);
+        }
+
         let domain_matches = self.instance_state.with_ref(|state| {
             message.header().sdo_id == state.default_ds.sdo_id
                 && message.header().domain_number == state.default_ds.domain_number
@@ -515,13 +526,13 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
     }
 }
 
-impl<'a, A, C, F: Filter, R, S> Port<'a, InBmca, A, R, C, F, S> {
+impl<'a, A, C, F: Filter, R, P, S> Port<'a, InBmca, A, R, C, F, P, S> {
     /// End a BMCA cycle and make the
     /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
     pub fn end_bmca(
         self,
     ) -> (
-        Port<'a, Running, A, R, C, F, S>,
+        Port<'a, Running, A, R, C, F, P, S>,
         PortActionIterator<'static>,
     ) {
         (
@@ -544,13 +555,14 @@ impl<'a, A, C, F: Filter, R, S> Port<'a, InBmca, A, R, C, F, S> {
                 filter: self.filter,
                 mean_delay: self.mean_delay,
                 peer_delay_state: self.peer_delay_state,
+                security_provider: self.security_provider,
             },
             self.lifecycle.pending_action,
         )
     }
 }
 
-impl<L, A, R, C: Clock, F: Filter, S> Port<'_, L, A, R, C, F, S> {
+impl<L, A, R, C: Clock, F: Filter, P, S> Port<'_, L, A, R, C, F, P, S> {
     fn set_forced_port_state(&mut self, mut state: PortState) {
         log::info!(
             "new state for port {}: {} -> {}",
@@ -569,7 +581,7 @@ impl<L, A, R, C: Clock, F: Filter, S> Port<'_, L, A, R, C, F, S> {
     }
 }
 
-impl<L, A, R, C, F: Filter, S> Port<'_, L, A, R, C, F, S> {
+impl<L, A, R, C, F: Filter, P, S> Port<'_, L, A, R, C, F, P, S> {
     /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
@@ -589,7 +601,7 @@ impl<L, A, R, C, F: Filter, S> Port<'_, L, A, R, C, F, S> {
     }
 }
 
-impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, S> {
+impl<'a, A, C, F: Filter, R: Rng, P, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, P, S> {
     /// Create a new port from a port dataset on a given interface.
     pub(crate) fn new(
         instance_state: &'a S,
@@ -598,6 +610,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
         clock: C,
         port_identity: PortIdentity,
         mut rng: R,
+        security_provider: P,
     ) -> Self {
         let duration = config.announce_duration(&mut rng);
         let bmca = Bmca::new(
@@ -617,6 +630,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
                 sync_interval: config.sync_interval,
                 master_only: config.master_only,
                 delay_asymmetry: config.delay_asymmetry,
+                spp: None,
             },
             filter_config,
             clock,
@@ -638,6 +652,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
             filter,
             mean_delay: None,
             peer_delay_state: PeerDelayState::Empty,
+            security_provider,
         }
     }
 }
@@ -648,11 +663,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
-        datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS},
-        filters::BasicFilter,
-        time::{Duration, Interval, Time},
-        Clock,
+        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS}, crypto::NoSecurityProvider, datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS}, filters::BasicFilter, time::{Duration, Interval, Time}, Clock
     };
 
     // General test infra
@@ -683,8 +694,8 @@ mod tests {
 
     pub(super) fn setup_test_port(
         state: &RefCell<PtpInstanceState>,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
-        let port = Port::<_, _, _, _, BasicFilter>::new(
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter, NoSecurityProvider> {
+        let port = Port::<_, _, _, _, BasicFilter, NoSecurityProvider>::new(
             state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
@@ -696,22 +707,25 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                spp: None,
             },
             0.25,
             TestClock,
             Default::default(),
             rand::rngs::mock::StepRng::new(2, 1),
+            NoSecurityProvider,
         );
 
         let (port, _) = port.end_bmca();
         port
     }
 
+
     pub(super) fn setup_test_port_custom_identity(
         state: &RefCell<PtpInstanceState>,
         port_identity: PortIdentity,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
-        let port = Port::<_, _, _, _, BasicFilter>::new(
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter, NoSecurityProvider> {
+        let port = Port::<_, _, _, _, BasicFilter, NoSecurityProvider>::new(
             &state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
@@ -723,11 +737,13 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                spp: None,
             },
             0.25,
             TestClock,
             port_identity,
             rand::rngs::mock::StepRng::new(2, 1),
+            NoSecurityProvider,
         );
 
         let (port, _) = port.end_bmca();
@@ -737,8 +753,8 @@ mod tests {
     pub(super) fn setup_test_port_custom_filter<F: Filter>(
         state: &RefCell<PtpInstanceState>,
         filter_config: F::Config,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
-        let port = Port::<_, _, _, _, F>::new(
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F, NoSecurityProvider> {
+        let port = Port::<_, _, _, _, F, _>::new(
             state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
@@ -750,11 +766,13 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                spp: None,
             },
             filter_config,
             TestClock,
             Default::default(),
             rand::rngs::mock::StepRng::new(2, 1),
+            NoSecurityProvider,
         );
 
         let (port, _) = port.end_bmca();

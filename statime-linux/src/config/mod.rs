@@ -116,6 +116,7 @@ impl From<PortConfig> for statime::config::PortConfig<Option<Vec<ClockIdentity>>
                     interval: Interval::from_log_2(pc.delay_interval),
                 },
             },
+            spp: None,
         }
     }
 }

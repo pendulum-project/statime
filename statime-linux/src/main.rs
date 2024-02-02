@@ -10,6 +10,7 @@ use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
+    crypto::NoSecurityProvider,
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         is_message_buffer_compatible, InBmca, Measurement, Port, PortAction, PortActionIterator,
@@ -351,6 +352,7 @@ async fn actual_main() {
             KalmanConfiguration::default(),
             port_clock.clone_box(),
             rng,
+            NoSecurityProvider,
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -518,6 +520,7 @@ type BmcaPort = Port<
     StdRng,
     BoxedClock,
     KalmanFilter,
+    NoSecurityProvider,
     RwLock<PtpInstanceState>,
 >;
 
