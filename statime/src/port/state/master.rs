@@ -2,6 +2,7 @@ use core::fmt::Debug;
 
 use crate::{
     config::PortConfig,
+    crypto::SecurityAssociationProvider,
     datastructures::{
         common::{PortIdentity, TlvSetBuilder},
         datasets::DefaultDS,
@@ -29,18 +30,27 @@ impl MasterState {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_timestamp<'a>(
         &mut self,
+        config: &PortConfig<()>,
         context: TimestampContext,
         timestamp: Time,
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         match context.inner {
-            TimestampContextInner::Sync { id } => {
-                self.handle_sync_timestamp(id, timestamp, port_identity, default_ds, buffer)
-            }
+            TimestampContextInner::Sync { id } => self.handle_sync_timestamp(
+                config,
+                id,
+                timestamp,
+                port_identity,
+                default_ds,
+                buffer,
+                provider,
+            ),
             _ => {
                 log::error!("Unexpected send timestamp");
                 actions![]
@@ -48,25 +58,38 @@ impl MasterState {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_sync_timestamp<'a>(
         &mut self,
+        config: &PortConfig<()>,
         id: u16,
         timestamp: Time,
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
-        let packet_length =
-            match Message::follow_up(default_ds, port_identity, id, timestamp).serialize(buffer) {
-                Ok(length) => length,
-                Err(error) => {
-                    log::error!(
-                        "Statime bug: Could not serialize sync follow up {:?}",
-                        error
-                    );
-                    return actions![];
-                }
-            };
+        let mut message = Message::follow_up(default_ds, port_identity, id, timestamp);
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = config.spp {
+            if message
+                .add_signature(spp, provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign follow up, sending unsigned");
+            }
+        }
+
+        let packet_length = match message.serialize(buffer) {
+            Ok(length) => length,
+            Err(error) => {
+                log::error!(
+                    "Statime bug: Could not serialize sync follow up {:?}",
+                    error
+                );
+                return actions![];
+            }
+        };
 
         actions![PortAction::SendGeneral {
             data: &buffer[..packet_length],
@@ -79,12 +102,23 @@ impl MasterState {
         port_identity: PortIdentity,
         default_ds: &DefaultDS,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         log::trace!("sending sync message");
 
         let seq_id = self.sync_seq_ids.generate();
-        let packet_length = match Message::sync(default_ds, port_identity, seq_id).serialize(buffer)
-        {
+        let mut message = Message::sync(default_ds, port_identity, seq_id);
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = config.spp {
+            if message
+                .add_signature(spp, provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not add signature to sync, sending without")
+            }
+        }
+
+        let packet_length = match message.serialize(buffer) {
             Ok(message) => message,
             Err(error) => {
                 log::error!("Statime bug: Could not serialize sync: {:?}", error);
@@ -112,6 +146,7 @@ impl MasterState {
         port_identity: PortIdentity,
         tlv_provider: &mut impl ForwardedTLVProvider,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         log::trace!("sending announce message");
 
@@ -120,7 +155,7 @@ impl MasterState {
 
         let mut message =
             Message::announce(global, port_identity, self.announce_seq_ids.generate());
-        let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
+        let mut tlv_margin = MAX_DATA_LEN - message.wire_size() - 64; // TODO: for production, we need a better way to anticipate signature length
 
         while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
             assert!(tlv.size() < tlv_margin);
@@ -135,6 +170,17 @@ impl MasterState {
         }
 
         message.suffix = tlv_builder.build();
+
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+
+        if let Some(spp) = config.spp {
+            if message
+                .add_signature(spp, provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign announce message, sending unsigned");
+            }
+        }
 
         let packet_length =
             match Message::announce(global, port_identity, self.announce_seq_ids.generate())
@@ -160,13 +206,16 @@ impl MasterState {
         ]
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_event_receive<'a>(
         &mut self,
+        config: &PortConfig<()>,
         message: Message,
         timestamp: Time,
         min_delay_req_interval: Interval,
         port_identity: PortIdentity,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         let header = message.header;
 
@@ -176,12 +225,14 @@ impl MasterState {
 
         match message.body {
             MessageBody::DelayReq(message) => self.handle_delay_req(
+                config,
                 header,
                 message,
                 timestamp,
                 min_delay_req_interval,
                 port_identity,
                 buffer,
+                provider,
             ),
             _ => {
                 log::warn!("Unexpected message {:?}", message);
@@ -190,23 +241,35 @@ impl MasterState {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn handle_delay_req<'a>(
         &mut self,
+        config: &PortConfig<()>,
         header: Header,
         message: DelayReqMessage,
         timestamp: Time,
         min_delay_req_interval: Interval,
         port_identity: PortIdentity,
         buffer: &'a mut [u8],
+        provider: &impl SecurityAssociationProvider,
     ) -> PortActionIterator<'a> {
         log::debug!("Received DelayReq");
-        let delay_resp_message = Message::delay_resp(
+        let mut delay_resp_message = Message::delay_resp(
             header,
             message,
             port_identity,
             min_delay_req_interval,
             timestamp,
         );
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = config.spp {
+            if delay_resp_message
+                .add_signature(spp, provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not add signature to delay response, sending unsigned");
+            }
+        }
 
         let packet_length = match delay_resp_message.serialize(buffer) {
             Ok(length) => length,
@@ -229,6 +292,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{DelayMechanism, InstanceConfig},
+        crypto::NoSecurityProvider,
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             datasets::{CurrentDS, ParentDS, TimePropertiesDS},
@@ -240,11 +304,25 @@ mod tests {
 
     #[test]
     fn test_delay_response() {
+        let config = PortConfig {
+            acceptable_master_list: (),
+            delay_mechanism: DelayMechanism::E2E {
+                interval: Interval::TWO_SECONDS,
+            },
+            announce_interval: Interval::TWO_SECONDS,
+            announce_receipt_timeout: 2,
+            sync_interval: Interval::ONE_SECOND,
+            master_only: false,
+            delay_asymmetry: Duration::ZERO,
+            spp: None,
+        };
+
         let mut state = MasterState::new();
 
         let mut buffer = [0u8; MAX_DATA_LEN];
 
         let mut action = state.handle_event_receive(
+            &config,
             Message {
                 header: Header {
                     sequence_id: 5123,
@@ -264,6 +342,7 @@ mod tests {
             Interval::from_log_2(2),
             PortIdentity::default(),
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::SendGeneral { data }) = action.next() else {
@@ -296,6 +375,7 @@ mod tests {
         );
 
         let mut action = state.handle_event_receive(
+            &config,
             Message {
                 header: Header {
                     sequence_id: 879,
@@ -315,6 +395,7 @@ mod tests {
             Interval::from_log_2(5),
             PortIdentity::default(),
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::SendGeneral { data }) = action.next() else {
@@ -379,6 +460,7 @@ mod tests {
             sync_interval: Interval::ONE_SECOND,
             master_only: false,
             delay_asymmetry: Duration::ZERO,
+            spp: None,
         };
         let mut state = MasterState::new();
 
@@ -388,6 +470,7 @@ mod tests {
             PortIdentity::default(),
             &mut NoForwardedTLVs,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         assert!(matches!(
@@ -416,6 +499,7 @@ mod tests {
             PortIdentity::default(),
             &mut NoForwardedTLVs,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         assert!(matches!(
@@ -452,6 +536,7 @@ mod tests {
             sync_interval: Interval::ONE_SECOND,
             master_only: false,
             delay_asymmetry: Duration::ZERO,
+            spp: None,
         };
 
         let mut state = MasterState::new();
@@ -464,8 +549,13 @@ mod tests {
             sdo_id: SdoId::default(),
         });
 
-        let mut actions =
-            state.send_sync(&config, PortIdentity::default(), &defaultds, &mut buffer);
+        let mut actions = state.send_sync(
+            &config,
+            PortIdentity::default(),
+            &defaultds,
+            &mut buffer,
+            &NoSecurityProvider,
+        );
 
         assert!(matches!(
             actions.next(),
@@ -486,11 +576,13 @@ mod tests {
         };
 
         let mut actions = state.handle_timestamp(
+            &config,
             context,
             Time::from_fixed_nanos(U96F32::from_bits((601300 << 32) + (230 << 16))),
             PortIdentity::default(),
             &defaultds,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::SendGeneral { data }) = actions.next() else {
@@ -521,8 +613,13 @@ mod tests {
             TimeInterval(I48F16::from_bits(230))
         );
 
-        let mut actions =
-            state.send_sync(&config, PortIdentity::default(), &defaultds, &mut buffer);
+        let mut actions = state.send_sync(
+            &config,
+            PortIdentity::default(),
+            &defaultds,
+            &mut buffer,
+            &NoSecurityProvider,
+        );
 
         assert!(matches!(
             actions.next(),
@@ -543,11 +640,13 @@ mod tests {
         };
 
         let mut actions = state.handle_timestamp(
+            &config,
             context,
             Time::from_fixed_nanos(U96F32::from_bits((1000601300 << 32) + (543 << 16))),
             PortIdentity::default(),
             &defaultds,
             &mut buffer,
+            &NoSecurityProvider,
         );
 
         let Some(PortAction::SendGeneral { data }) = actions.next() else {

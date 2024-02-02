@@ -57,6 +57,7 @@ use crate::{
 /// use statime::PtpInstance;
 /// use statime::config::{AcceptAnyMaster, ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
 /// use statime::filters::BasicFilter;
+/// use statime::crypto::NoSecurityProvider;
 ///
 /// let instance_config = InstanceConfig {
 ///     clock_identity: ClockIdentity::from_mac_address(system::get_mac()),
@@ -73,7 +74,7 @@ use crate::{
 ///     time_properties_ds,
 /// );
 ///
-/// let mut port = instance.add_port(port_config, filter_config, clock, rng);
+/// let mut port = instance.add_port(port_config, filter_config, clock, rng, NoSecurityProvider);
 ///
 /// // Send of port to its own thread/task to do its work
 ///
@@ -97,9 +98,9 @@ pub(crate) struct PtpInstanceState {
 }
 
 impl PtpInstanceState {
-    fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng>(
+    fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P>(
         &mut self,
-        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
+        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F, P>],
         bmca_interval: Duration,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
@@ -172,13 +173,14 @@ impl<F: Filter> PtpInstance<F> {
     /// the caller is responsible for propagating any property changes to this
     /// clock, and for synchronizing this clock with the instance clock as
     /// appropriate based on the ports state.
-    pub fn add_port<A, C, R: Rng>(
+    pub fn add_port<A, C, R: Rng, P>(
         &self,
         config: PortConfig<A>,
         filter_config: F::Config,
         clock: C,
         rng: R,
-    ) -> Port<InBmca<'_>, A, R, C, F> {
+        security_provider: P,
+    ) -> Port<InBmca<'_>, A, R, C, F, P> {
         self.log_bmca_interval
             .fetch_min(config.announce_interval.as_log_2(), Ordering::Relaxed);
         let mut state = self.state.borrow_mut();
@@ -194,6 +196,7 @@ impl<F: Filter> PtpInstance<F> {
             clock,
             port_identity,
             rng,
+            security_provider,
         )
     }
 
@@ -201,9 +204,9 @@ impl<F: Filter> PtpInstance<F> {
     ///
     /// The caller must pass all the ports that were created on this instance in
     /// the slice!
-    pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
+    pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng, P>(
         &self,
-        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
+        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F, P>],
     ) {
         self.state.borrow_mut().bmca(
             ports,

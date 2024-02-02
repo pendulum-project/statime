@@ -9,6 +9,7 @@ use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
+    crypto::NoSecurityProvider,
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
@@ -299,6 +300,7 @@ async fn actual_main() {
             KalmanConfiguration::default(),
             port_clock.clone(),
             rng,
+            NoSecurityProvider,
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -450,7 +452,14 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<InBmca<'static>, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, KalmanFilter>;
+type BmcaPort = Port<
+    InBmca<'static>,
+    Option<Vec<ClockIdentity>>,
+    StdRng,
+    LinuxClock,
+    KalmanFilter,
+    NoSecurityProvider,
+>;
 
 // the Port task
 //

@@ -21,6 +21,7 @@ use crate::{
     },
     clock::Clock,
     config::PortConfig,
+    crypto::SecurityAssociationProvider,
     datastructures::{
         common::{LeapIndicator, PortIdentity, TimeSource, Tlv, TlvSetIterator},
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
@@ -114,6 +115,7 @@ pub(crate) mod state;
 /// use statime::filters::BasicFilter;
 /// use statime::PtpInstance;
 /// use statime::time::Interval;
+/// use statime::crypto::NoSecurityProvider;
 ///
 /// # let (instance_config, time_properties_ds) = unimplemented!();
 /// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds);
@@ -128,12 +130,13 @@ pub(crate) mod state;
 ///     sync_interval: interval,
 ///     master_only: false,
 ///     delay_asymmetry: Default::default(),
+///     spp: None,
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
 /// let rng = thread_rng();
 ///
-/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
+/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng, NoSecurityProvider);
 ///
 /// // To handle events for the port it needs to change to running mode
 /// let (running_port, actions) = port_in_bmca.end_bmca();
@@ -236,8 +239,9 @@ pub(crate) mod state;
 /// use statime::config::AcceptableMasterList;
 /// use statime::filters::Filter;
 /// use statime::port::{NoForwardedTLVs, Port, PortActionIterator, Running};
+/// use statime::crypto::SecurityAssociationProvider;
 ///
-/// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter>) {
+/// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter, impl SecurityAssociationProvider>) {
 ///     let actions = if resources.announce_timer.has_expired() {
 ///         running_port.handle_announce_timer(&mut NoForwardedTLVs)
 ///     } else if resources.sync_timer.has_expired() {
@@ -263,7 +267,7 @@ pub(crate) mod state;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Port<L, A, R, C, F: Filter> {
+pub struct Port<L, A, R, C, F: Filter, P> {
     config: PortConfig<()>,
     filter_config: F::Config,
     clock: C,
@@ -275,6 +279,7 @@ pub struct Port<L, A, R, C, F: Filter> {
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
     rng: R,
+    security_provider: P,
 }
 
 /// Type state of [`Port`] entered by [`Port::end_bmca`]
@@ -458,7 +463,9 @@ impl<'a> Iterator for PortActionIterator<'a> {
     }
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P: SecurityAssociationProvider>
+    Port<Running<'a>, A, R, C, F, P>
+{
     /// Inform the port about a transmit timestamp being available
     ///
     /// `context` is the handle of the packet that was send from the
@@ -469,13 +476,14 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         timestamp: Time,
     ) -> PortActionIterator<'_> {
         let actions = self.port_state.handle_timestamp(
-            self.config.delay_asymmetry,
+            &self.config,
             context,
             timestamp,
             self.port_identity,
             &self.lifecycle.state.default_ds,
             &mut self.clock,
             &mut self.packet_buffer,
+            &self.security_provider,
         );
 
         actions
@@ -492,6 +500,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             self.port_identity,
             tlv_provider,
             &mut self.packet_buffer,
+            &self.security_provider,
         )
     }
 
@@ -502,6 +511,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             self.port_identity,
             &self.lifecycle.state.default_ds,
             &mut self.packet_buffer,
+            &self.security_provider,
         )
     }
 
@@ -513,6 +523,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             self.port_identity,
             &self.lifecycle.state.default_ds,
             &mut self.packet_buffer,
+            &self.security_provider,
         )
     }
 
@@ -543,7 +554,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
     /// [`PtpInstance::bmca`].
-    pub fn start_bmca(self) -> Port<InBmca<'a>, A, R, C, F> {
+    pub fn start_bmca(self) -> Port<InBmca<'a>, A, R, C, F, P> {
         Port {
             port_state: self.port_state,
             config: self.config,
@@ -558,6 +569,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 local_best: None,
                 state_refcell: self.lifecycle.state_refcell,
             },
+            security_provider: self.security_provider,
         }
     }
 
@@ -575,6 +587,10 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             }
         };
 
+        if self.config.spp.is_some() && !message.verify_signed(&self.security_provider) {
+            return actions![];
+        }
+
         // Only process messages from the same domain
         if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
             || message.header().domain_number != self.lifecycle.state.default_ds.domain_number
@@ -584,13 +600,14 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
         if message.is_event() {
             self.port_state.handle_event_receive(
-                self.config.delay_asymmetry,
+                &self.config,
                 message,
                 timestamp,
                 self.config.min_delay_req_interval(),
                 self.port_identity,
                 &mut self.clock,
                 &mut self.packet_buffer,
+                &self.security_provider,
             )
         } else {
             self.handle_general_internal(message)
@@ -606,6 +623,10 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 return actions![];
             }
         };
+
+        if self.config.spp.is_some() && !message.verify_signed(&self.security_provider) {
+            return actions![];
+        }
 
         // Only process messages from the same domain
         if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
@@ -642,10 +663,15 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 }
 
-impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C, F: Filter, R, P> Port<InBmca<'a>, A, R, C, F, P> {
     /// End a BMCA cycle and make the
     /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
-    pub fn end_bmca(self) -> (Port<Running<'a>, A, R, C, F>, PortActionIterator<'static>) {
+    pub fn end_bmca(
+        self,
+    ) -> (
+        Port<Running<'a>, A, R, C, F, P>,
+        PortActionIterator<'static>,
+    ) {
         (
             Port {
                 port_state: self.port_state,
@@ -660,13 +686,14 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
                     state_refcell: self.lifecycle.state_refcell,
                     state: self.lifecycle.state_refcell.borrow(),
                 },
+                security_provider: self.security_provider,
             },
             self.lifecycle.pending_action,
         )
     }
 }
 
-impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
+impl<L, A, R, C: Clock, F: Filter, P> Port<L, A, R, C, F, P> {
     fn set_forced_port_state(&mut self, mut state: PortState<F>) {
         log::info!(
             "new state for port {}: {} -> {}",
@@ -679,7 +706,7 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
     }
 }
 
-impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
+impl<L, A, R, C, F: Filter, P> Port<L, A, R, C, F, P> {
     /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
@@ -699,13 +726,13 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
     }
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P> Port<InBmca<'a>, A, R, C, F, P> {
     pub(crate) fn calculate_best_local_announce_message(&mut self) {
         self.lifecycle.local_best = self.bmca.take_best_port_announce_message()
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C: Clock, F: Filter, R: Rng, P> Port<InBmca<'a>, A, R, C, F, P> {
     pub(crate) fn step_announce_age(&mut self, step: Duration) {
         self.bmca.step_age(step);
     }
@@ -870,7 +897,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
     }
 }
 
-impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C, F: Filter, R: Rng, P> Port<InBmca<'a>, A, R, C, F, P> {
     /// Create a new port from a port dataset on a given interface.
     pub(crate) fn new(
         state_refcell: &'a AtomicRefCell<PtpInstanceState>,
@@ -879,6 +906,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
         clock: C,
         port_identity: PortIdentity,
         mut rng: R,
+        security_provider: P,
     ) -> Self {
         let duration = config.announce_duration(&mut rng);
         let bmca = Bmca::new(
@@ -896,6 +924,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 sync_interval: config.sync_interval,
                 master_only: config.master_only,
                 delay_asymmetry: config.delay_asymmetry,
+                spp: None,
             },
             filter_config,
             clock,
@@ -909,6 +938,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 local_best: None,
                 state_refcell,
             },
+            security_provider,
         }
     }
 }
@@ -919,6 +949,7 @@ mod tests {
     use crate::{
         bmc::acceptable_master::AcceptAnyMaster,
         config::{DelayMechanism, InstanceConfig},
+        crypto::NoSecurityProvider,
         datastructures::messages::{AnnounceMessage, Header, PtpVersion},
         filters::BasicFilter,
         time::Interval,
@@ -1007,7 +1038,7 @@ mod tests {
             time_properties_ds: Default::default(),
         });
 
-        let port = Port::<_, _, _, _, BasicFilter>::new(
+        let port = Port::<_, _, _, _, BasicFilter, _>::new(
             &state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
@@ -1019,11 +1050,13 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                spp: None,
             },
             0.25,
             TestClock,
             Default::default(),
             rand::rngs::mock::StepRng::new(2, 1),
+            NoSecurityProvider,
         );
 
         let (mut port, _) = port.end_bmca();
@@ -1085,7 +1118,7 @@ mod tests {
             time_properties_ds: Default::default(),
         });
 
-        let port = Port::<_, _, _, _, BasicFilter>::new(
+        let port = Port::<_, _, _, _, BasicFilter, _>::new(
             &state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
@@ -1097,11 +1130,13 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                spp: None,
             },
             0.25,
             TestClock,
             Default::default(),
             rand::rngs::mock::StepRng::new(2, 1),
+            NoSecurityProvider,
         );
 
         let (mut port, _) = port.end_bmca();
