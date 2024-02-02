@@ -12,12 +12,13 @@ use self::{
     p_delay_resp_follow_up::PDelayRespFollowUpMessage, signalling::SignalingMessage,
 };
 use super::{
-    common::{PortIdentity, TimeInterval, TlvSet, WireTimestamp},
+    common::{PortIdentity, TimeInterval, Tlv, TlvSet, TlvType, WireTimestamp},
     datasets::DefaultDS,
     WireFormatError,
 };
 use crate::{
     config::LeapIndicator,
+    crypto::{NoSpaceError, SecurityAssociation, SecurityAssociationProvider},
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
 };
@@ -248,7 +249,125 @@ fn base_header(default_ds: &DefaultDS, port_identity: PortIdentity, sequence_id:
     }
 }
 
+impl<'a> Message<'a> {
+    #[allow(unused)]
+    pub(crate) fn add_signature(
+        &mut self,
+        spp: u8,
+        provider: &impl SecurityAssociationProvider,
+        backing_buffer: &'a mut [u8],
+    ) -> Result<(), NoSpaceError> {
+        let association = provider.lookup(spp).ok_or(NoSpaceError)?;
+        let (key_id, key) = association.signing_mac();
+
+        // partial authentication tlv
+        let mut temp_tlv_value = [0; MAX_DATA_LEN];
+        temp_tlv_value[0] = spp;
+        temp_tlv_value[1] = 0;
+        temp_tlv_value[2..6].copy_from_slice(&key_id.to_be_bytes());
+
+        // Regenerate the tlv set with partial authentication tlv
+        let mut temp_message = self.clone();
+        temp_message.suffix = self
+            .suffix
+            .extend_with(
+                Tlv {
+                    tlv_type: TlvType::Authentication,
+                    value: temp_tlv_value[0..6 + key.output_size()].into(),
+                },
+                backing_buffer,
+            )
+            .ok_or(NoSpaceError)?;
+
+        // generate tag
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        temp_message
+            .serialize(&mut temp_buffer)
+            .map_err(|_| NoSpaceError)?;
+        if association.policy_data().ignore_correction {
+            // zero out correction field.
+            temp_buffer[8..16].fill(0)
+        }
+        key.sign(
+            &temp_buffer[..self.wire_size() + 10],
+            &mut temp_tlv_value[6..],
+        )?;
+
+        // Generate final tlv set
+        self.suffix = self
+            .suffix
+            .extend_with(
+                Tlv {
+                    tlv_type: TlvType::Authentication,
+                    value: temp_tlv_value[0..6 + key.output_size()].into(),
+                },
+                backing_buffer,
+            )
+            .ok_or(NoSpaceError)?;
+
+        Ok(())
+    }
+}
+
 impl Message<'_> {
+    #[allow(unused)]
+    pub(crate) fn verify_signed(&self, provider: &impl SecurityAssociationProvider) -> bool {
+        let mut tlv_offset = 0;
+        for tlv in self.suffix.tlv() {
+            if tlv.tlv_type == TlvType::Authentication {
+                // Check we have at least the SPP, params and key id
+                if tlv.value.len() < 6 {
+                    return false;
+                }
+
+                let spp = tlv.value[0];
+                let params = tlv.value[1];
+                let key_id = u32::from_be_bytes(tlv.value[2..6].try_into().unwrap());
+
+                // we dont support presence of any of the optional bits, so not valid if those
+                // are present
+                if params != 0 {
+                    return false;
+                }
+
+                // get the security association and key
+                let Some(association) = provider.lookup(spp) else {
+                    return false;
+                };
+                let Some(key) = association.mac(key_id) else {
+                    return false;
+                };
+
+                // Ensure we have a complete ICV
+                if tlv.value.len() < 6 + key.output_size() {
+                    return false;
+                }
+
+                // We need the raw packet data for the signature, so serialize again
+                // TODO: bad practice to reserialize for checking signatures, should be fixed
+                // before production ready
+                let mut buffer = [0; MAX_DATA_LEN];
+                if self.serialize(&mut buffer).is_err() {
+                    return false;
+                }
+                if association.policy_data().ignore_correction {
+                    // zero out correction field.
+                    buffer[8..16].fill(0)
+                }
+
+                return key.verify(
+                    &buffer[..self.header.wire_size() + self.body.wire_size() + tlv_offset + 10],
+                    &tlv.value[6..6 + key.output_size()],
+                );
+            }
+
+            tlv_offset += tlv.wire_size();
+        }
+
+        // No authentication tlv found, so not signed
+        false
+    }
+
     pub(crate) fn sync(
         default_ds: &DefaultDS,
         port_identity: PortIdentity,
@@ -440,5 +559,118 @@ impl<'a> Message<'a> {
             body,
             suffix,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::InstanceConfig,
+        crypto::{HmacSha256_128, SecurityPolicy},
+    };
+
+    struct TestSecurityProvider(SecurityPolicy);
+
+    struct TestSecurityAssociation(SecurityPolicy);
+
+    impl SecurityAssociation for TestSecurityAssociation {
+        fn policy_data(&self) -> crate::crypto::SecurityPolicy {
+            self.0
+        }
+
+        fn mac(&self, _key_id: u32) -> Option<&dyn crate::crypto::Mac> {
+            Some(std::boxed::Box::leak(std::boxed::Box::new(
+                HmacSha256_128::new([0; 32]),
+            )))
+        }
+
+        fn signing_mac(&self) -> (u32, &dyn crate::crypto::Mac) {
+            (
+                0,
+                std::boxed::Box::leak(std::boxed::Box::new(HmacSha256_128::new([0; 32]))),
+            )
+        }
+    }
+
+    impl SecurityAssociationProvider for TestSecurityProvider {
+        type Association = TestSecurityAssociation;
+
+        fn lookup(&self, _spp: u8) -> Option<Self::Association> {
+            Some(TestSecurityAssociation(self.0))
+        }
+    }
+
+    #[test]
+    fn test_signing_ignoring_correction() {
+        let port_identity = PortIdentity::default();
+        let default_ds = DefaultDS::new(InstanceConfig {
+            clock_identity: Default::default(),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            sdo_id: Default::default(),
+            slave_only: false,
+        });
+
+        let provider = TestSecurityProvider(SecurityPolicy {
+            ignore_correction: true,
+        });
+
+        let mut test_message = Message::sync(&default_ds, port_identity, 1);
+        let mut backing_buffer = [0; MAX_DATA_LEN];
+        test_message
+            .add_signature(0, &provider, &mut backing_buffer)
+            .unwrap();
+
+        let mut message_buffer = [0; MAX_DATA_LEN];
+        let message_len = test_message.serialize(&mut message_buffer).unwrap();
+
+        // Modify correction field
+        message_buffer[9] = message_buffer[9].wrapping_add(9);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(received_message.verify_signed(&provider));
+
+        // Modify message
+        message_buffer[message_len - 1] = message_buffer[message_len - 1].wrapping_add(5);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(!received_message.verify_signed(&provider));
+    }
+
+    #[test]
+    fn test_signing() {
+        let port_identity = PortIdentity::default();
+        let default_ds = DefaultDS::new(InstanceConfig {
+            clock_identity: Default::default(),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            sdo_id: Default::default(),
+            slave_only: false,
+        });
+
+        let provider = TestSecurityProvider(SecurityPolicy {
+            ignore_correction: false,
+        });
+
+        let mut test_message = Message::sync(&default_ds, port_identity, 1);
+        let mut backing_buffer = [0; MAX_DATA_LEN];
+        test_message
+            .add_signature(0, &provider, &mut backing_buffer)
+            .unwrap();
+
+        let mut message_buffer = [0; MAX_DATA_LEN];
+        let message_len = test_message.serialize(&mut message_buffer).unwrap();
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(received_message.verify_signed(&provider));
+
+        // Modify correction field
+        message_buffer[9] = message_buffer[9].wrapping_add(9);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(!received_message.verify_signed(&provider));
     }
 }

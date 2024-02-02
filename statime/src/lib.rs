@@ -86,6 +86,7 @@ extern crate std;
 mod bmc;
 mod clock;
 pub mod config;
+pub mod crypto;
 pub(crate) mod datastructures;
 pub mod filters;
 mod float_polyfill;

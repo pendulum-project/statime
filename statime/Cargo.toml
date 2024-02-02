@@ -12,9 +12,10 @@ publish.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "ring"]
 std = []
 fuzz = ["std"]
+ring = ["dep:ring"]
 
 [dependencies]
 arrayvec.workspace = true
@@ -23,4 +24,5 @@ fixed.workspace = true
 libm.workspace = true
 log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
+ring = { workspace = true, optional = true }
 atomic_refcell.workspace = true
