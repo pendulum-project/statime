@@ -9,7 +9,6 @@ use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
-    crypto::NoSecurityProvider,
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
@@ -18,13 +17,10 @@ use statime::{
     PtpInstance,
 };
 use statime_linux::{
-    clock::LinuxClock,
-    config::Config,
-    socket::{
+    clock::LinuxClock, config::Config, fixed_key_experiment::FixedKeyProvider, socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,
-    },
-    tlvforwarder::TlvForwarder,
+    }, tlvforwarder::TlvForwarder
 };
 use timestamped_socket::{
     interface::interfaces,
@@ -273,6 +269,8 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
+    let key_provider = FixedKeyProvider::default();
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -300,7 +298,7 @@ async fn actual_main() {
             KalmanConfiguration::default(),
             port_clock.clone(),
             rng,
-            NoSecurityProvider,
+            key_provider.clone(),
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -458,7 +456,7 @@ type BmcaPort = Port<
     StdRng,
     LinuxClock,
     KalmanFilter,
-    NoSecurityProvider,
+    FixedKeyProvider,
 >;
 
 // the Port task

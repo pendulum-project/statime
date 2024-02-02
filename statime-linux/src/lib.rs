@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod observer;
 pub mod socket;
 pub mod tlvforwarder;
+pub mod fixed_key_experiment;
 
 use fern::colors::Color;
 pub use metrics::exporter::main as metrics_exporter_main;
