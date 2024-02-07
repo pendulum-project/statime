@@ -60,6 +60,10 @@ pub struct KalmanConfiguration {
     /// estimation to using sample variance instead of largest-spread. (max
     /// 32)
     pub statistical_estimation_boundary: usize,
+    /// Multiplication factor on uncertainty estimation when it comes from
+    /// peer delay measurements (to compensate for there being multiple path
+    /// segments).
+    pub peer_delay_factor: f64,
 }
 
 impl Default for KalmanConfiguration {
@@ -79,6 +83,7 @@ impl Default for KalmanConfiguration {
             estimate_threshold: Duration::from_millis(200),
             difference_estimation_boundary: 4,
             statistical_estimation_boundary: 8,
+            peer_delay_factor: 2.0,
         }
     }
 }
@@ -110,6 +115,7 @@ struct MeasurementErrorEstimator {
     fill: usize,
     last_sync: Option<(Time, Duration)>,
     last_delay: Option<(Time, Duration)>,
+    peer_delay_detected: bool,
 }
 
 impl MeasurementErrorEstimator {
@@ -203,6 +209,13 @@ impl MeasurementErrorEstimator {
                 self.last_delay = Some((m.event_time, delay_offset));
             }
         }
+
+        if let Some(peer_delay) = m.peer_delay {
+            self.last_delay = None;
+            self.last_sync = None;
+            self.peer_delay_detected = true;
+            self.insert_entry(peer_delay.seconds());
+        }
     }
 
     fn measurement_variance(&self, config: &KalmanConfiguration) -> f64 {
@@ -213,6 +226,10 @@ impl MeasurementErrorEstimator {
         } else {
             self.variance() / 2.0
         }
+    }
+
+    fn peer_delay(&self) -> bool {
+        self.peer_delay_detected
     }
 }
 
@@ -226,6 +243,7 @@ struct InnerFilter {
 impl InnerFilter {
     const MEASUREMENT_SYNC: Matrix<1, 3> = Matrix::new([[1.0, 0.0, 1.0]]);
     const MEASUREMENT_DELAY: Matrix<1, 3> = Matrix::new([[1.0, 0.0, -1.0]]);
+    const MEASUREMENT_PEER_DELAY: Matrix<1, 3> = Matrix::new([[0.0, 0.0, 1.0]]);
 
     fn new(initial_offset: f64, time: Time, config: &KalmanConfiguration) -> Self {
         Self {
@@ -276,6 +294,16 @@ impl InnerFilter {
         let measurement_vec = Vector::new_vector([delay_offset]);
         let measurement_noise = Matrix::new([[variance]]);
         self.absorb_measurement(measurement_vec, Self::MEASUREMENT_DELAY, measurement_noise);
+    }
+
+    fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
+        let measurement_vec = Vector::new_vector([peer_delay]);
+        let measurement_noise = Matrix::new([[variance]]);
+        self.absorb_measurement(
+            measurement_vec,
+            Self::MEASUREMENT_PEER_DELAY,
+            measurement_noise,
+        )
     }
 
     fn absorb_measurement(
@@ -377,6 +405,12 @@ impl BaseFilter {
             } else {
                 inner.absorb_delay_offset(delay_offset, variance)
             }
+        }
+    }
+
+    fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
+        if let Some(inner) = &mut self.0 {
+            inner.absorb_peer_delay(peer_delay, variance)
         }
     }
 
@@ -514,14 +548,6 @@ impl Filter for KalmanFilter {
             return super::FilterUpdate::default();
         }
 
-        if self.cur_frequency.is_none() {
-            if clock.set_frequency(0.0).is_ok() {
-                self.cur_frequency = Some(0.0);
-            } else {
-                log::error!("Could not adjust clock frequency");
-            }
-        }
-
         self.measurement_error_estimator.absorb_measurement(
             m,
             self.running_filter.freq_offset(),
@@ -533,19 +559,59 @@ impl Filter for KalmanFilter {
         self.running_filter
             .progress_filtertime(m.event_time, self.wander, &self.config);
         if let Some(sync_offset) = m.raw_sync_offset {
+            // We can start controlling, so need a proper frequency.
+            if self.cur_frequency.is_none() {
+                if clock.set_frequency(0.0).is_ok() {
+                    self.cur_frequency = Some(0.0);
+                } else {
+                    log::error!("Could not adjust clock frequency");
+                }
+            }
+
             self.running_filter.absorb_sync_offset(
                 sync_offset.seconds(),
                 self.measurement_error_estimator
-                    .measurement_variance(&self.config),
+                    .measurement_variance(&self.config)
+                    * (if self.measurement_error_estimator.peer_delay() {
+                        self.config.peer_delay_factor
+                    } else {
+                        1.0
+                    }),
                 &self.config,
             );
         }
         if let Some(delay_offset) = m.raw_delay_offset {
+            // We can start controlling, so need a proper frequency.
+            if self.cur_frequency.is_none() {
+                if clock.set_frequency(0.0).is_ok() {
+                    self.cur_frequency = Some(0.0);
+                } else {
+                    log::error!("Could not adjust clock frequency");
+                }
+            }
+
             self.running_filter.absorb_delay_offset(
                 delay_offset.seconds(),
                 self.measurement_error_estimator
-                    .measurement_variance(&self.config),
+                    .measurement_variance(&self.config)
+                    * (if self.measurement_error_estimator.peer_delay() {
+                        self.config.peer_delay_factor
+                    } else {
+                        1.0
+                    }),
                 &self.config,
+            );
+        }
+        if let Some(peer_delay) = m.peer_delay {
+            self.running_filter.absorb_peer_delay(
+                peer_delay.seconds(),
+                self.measurement_error_estimator
+                    .measurement_variance(&self.config)
+                    * (if self.measurement_error_estimator.peer_delay() {
+                        self.config.peer_delay_factor
+                    } else {
+                        1.0
+                    }),
             );
         }
 

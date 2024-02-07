@@ -11,6 +11,8 @@ pub struct Measurement {
     pub offset: Option<Duration>,
     /// Delay to the remote PTP node.
     pub delay: Option<Duration>,
+    /// Peer delay on the port,
+    pub peer_delay: Option<Duration>,
     /// Raw offset calculated from a sync message
     pub raw_sync_offset: Option<Duration>,
     /// Raw offset calculated from a delay message

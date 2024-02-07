@@ -401,6 +401,7 @@ mod tests {
                         event_time: Time::from_micros(49),
                         offset: Some(Duration::from_micros(-51)),
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(49)),
                         raw_delay_offset: None,
                     })
@@ -452,6 +453,7 @@ mod tests {
                         event_time: Time::from_micros(1049),
                         offset: Some(Duration::from_micros(-53)),
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(47)),
                         raw_delay_offset: None,
                     })
@@ -496,6 +498,7 @@ mod tests {
                         event_time: Time::from_micros(49),
                         offset: Some(Duration::from_micros(-151)),
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(-51)),
                         raw_delay_offset: None,
                     })
@@ -537,6 +540,7 @@ mod tests {
                         event_time: Time::from_micros(49),
                         offset: None,
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(49)),
                         raw_delay_offset: None,
                     })
@@ -611,6 +615,7 @@ mod tests {
                         event_time: Time::from_micros(100),
                         offset: None,
                         delay: Some(Duration::from_micros(100)),
+                        peer_delay: None,
                         raw_sync_offset: None,
                         raw_delay_offset: Some(Duration::from_micros(-151)),
                     })
@@ -704,6 +709,7 @@ mod tests {
                         event_time: Time::from_micros(1049),
                         offset: None,
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(47)),
                         raw_delay_offset: None,
                     })
@@ -736,6 +742,7 @@ mod tests {
                         event_time: Time::from_micros(1100),
                         offset: None,
                         delay: Some(Duration::from_micros(100)),
+                        peer_delay: None,
                         raw_sync_offset: None,
                         raw_delay_offset: Some(Duration::from_micros(-153)),
                     })
@@ -800,6 +807,7 @@ mod tests {
                         event_time: Time::from_micros(49),
                         offset: Some(Duration::from_micros(-63)),
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(37)),
                         raw_delay_offset: None,
                     })
@@ -962,6 +970,7 @@ mod tests {
                         event_time: Time::from_micros(1049),
                         offset: Some(Duration::from_micros(-53)),
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(47)),
                         raw_delay_offset: None,
                     })
@@ -1004,6 +1013,7 @@ mod tests {
                         event_time: Time::from_micros(49),
                         offset: None,
                         delay: None,
+                        peer_delay: None,
                         raw_sync_offset: Some(Duration::from_micros(49)),
                         raw_delay_offset: None,
                     })
@@ -1120,6 +1130,7 @@ mod tests {
                         event_time: Time::from_micros(100),
                         offset: None,
                         delay: Some(Duration::from_micros(100)),
+                        peer_delay: None,
                         raw_sync_offset: None,
                         raw_delay_offset: Some(Duration::from_micros(-151)),
                     })

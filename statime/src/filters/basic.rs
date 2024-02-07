@@ -54,6 +54,10 @@ impl Filter for BasicFilter {
             update.mean_delay = Some(delay);
         }
 
+        if let Some(peer_delay) = measurement.peer_delay {
+            update.mean_delay = Some(peer_delay);
+        }
+
         let Some(offset) = measurement.offset else {
             // No measurement, so no further actions
             return update;
