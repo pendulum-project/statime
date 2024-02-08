@@ -11,12 +11,12 @@ use tokio::{
 };
 
 use crate::config::Config;
-use statime::observability::{ObservableDefaultDS, ObservableInstanceState};
+use statime::observability::{ObservableDefaultDS, ObservableInstanceState, ObservableTimePropertiesDS};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
     pub program: ProgramData,
-    pub instance: Option<ObservableInstanceState>,
+    pub instance: ObservableInstanceState,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -249,6 +249,22 @@ fn format_default_ds(
     Ok(())
 }
 
+pub fn format_time_properties_ds(w: &mut impl std::fmt::Write, time_properties_ds: &ObservableTimePropertiesDS) -> std::fmt::Result {
+    format_metric(
+        w,
+        "current_utc_offset",
+        "Current offset from UTC",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: vec![],
+            value: time_properties_ds.current_utc_offset.unwrap_or(0),
+        }],
+    )?;
+
+    Ok(())
+}
+
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
     format_metric(
         w,
@@ -266,8 +282,9 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
         }],
     )?;
 
-    format_default_ds(w, &state.instance.unwrap().default_ds)?;
-
+    format_default_ds(w, &state.instance.default_ds)?;
+    format_time_properties_ds(w, &state.instance.time_properties_ds)?;
+    
     w.write_str("# EOF\n")?;
     Ok(())
 }

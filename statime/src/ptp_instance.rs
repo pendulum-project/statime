@@ -17,7 +17,7 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::{ObservableInstanceState, ObservableDefaultDS},
+    observability::ObservableInstanceState,
     port::{InBmca, Port},
     time::Duration,
 };
@@ -88,7 +88,6 @@ use crate::{
 pub struct PtpInstance<F> {
     state: AtomicRefCell<PtpInstanceState>,
     log_bmca_interval: AtomicI8,
-    instance_sender: tokio::sync::watch::Sender<ObservableInstanceState>,
     _filter: PhantomData<F>,
 }
 
@@ -105,6 +104,7 @@ impl PtpInstanceState {
         &mut self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
         bmca_interval: Duration,
+        observable_state_sender: &tokio::sync::watch::Sender<ObservableInstanceState>,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
 
@@ -146,22 +146,20 @@ impl PtpInstanceState {
         for port in ports.iter_mut() {
             port.step_announce_age(bmca_interval);
         }
+
+        // Update the observable state
+        // We don't care if there's nobody on the other side
+        let _ = observable_state_sender.send(self.into());
     }
 }
 
 impl<F> PtpInstance<F> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
-    pub fn new(
-        config: InstanceConfig,
-        time_properties_ds: TimePropertiesDS,
-    ) -> (Self, tokio::sync::watch::Receiver<ObservableInstanceState>) {
+    pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
         let default_ds = DefaultDS::new(config);
 
-        let (instance_sender, instance_receiver) =
-            tokio::sync::watch::channel(ObservableInstanceState { default_ds: ObservableDefaultDS::from(default_ds) });
-        
-        (Self {
+        Self {
             state: AtomicRefCell::new(PtpInstanceState {
                 default_ds,
                 current_ds: Default::default(),
@@ -169,9 +167,19 @@ impl<F> PtpInstance<F> {
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),
-            instance_sender,
             _filter: PhantomData,
-        }, instance_receiver)
+        }
+    }
+
+    /// Read the current instance state in a serializable format
+    pub fn observe_state(&self) -> ObservableInstanceState {
+        let state = self.state.borrow();
+        ObservableInstanceState {
+            default_ds: state.default_ds.into(),
+            current_ds: state.current_ds.into(),
+            parent_ds: state.parent_ds.clone().into(),
+            time_properties_ds: state.time_properties_ds.into(),
+        }
     }
 }
 
@@ -200,11 +208,6 @@ impl<F: Filter> PtpInstance<F> {
         };
         state.default_ds.number_ports += 1;
 
-        // Don't care if there's no receiver
-        let _ = self.instance_sender.send(ObservableInstanceState {
-            default_ds: state.default_ds.into(),
-        });
-
         Port::new(
             &self.state,
             config,
@@ -222,12 +225,14 @@ impl<F: Filter> PtpInstance<F> {
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
+        observable_state_sender: &tokio::sync::watch::Sender<ObservableInstanceState>,
     ) {
         self.state.borrow_mut().bmca(
             ports,
             Duration::from_seconds(
                 2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
             ),
+            observable_state_sender,
         )
     }
 
@@ -236,16 +241,5 @@ impl<F: Filter> PtpInstance<F> {
         core::time::Duration::from_secs_f64(
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
-    }
-
-    /// Read the current instance state in a serializable format
-    pub fn observe_state(&self) -> ObservableInstanceState {
-        let state = self.state.borrow();
-        ObservableInstanceState {
-            default_ds: state.default_ds.into(),
-            //current_ds: state.current_ds,
-            //parent_ds: state.parent_ds.clone(),
-            //time_properties_ds: state.time_properties_ds,
-        }
     }
 }

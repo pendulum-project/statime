@@ -1,5 +1,6 @@
 /// Describes upcoming leap seconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LeapIndicator {
     #[default]
     /// No leap seconds will be added or removed on this UTC day.

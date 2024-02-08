@@ -1,5 +1,6 @@
 use std::{fs::Permissions, os::unix::prelude::PermissionsExt, path::Path, time::Instant};
 
+use statime::observability::ObservableInstanceState;
 use tokio::{io::AsyncWriteExt, net::UnixStream, task::JoinHandle};
 
 use crate::{
@@ -7,10 +8,10 @@ use crate::{
     metrics::exporter::{ObservableState, ProgramData},
 };
 
-pub async fn spawn(config: &Config, instance_reader: tokio::sync::watch::Receiver<Option<ObservableInstanceState>>) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(config: &Config, instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
-        let result = observer(config, instance_reader).await;
+        let result = observer(config, instance_state_receiver).await;
         if let Err(ref e) = result {
             log::warn!("Abnormal termination of the state observer: {e}");
             log::warn!("The state observer will not be available");
@@ -21,7 +22,7 @@ pub async fn spawn(config: &Config, instance_reader: tokio::sync::watch::Receive
 
 async fn observer(
     config: Config,
-    instance_reader: tokio::sync::watch::Receiver<Option<ObservableInstanceState>>
+    instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>
 ) -> std::io::Result<()> {
     let start_time = Instant::now();
 
@@ -44,7 +45,7 @@ async fn observer(
 
         let observe = ObservableState {
             program: ProgramData::with_uptime(start_time.elapsed().as_secs_f64()),
-            instance: instance_reader.borrow().to_owned(),
+            instance: instance_state_receiver.borrow().to_owned(),
         };
 
         write_json(&mut stream, &observe).await?;

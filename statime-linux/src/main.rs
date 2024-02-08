@@ -23,7 +23,7 @@ use statime_linux::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,
     },
-    tlvforwarder::TlvForwarder,
+    tlvforwarder::TlvForwarder, metrics::exporter::ObservableState,
 };
 use timestamped_socket::{
     interface::interfaces,
@@ -259,7 +259,8 @@ async fn actual_main() {
     )));
         
     // The observer for the metrics exporter
-    statime_linux::observer::spawn(&config, instance_receiver).await;
+    let (instance_state_sender, instance_state_receiver) = tokio::sync::watch::channel(instance.observe_state());
+    statime_linux::observer::spawn(&config, instance_state_receiver).await;
 
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
 
@@ -296,6 +297,7 @@ async fn actual_main() {
                 (LinuxClock::CLOCK_TAI, InterfaceTimestampMode::SoftwareAll)
             }
         };
+        
         let rng = StdRng::from_entropy();
         let port = instance.add_port(
             port_config.into(),
@@ -313,7 +315,7 @@ async fn actual_main() {
         ports.push(port);
         main_task_senders.push(main_task_sender);
         main_task_receivers.push(main_task_receiver);
-
+        
         match network_mode {
             statime_linux::config::NetworkMode::Ipv4 => {
                 let event_socket = open_ipv4_event_socket(interface, timestamping)
@@ -380,6 +382,7 @@ async fn actual_main() {
     run(
         instance,
         bmca_notify_sender,
+        instance_state_sender,
         main_task_receivers,
         main_task_senders,
         internal_sync_senders,
@@ -391,6 +394,7 @@ async fn actual_main() {
 async fn run(
     instance: &'static PtpInstance<KalmanFilter>,
     bmca_notify_sender: tokio::sync::watch::Sender<bool>,
+    instance_state_sender: tokio::sync::watch::Sender<ObservableInstanceState>,
     mut main_task_receivers: Vec<Receiver<BmcaPort>>,
     main_task_senders: Vec<Sender<BmcaPort>>,
     internal_sync_senders: Vec<tokio::sync::watch::Sender<ClockSyncMode>>,
@@ -428,7 +432,7 @@ async fn run(
             mut_bmca_ports.push(mut_bmca_port);
         }
 
-        instance.bmca(&mut mut_bmca_ports);
+        instance.bmca(&mut mut_bmca_ports, &instance_state_sender);
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];
         for (idx, port) in mut_bmca_ports.iter().enumerate() {
