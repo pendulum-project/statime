@@ -8,8 +8,8 @@ use crate::{
         messages::{DelayReqMessage, Header, Message, MessageBody, MAX_DATA_LEN},
     },
     port::{
-        sequence_id::SequenceIdGenerator, ForwardedTLVProvider, PortAction, PortActionIterator,
-        TimestampContext, TimestampContextInner,
+        actions::TimestampContextInner, sequence_id::SequenceIdGenerator, ForwardedTLVProvider,
+        PortAction, PortActionIterator, TimestampContext,
     },
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
