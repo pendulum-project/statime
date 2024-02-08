@@ -1,12 +1,6 @@
-use std::fs::Permissions;
-use std::os::unix::prelude::PermissionsExt;
-use std::path::Path;
-use std::time::Instant;
-use statime::observability::ObservableInstanceState;
-use tokio::io::AsyncWriteExt;
+use std::{fs::Permissions, os::unix::prelude::PermissionsExt, path::Path, time::Instant};
 
-use tokio::net::UnixStream;
-use tokio::task::JoinHandle;
+use tokio::{io::AsyncWriteExt, net::UnixStream, task::JoinHandle};
 
 use crate::{
     config::Config,
@@ -37,8 +31,9 @@ async fn observer(
     };
 
     // this binary needs to run as root to be able to adjust the system clock.
-    // by default, the socket inherits root permissions, but the client should not need
-    // elevated permissions to read from the socket. So we explicitly set the permissions
+    // by default, the socket inherits root permissions, but the client should not
+    // need elevated permissions to read from the socket. So we explicitly set
+    // the permissions
     let permissions: std::fs::Permissions =
         PermissionsExt::from_mode(config.observability.observation_permissions);
 
@@ -73,7 +68,8 @@ pub fn create_unix_socket_with_permissions(
 }
 
 fn create_unix_socket(path: &Path) -> std::io::Result<tokio::net::UnixListener> {
-    // must unlink path before the bind below (otherwise we get "address already in use")
+    // must unlink path before the bind below (otherwise we get "address already in
+    // use")
     if path.exists() {
         use std::os::unix::fs::FileTypeExt;
 

@@ -2,7 +2,7 @@
 //!
 //! See [`Port`] for a detailed description.
 
-use core::ops::Deref;
+use core::{iter::Fuse, ops::Deref};
 
 use arrayvec::ArrayVec;
 use atomic_refcell::{AtomicRef, AtomicRefCell};
@@ -22,7 +22,7 @@ use crate::{
     clock::Clock,
     config::PortConfig,
     datastructures::{
-        common::{LeapIndicator, PortIdentity, TimeSource},
+        common::{LeapIndicator, PortIdentity, TimeSource, Tlv, TlvSetIterator},
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
         messages::{Message, MessageBody},
     },
@@ -198,6 +198,7 @@ pub(crate) mod state;
 ///             PortAction::ResetFilterUpdateTimer { duration } => {
 ///                 resources.filter_update_timer.expire_in(duration)
 ///             }
+///             PortAction::ForwardTLV { .. } => {}
 ///         }
 ///     }
 /// }
@@ -234,11 +235,11 @@ pub(crate) mod state;
 /// use statime::Clock;
 /// use statime::config::AcceptableMasterList;
 /// use statime::filters::Filter;
-/// use statime::port::{Port, PortActionIterator, Running};
+/// use statime::port::{NoForwardedTLVs, Port, PortActionIterator, Running};
 ///
 /// fn something_happend(resources: &mut MyPortResources, running_port: &mut Port<Running, impl AcceptableMasterList, impl Rng, impl Clock, impl Filter>) {
 ///     let actions = if resources.announce_timer.has_expired() {
-///         running_port.handle_announce_timer()
+///         running_port.handle_announce_timer(&mut NoForwardedTLVs)
 ///     } else if resources.sync_timer.has_expired() {
 ///         running_port.handle_sync_timer()
 ///     } else if resources.delay_req_timer.has_expired() {
@@ -311,6 +312,45 @@ enum TimestampContextInner {
     DelayReq { id: u16 },
 }
 
+#[derive(Debug, Clone)]
+/// TLV that needs to be forwarded in the announce messages of other ports.
+pub struct ForwardedTLV<'a> {
+    tlv: Tlv<'a>,
+    sender_identity: PortIdentity,
+}
+
+impl<'a> ForwardedTLV<'a> {
+    /// Wire size of the TLV. Can be used to determine how many TLV's to keep
+    pub fn size(&self) -> usize {
+        self.tlv.wire_size()
+    }
+
+    /// Get an owned version of the struct.
+    #[cfg(feature = "std")]
+    pub fn into_owned(self) -> ForwardedTLV<'static> {
+        ForwardedTLV {
+            tlv: self.tlv.into_owned(),
+            sender_identity: self.sender_identity,
+        }
+    }
+}
+
+/// Source of TLVs that need to be forwarded, provided to announce sender.
+pub trait ForwardedTLVProvider {
+    /// Should provide the next available TLV, unless it is larger than max_size
+    fn next_if_smaller(&mut self, max_size: usize) -> Option<ForwardedTLV>;
+}
+
+/// Simple implementation when
+#[derive(Debug, Copy, Clone)]
+pub struct NoForwardedTLVs;
+
+impl ForwardedTLVProvider for NoForwardedTLVs {
+    fn next_if_smaller(&mut self, _max_size: usize) -> Option<ForwardedTLV> {
+        None
+    }
+}
+
 /// An action the [`Port`] needs the user to perform
 #[derive(Debug)]
 #[must_use]
@@ -339,6 +379,13 @@ pub enum PortAction<'a> {
     ResetAnnounceReceiptTimer { duration: core::time::Duration },
     /// Call [`Port::handle_filter_update_timer`] in `duration` from now
     ResetFilterUpdateTimer { duration: core::time::Duration },
+    /// Forward this TLV to the announce timer call of all other ports.
+    /// The receiver must ensure the TLV is yielded only once to the announce
+    /// method of a port.
+    ///
+    /// This can be ignored when implementing a single port or slave only ptp
+    /// instance.
+    ForwardTLV { tlv: ForwardedTLV<'a> },
 }
 
 const MAX_ACTIONS: usize = 2;
@@ -353,7 +400,9 @@ const MAX_ACTIONS: usize = 2;
 #[derive(Debug)]
 #[must_use]
 pub struct PortActionIterator<'a> {
-    internal: <ArrayVec<PortAction<'a>, MAX_ACTIONS> as IntoIterator>::IntoIter,
+    internal: Fuse<<ArrayVec<PortAction<'a>, MAX_ACTIONS> as IntoIterator>::IntoIter>,
+    tlvs: TlvSetIterator<'a>,
+    sender_identity: PortIdentity,
 }
 
 impl<'a> PortActionIterator<'a> {
@@ -363,12 +412,16 @@ impl<'a> PortActionIterator<'a> {
     /// statements.
     pub fn empty() -> Self {
         Self {
-            internal: ArrayVec::new().into_iter(),
+            internal: ArrayVec::new().into_iter().fuse(),
+            tlvs: TlvSetIterator::empty(),
+            sender_identity: Default::default(),
         }
     }
     fn from(list: ArrayVec<PortAction<'a>, MAX_ACTIONS>) -> Self {
         Self {
-            internal: list.into_iter(),
+            internal: list.into_iter().fuse(),
+            tlvs: TlvSetIterator::empty(),
+            sender_identity: Default::default(),
         }
     }
     fn from_filter(update: FilterUpdate) -> Self {
@@ -378,13 +431,30 @@ impl<'a> PortActionIterator<'a> {
             actions![]
         }
     }
+    fn with_forward_tlvs(self, tlvs: TlvSetIterator<'a>, sender_identity: PortIdentity) -> Self {
+        Self {
+            internal: self.internal,
+            tlvs,
+            sender_identity,
+        }
+    }
 }
 
 impl<'a> Iterator for PortActionIterator<'a> {
     type Item = PortAction<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.internal.next()
+        self.internal.next().or_else(|| loop {
+            let tlv = self.tlvs.next()?;
+            if tlv.tlv_type.announce_propagate() {
+                return Some(PortAction::ForwardTLV {
+                    tlv: ForwardedTLV {
+                        tlv,
+                        sender_identity: self.sender_identity,
+                    },
+                });
+            }
+        })
     }
 }
 
@@ -412,11 +482,15 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     /// Handle the announce timer going off
-    pub fn handle_announce_timer(&mut self) -> PortActionIterator<'_> {
+    pub fn handle_announce_timer(
+        &mut self,
+        tlv_provider: &mut impl ForwardedTLVProvider,
+    ) -> PortActionIterator<'_> {
         self.port_state.send_announce(
             self.lifecycle.state.deref(),
             &self.config,
             self.port_identity,
+            tlv_provider,
             &mut self.packet_buffer,
         )
     }
@@ -488,7 +562,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     /// Handle a message over the event channel
-    pub fn handle_event_receive(&mut self, data: &[u8], timestamp: Time) -> PortActionIterator {
+    pub fn handle_event_receive<'b>(
+        &'b mut self,
+        data: &'b [u8],
+        timestamp: Time,
+    ) -> PortActionIterator<'b> {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
             Err(error) => {
@@ -520,7 +598,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 
     /// Handle a general ptp message
-    pub fn handle_general_receive(&mut self, data: &[u8]) -> PortActionIterator {
+    pub fn handle_general_receive<'b>(&'b mut self, data: &'b [u8]) -> PortActionIterator<'b> {
         let message = match Message::deserialize(data) {
             Ok(message) => message,
             Err(error) => {
@@ -539,7 +617,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         self.handle_general_internal(message)
     }
 
-    fn handle_general_internal(&mut self, message: Message<'_>) -> PortActionIterator<'_> {
+    fn handle_general_internal<'b>(&'b mut self, message: Message<'b>) -> PortActionIterator<'b> {
         match message.body {
             MessageBody::Announce(announce) => {
                 if self
@@ -549,6 +627,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                     actions![PortAction::ResetAnnounceReceiptTimer {
                         duration: self.config.announce_duration(&mut self.rng),
                     }]
+                    .with_forward_tlvs(message.suffix.tlv(), message.header.source_port_identity)
                 } else {
                     actions![]
                 }
@@ -604,6 +683,11 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
     /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
+    }
+
+    /// Indicate whether this [`Port`] is in the master state.
+    pub fn is_master(&self) -> bool {
+        matches!(self.port_state, PortState::Master(_))
     }
 
     pub(crate) fn state(&self) -> &PortState<F> {

@@ -1,10 +1,14 @@
+use std::{
+    fmt::Write,
+    path::{Path, PathBuf},
+};
+
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write;
-use std::path::{Path, PathBuf};
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpListener, UnixStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, UnixStream},
+};
 
 use crate::config::Config;
 use statime::observability::{ObservableDefaultDS, ObservableInstanceState};
@@ -70,7 +74,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let observation_socket_path = match config.observability.observation_path {
         Some(path) => path,
         None => {
-            eprintln!("An observation socket path must be configured using the observation-path option in the [observability] section of the configuration");
+            eprintln!(
+                "An observation socket path must be configured using the observation-path option \
+                 in the [observability] section of the configuration"
+            );
             std::process::exit(1);
         }
     };

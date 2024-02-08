@@ -1,6 +1,7 @@
 name: docs
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -40,7 +41,7 @@ jobs:
         run: rm -rf target/docs/site/api/.lock
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@a753861a5debcf57bf8b404356158c8e1e33150c
+        uses: actions/upload-pages-artifact@0252fc4ba7626f0298f0cf00902a25c6afc77fa8
         with:
           path: target/docs/site
 
@@ -53,4 +54,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@9dbe3824824f8a1377b8e298bafde1a50ede43e5
+        uses: actions/deploy-pages@87c3283f01cd6fe19a0ab93a23b2f6fcba5a8e42

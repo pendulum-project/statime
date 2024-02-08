@@ -39,7 +39,7 @@ mod sync;
 ///
 /// This can be used to preallocate buffers that can always fit packets send by
 /// `statime`.
-pub const MAX_DATA_LEN: usize = 255;
+pub const MAX_DATA_LEN: usize = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -56,7 +56,7 @@ pub enum MessageType {
     Management = 0xd,
 }
 
-pub struct EnumConversionError(u8);
+pub struct EnumConversionError;
 
 impl TryFrom<u8> for MessageType {
     type Error = EnumConversionError;
@@ -75,7 +75,7 @@ impl TryFrom<u8> for MessageType {
             0xb => Ok(Announce),
             0xc => Ok(Signaling),
             0xd => Ok(Management),
-            _ => Err(EnumConversionError(value)),
+            _ => Err(EnumConversionError),
         }
     }
 }

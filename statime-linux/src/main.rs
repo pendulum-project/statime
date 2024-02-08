@@ -23,6 +23,7 @@ use statime_linux::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,
     },
+    tlvforwarder::TlvForwarder,
 };
 use timestamped_socket::{
     interface::interfaces,
@@ -272,6 +273,8 @@ async fn actual_main() {
 
     let mut ports = Vec::with_capacity(config.ports.len());
 
+    let tlv_forwarder = TlvForwarder::new();
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -324,6 +327,7 @@ async fn actual_main() {
                     event_socket,
                     general_socket,
                     bmca_notify_receiver.clone(),
+                    tlv_forwarder.duplicate(),
                     port_clock,
                 ));
             }
@@ -339,6 +343,7 @@ async fn actual_main() {
                     event_socket,
                     general_socket,
                     bmca_notify_receiver.clone(),
+                    tlv_forwarder.duplicate(),
                     port_clock,
                 ));
             }
@@ -354,11 +359,15 @@ async fn actual_main() {
                         .expect("Unable to get network interface index") as _,
                     socket,
                     bmca_notify_receiver.clone(),
+                    tlv_forwarder.duplicate(),
                     port_clock,
                 ));
             }
         }
     }
+
+    // Drop the forwarder so we don't keep an unneeded subscriber.
+    drop(tlv_forwarder);
 
     // All ports created, so we can start running them.
     for (i, port) in ports.into_iter().enumerate() {
@@ -455,6 +464,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
     mut event_socket: Socket<A, Open>,
     mut general_socket: Socket<A, Open>,
     mut bmca_notify: tokio::sync::watch::Receiver<bool>,
+    mut tlv_forwarder: TlvForwarder,
     clock: LinuxClock,
 ) {
     let mut timers = Timers {
@@ -476,6 +486,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
             &mut event_socket,
             &mut general_socket,
             &mut timers,
+            &tlv_forwarder,
             &clock,
         )
         .await;
@@ -486,6 +497,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
                 &mut event_socket,
                 &mut general_socket,
                 &mut timers,
+                &tlv_forwarder,
                 &clock,
             )
             .await;
@@ -516,7 +528,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
                     Err(error) => panic!("Error receiving: {error:?}"),
                 },
                 () = &mut timers.port_announce_timer => {
-                    port.handle_announce_timer()
+                    port.handle_announce_timer(&mut tlv_forwarder)
                 },
                 () = &mut timers.port_sync_timer => {
                     port.handle_sync_timer()
@@ -542,6 +554,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
                     &mut event_socket,
                     &mut general_socket,
                     &mut timers,
+                    &tlv_forwarder,
                     &clock,
                 )
                 .await;
@@ -571,6 +584,7 @@ async fn ethernet_port_task(
     interface: libc::c_int,
     mut socket: Socket<EthernetAddress, Open>,
     mut bmca_notify: tokio::sync::watch::Receiver<bool>,
+    mut tlv_forwarder: TlvForwarder,
     clock: LinuxClock,
 ) {
     let mut timers = Timers {
@@ -584,11 +598,24 @@ async fn ethernet_port_task(
     loop {
         let port_in_bmca = port_task_receiver.recv().await.unwrap();
 
+        // Clear out old tlvs if we are not in the master state, so we don't keep em too
+        // long.
+        if port_in_bmca.is_master() {
+            tlv_forwarder.empty()
+        }
+
         // handle post-bmca actions
         let (mut port, actions) = port_in_bmca.end_bmca();
 
-        let mut pending_timestamp =
-            handle_actions_ethernet(actions, interface, &mut socket, &mut timers, &clock).await;
+        let mut pending_timestamp = handle_actions_ethernet(
+            actions,
+            interface,
+            &mut socket,
+            &mut timers,
+            &tlv_forwarder,
+            &clock,
+        )
+        .await;
 
         while let Some((context, timestamp)) = pending_timestamp {
             pending_timestamp = handle_actions_ethernet(
@@ -596,6 +623,7 @@ async fn ethernet_port_task(
                 interface,
                 &mut socket,
                 &mut timers,
+                &tlv_forwarder,
                 &clock,
             )
             .await;
@@ -620,7 +648,7 @@ async fn ethernet_port_task(
                     Err(error) => panic!("Error receiving: {error:?}"),
                 },
                 () = &mut timers.port_announce_timer => {
-                    port.handle_announce_timer()
+                    port.handle_announce_timer(&mut tlv_forwarder)
                 },
                 () = &mut timers.port_sync_timer => {
                     port.handle_sync_timer()
@@ -641,9 +669,15 @@ async fn ethernet_port_task(
             };
 
             loop {
-                let pending_timestamp =
-                    handle_actions_ethernet(actions, interface, &mut socket, &mut timers, &clock)
-                        .await;
+                let pending_timestamp = handle_actions_ethernet(
+                    actions,
+                    interface,
+                    &mut socket,
+                    &mut timers,
+                    &tlv_forwarder,
+                    &clock,
+                )
+                .await;
 
                 // there might be more actions to handle based on the current action
                 actions = match pending_timestamp {
@@ -671,6 +705,7 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
     event_socket: &mut Socket<A, Open>,
     general_socket: &mut Socket<A, Open>,
     timers: &mut Timers<'_>,
+    tlv_forwarder: &TlvForwarder,
     clock: &LinuxClock,
 ) -> Option<(TimestampContext, Time)> {
     let mut pending_timestamp = None;
@@ -717,6 +752,9 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
             PortAction::ResetFilterUpdateTimer { duration } => {
                 timers.filter_update_timer.as_mut().reset(duration);
             }
+            PortAction::ForwardTLV { tlv } => {
+                tlv_forwarder.forward(tlv.into_owned());
+            }
         }
     }
 
@@ -728,6 +766,7 @@ async fn handle_actions_ethernet(
     interface: libc::c_int,
     socket: &mut Socket<EthernetAddress, Open>,
     timers: &mut Timers<'_>,
+    tlv_forwarder: &TlvForwarder,
     clock: &LinuxClock,
 ) -> Option<(TimestampContext, Time)> {
     let mut pending_timestamp = None;
@@ -788,6 +827,7 @@ async fn handle_actions_ethernet(
             PortAction::ResetFilterUpdateTimer { duration } => {
                 timers.filter_update_timer.as_mut().reset(duration);
             }
+            PortAction::ForwardTLV { tlv } => tlv_forwarder.forward(tlv.into_owned()),
         }
     }
 
