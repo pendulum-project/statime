@@ -11,8 +11,9 @@ pub use actions::{
 use atomic_refcell::{AtomicRef, AtomicRefCell};
 pub use measurement::Measurement;
 use rand::Rng;
-use state::{MasterState, PortState};
+use state::PortState;
 
+use self::sequence_id::SequenceIdGenerator;
 pub use crate::datastructures::messages::MAX_DATA_LEN;
 #[cfg(doc)]
 use crate::PtpInstance;
@@ -280,6 +281,10 @@ pub struct Port<L, A, R, C, F: Filter> {
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
     rng: R,
+
+    announce_seq_ids: SequenceIdGenerator,
+    sync_seq_ids: SequenceIdGenerator,
+    delay_seq_ids: SequenceIdGenerator,
 }
 
 /// Type state of [`Port`] entered by [`Port::end_bmca`]
@@ -340,8 +345,8 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         // we didn't hear announce messages from other masters, so become master
         // ourselves
         match self.port_state {
-            PortState::Master(_) => (),
-            _ => self.set_forced_port_state(PortState::Master(MasterState::new())),
+            PortState::Master => (),
+            _ => self.set_forced_port_state(PortState::Master),
         }
 
         // Immediately start sending syncs and announces
@@ -382,6 +387,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 local_best: None,
                 state_refcell: self.lifecycle.state_refcell,
             },
+            announce_seq_ids: self.announce_seq_ids,
+            sync_seq_ids: self.sync_seq_ids,
+            delay_seq_ids: self.delay_seq_ids,
         }
     }
 
@@ -476,6 +484,9 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
                     state_refcell: self.lifecycle.state_refcell,
                     state: self.lifecycle.state_refcell.borrow(),
                 },
+                announce_seq_ids: self.announce_seq_ids,
+                sync_seq_ids: self.sync_seq_ids,
+                delay_seq_ids: self.delay_seq_ids,
             },
             self.lifecycle.pending_action,
         )
@@ -505,7 +516,7 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
 
     /// Indicate whether this [`Port`] is in the master state.
     pub fn is_master(&self) -> bool {
-        matches!(self.port_state, PortState::Master(_))
+        matches!(self.port_state, PortState::Master)
     }
 
     pub(crate) fn state(&self) -> &PortState<F> {
@@ -556,6 +567,9 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 local_best: None,
                 state_refcell,
             },
+            announce_seq_ids: SequenceIdGenerator::new(),
+            sync_seq_ids: SequenceIdGenerator::new(),
+            delay_seq_ids: SequenceIdGenerator::new(),
         }
     }
 }

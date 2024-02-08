@@ -224,7 +224,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
             PortState::Slave(ref mut state) => {
                 log::debug!("Starting new delay measurement");
 
-                let delay_id = state.delay_req_ids.generate();
+                let delay_id = self.delay_seq_ids.generate();
                 let delay_req = Message::delay_req(
                     &self.lifecycle.state.default_ds,
                     self.port_identity,
