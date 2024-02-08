@@ -11,17 +11,13 @@ use crate::{
 
 impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
-        match self.port_state {
-            PortState::Master(ref mut state) => {
-                log::trace!("sending sync message");
+        if matches!(self.port_state, PortState::Master) {
+            log::trace!("sending sync message");
 
-                let seq_id = state.sync_seq_ids.generate();
-                let packet_length = match Message::sync(
-                    &self.lifecycle.state.default_ds,
-                    self.port_identity,
-                    seq_id,
-                )
-                .serialize(&mut self.packet_buffer)
+            let seq_id = self.sync_seq_ids.generate();
+            let packet_length =
+                match Message::sync(&self.lifecycle.state.default_ds, self.port_identity, seq_id)
+                    .serialize(&mut self.packet_buffer)
                 {
                     Ok(message) => message,
                     Err(error) => {
@@ -30,24 +26,24 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
                     }
                 };
 
-                actions![
-                    PortAction::ResetSyncTimer {
-                        duration: self.config.sync_interval.as_core_duration(),
+            actions![
+                PortAction::ResetSyncTimer {
+                    duration: self.config.sync_interval.as_core_duration(),
+                },
+                PortAction::SendEvent {
+                    context: TimestampContext {
+                        inner: TimestampContextInner::Sync { id: seq_id },
                     },
-                    PortAction::SendEvent {
-                        context: TimestampContext {
-                            inner: TimestampContextInner::Sync { id: seq_id },
-                        },
-                        data: &self.packet_buffer[..packet_length],
-                    }
-                ]
-            }
-            _ => actions![],
+                    data: &self.packet_buffer[..packet_length],
+                }
+            ]
+        } else {
+            actions![]
         }
     }
 
     pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
-        if matches!(self.port_state, PortState::Master(_)) {
+        if matches!(self.port_state, PortState::Master) {
             let packet_length = match Message::follow_up(
                 &self.lifecycle.state.default_ds,
                 self.port_identity,
@@ -78,61 +74,60 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         &mut self,
         tlv_provider: &mut impl ForwardedTLVProvider,
     ) -> PortActionIterator {
-        match self.port_state {
-            PortState::Master(ref mut state) => {
-                log::trace!("sending announce message");
+        if matches!(self.port_state, PortState::Master) {
+            log::trace!("sending announce message");
 
-                let mut tlv_buffer = [0; MAX_DATA_LEN];
-                let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
+            let mut tlv_buffer = [0; MAX_DATA_LEN];
+            let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
 
-                let mut message = Message::announce(
-                    &self.lifecycle.state,
-                    self.port_identity,
-                    state.announce_seq_ids.generate(),
-                );
-                let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
+            let mut message = Message::announce(
+                &self.lifecycle.state,
+                self.port_identity,
+                self.announce_seq_ids.generate(),
+            );
+            let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
 
-                while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
-                    assert!(tlv.size() < tlv_margin);
-                    if self.lifecycle.state.parent_ds.parent_port_identity != tlv.sender_identity {
-                        // Ignore, shouldn't be forwarded
-                        continue;
-                    }
-
-                    tlv_margin -= tlv.size();
-                    // Will not fail as previous checks ensure sufficient space in buffer.
-                    tlv_builder.add(tlv.tlv).unwrap();
+            while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
+                assert!(tlv.size() < tlv_margin);
+                if self.lifecycle.state.parent_ds.parent_port_identity != tlv.sender_identity {
+                    // Ignore, shouldn't be forwarded
+                    continue;
                 }
 
-                message.suffix = tlv_builder.build();
-
-                let packet_length = match Message::announce(
-                    &self.lifecycle.state,
-                    self.port_identity,
-                    state.announce_seq_ids.generate(),
-                )
-                .serialize(&mut self.packet_buffer)
-                {
-                    Ok(length) => length,
-                    Err(error) => {
-                        log::error!(
-                            "Statime bug: Could not serialize announce message {:?}",
-                            error
-                        );
-                        return actions![];
-                    }
-                };
-
-                actions![
-                    PortAction::ResetAnnounceTimer {
-                        duration: self.config.announce_interval.as_core_duration(),
-                    },
-                    PortAction::SendGeneral {
-                        data: &self.packet_buffer[..packet_length]
-                    }
-                ]
+                tlv_margin -= tlv.size();
+                // Will not fail as previous checks ensure sufficient space in buffer.
+                tlv_builder.add(tlv.tlv).unwrap();
             }
-            _ => actions![],
+
+            message.suffix = tlv_builder.build();
+
+            let packet_length = match Message::announce(
+                &self.lifecycle.state,
+                self.port_identity,
+                self.announce_seq_ids.generate(),
+            )
+            .serialize(&mut self.packet_buffer)
+            {
+                Ok(length) => length,
+                Err(error) => {
+                    log::error!(
+                        "Statime bug: Could not serialize announce message {:?}",
+                        error
+                    );
+                    return actions![];
+                }
+            };
+
+            actions![
+                PortAction::ResetAnnounceTimer {
+                    duration: self.config.announce_interval.as_core_duration(),
+                },
+                PortAction::SendGeneral {
+                    data: &self.packet_buffer[..packet_length]
+                }
+            ]
+        } else {
+            actions![]
         }
     }
 
@@ -142,7 +137,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         message: DelayReqMessage,
         timestamp: Time,
     ) -> PortActionIterator {
-        if matches!(self.port_state, PortState::Master(_)) {
+        if matches!(self.port_state, PortState::Master) {
             log::debug!("Received DelayReq");
             let delay_resp_message = Message::delay_resp(
                 header,
@@ -181,7 +176,6 @@ mod tests {
             messages::{Header, MessageBody},
         },
         port::{
-            state::MasterState,
             tests::{setup_test_port, setup_test_state},
             NoForwardedTLVs,
         },
@@ -194,7 +188,7 @@ mod tests {
 
         let mut port = setup_test_port(&state);
 
-        port.set_forced_port_state(PortState::Master(MasterState::default()));
+        port.set_forced_port_state(PortState::Master);
 
         port.config.delay_mechanism = DelayMechanism::E2E {
             interval: Interval::from_log_2(2),
@@ -308,7 +302,7 @@ mod tests {
 
         let mut port = setup_test_port(&state);
 
-        port.set_forced_port_state(PortState::Master(MasterState::default()));
+        port.set_forced_port_state(PortState::Master);
 
         let mut actions = port.send_announce(&mut NoForwardedTLVs);
 
@@ -369,7 +363,7 @@ mod tests {
 
         let mut port = setup_test_port(&state);
 
-        port.set_forced_port_state(PortState::Master(MasterState::default()));
+        port.set_forced_port_state(PortState::Master);
         let mut actions = port.send_sync();
 
         assert!(matches!(

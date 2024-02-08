@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use super::{state::MasterState, InBmca, Port, PortActionIterator, Running};
+use super::{InBmca, Port, PortActionIterator, Running};
 use crate::{
     bmc::bmca::{BestAnnounceMessage, RecommendedState},
     config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
@@ -146,7 +146,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 let remote_master = announce_message.header.source_port_identity;
 
                 let update_state = match &self.port_state {
-                    PortState::Listening | PortState::Master(_) | PortState::Passive => true,
+                    PortState::Listening | PortState::Master | PortState::Passive => true,
                     PortState::Slave(old_state) => old_state.remote_master() != remote_master,
                 };
 
@@ -177,7 +177,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                             let reset_announce = PortAction::ResetAnnounceReceiptTimer { duration };
                             self.lifecycle.pending_action = actions![reset_announce];
                         }
-                        PortState::Master(_) => {
+                        PortState::Master => {
                             let msg = "slave-only PTP port should not be in master state";
                             debug_assert!(!default_ds.slave_only, "{msg}");
                             log::error!("{msg}");
@@ -186,7 +186,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 } else {
                     match self.port_state {
                         PortState::Listening | PortState::Slave(_) | PortState::Passive => {
-                            self.set_forced_port_state(PortState::Master(MasterState::new()));
+                            self.set_forced_port_state(PortState::Master);
 
                             // Immediately start sending announces and syncs
                             let duration = core::time::Duration::from_secs(0);
@@ -195,12 +195,12 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                                 PortAction::ResetSyncTimer { duration }
                             ];
                         }
-                        PortState::Master(_) => { /* do nothing */ }
+                        PortState::Master => { /* do nothing */ }
                     }
                 }
             }
             RecommendedState::P1(_) | RecommendedState::P2(_) => match self.port_state {
-                PortState::Listening | PortState::Slave(_) | PortState::Master(_) => {
+                PortState::Listening | PortState::Slave(_) | PortState::Master => {
                     self.set_forced_port_state(PortState::Passive)
                 }
                 PortState::Passive => {}
