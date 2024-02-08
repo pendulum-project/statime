@@ -18,7 +18,7 @@ use crate::{
     },
     filters::Filter,
     observability::{
-        ObservableCurrentDS, ObservableDefaultDS, ObservableParentDS, ObservableTimePropertiesDS,
+        CurrentDS, DefaultDS, ParentDS, TimePropertiesDS,
     },
     port::{InBmca, Port},
     time::Duration,
@@ -167,22 +167,22 @@ impl<F> PtpInstance<F> {
     }
 
     /// Return IEEE-1588 defaultDS for introspection
-    pub fn default_ds(&self) -> ObservableDefaultDS {
+    pub fn default_ds(&self) -> DefaultDS {
         self.state.borrow().default_ds.into()
     }
 
     /// Return IEEE-1588 currentDS for introspection
-    pub fn current_ds(&self) -> ObservableCurrentDS {
+    pub fn current_ds(&self) -> CurrentDS {
         self.state.borrow().current_ds.into()
     }
 
     /// Return IEEE-1588 parentDS for introspection
-    pub fn parent_ds(&self) -> ObservableParentDS {
+    pub fn parent_ds(&self) -> ParentDS {
         self.state.borrow().parent_ds.clone().into()
     }
 
     /// Return IEEE-1588 timePropertiesDS for introspection
-    pub fn time_properties_ds(&self) -> ObservableTimePropertiesDS {
+    pub fn time_properties_ds(&self) -> TimePropertiesDS {
         self.state.borrow().time_properties_ds.into()
     }
 }

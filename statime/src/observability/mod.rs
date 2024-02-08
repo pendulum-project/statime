@@ -12,16 +12,16 @@ use crate::{
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableInstanceState {
-    pub default_ds: ObservableDefaultDS,
-    pub current_ds: ObservableCurrentDS,
-    pub parent_ds: ObservableParentDS,
-    pub time_properties_ds: ObservableTimePropertiesDS,
+    pub default_ds: DefaultDS,
+    pub current_ds: CurrentDS,
+    pub parent_ds: ParentDS,
+    pub time_properties_ds: TimePropertiesDS,
 }
 
 /// Observable version of the DefaultDS struct
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ObservableDefaultDS {
+pub struct DefaultDS {
     pub clock_identity: crate::config::ClockIdentity,
     pub number_ports: u16,
     pub clock_quality: crate::config::ClockQuality,
@@ -32,7 +32,7 @@ pub struct ObservableDefaultDS {
     pub sdo_id: crate::config::SdoId,
 }
 
-impl From<InternalDefaultDS> for ObservableDefaultDS {
+impl From<InternalDefaultDS> for DefaultDS {
     fn from(v: InternalDefaultDS) -> Self {
         Self {
             clock_identity: v.clock_identity,
@@ -49,13 +49,13 @@ impl From<InternalDefaultDS> for ObservableDefaultDS {
 
 #[derive(Debug, Default, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ObservableCurrentDS {
+pub struct CurrentDS {
     pub steps_removed: u16,
     pub offset_from_master: i128, // rounded nanos
     pub mean_delay: i128,         // rounded nanos
 }
 
-impl From<InternalCurrentDS> for ObservableCurrentDS {
+impl From<InternalCurrentDS> for CurrentDS {
     fn from(v: InternalCurrentDS) -> Self {
         Self {
             steps_removed: v.steps_removed,
@@ -67,7 +67,7 @@ impl From<InternalCurrentDS> for ObservableCurrentDS {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ObservableParentDS {
+pub struct ParentDS {
     pub parent_port_identity: PortIdentity,
     pub parent_stats: bool,
     pub observed_parent_offset_scaled_log_variance: u16,
@@ -78,7 +78,7 @@ pub struct ObservableParentDS {
     pub grandmaster_priority_2: u8,
 }
 
-impl From<InternalParentDS> for ObservableParentDS {
+impl From<InternalParentDS> for ParentDS {
     fn from(v: InternalParentDS) -> Self {
         Self {
             parent_port_identity: v.parent_port_identity,
@@ -96,7 +96,7 @@ impl From<InternalParentDS> for ObservableParentDS {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ObservableTimePropertiesDS {
+pub struct TimePropertiesDS {
     pub current_utc_offset: Option<i16>,
     pub leap_indicator: LeapIndicator,
     pub time_traceable: bool,
@@ -105,7 +105,7 @@ pub struct ObservableTimePropertiesDS {
     pub time_source: TimeSource,
 }
 
-impl From<InternalTimePropertiesDS> for ObservableTimePropertiesDS {
+impl From<InternalTimePropertiesDS> for TimePropertiesDS {
     fn from(v: InternalTimePropertiesDS) -> Self {
         Self {
             current_utc_offset: v.current_utc_offset,
