@@ -16,6 +16,7 @@ default = ["std", "serde", "tokio"]
 std = []
 fuzz = ["std"]
 serde = ["dep:serde"]
+tokio = ["dep:tokio"]
 
 [dependencies]
 arrayvec.workspace = true

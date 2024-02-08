@@ -70,12 +70,10 @@ use crate::{
 ///     sdo_id: Default::default(),
 /// };
 /// let time_properties_ds = TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
-/// let instance_sender = ;
 ///
 /// let mut instance = PtpInstance::<BasicFilter>::new(
 ///     instance_config,
 ///     time_properties_ds,
-///     instance_sender,
 /// );
 ///
 /// let mut port = instance.add_port(port_config, filter_config, clock, rng);
