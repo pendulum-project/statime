@@ -6,8 +6,6 @@ use crate::{
     },
 };
 
-#[cfg(feature = "std")]
-
 /// A concrete implementation of the PTP Default dataset (IEEE1588-2019 section
 /// 8.2.1)
 ///

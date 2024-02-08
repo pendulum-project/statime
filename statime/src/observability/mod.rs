@@ -7,11 +7,9 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS},
     },
 };
-
-use serde::{Deserialize, Serialize};
-
 /// Observable version of the InstanceState struct
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableInstanceState {
     pub default_ds: ObservableDefaultDS,
     pub current_ds: ObservableCurrentDS,
@@ -31,7 +29,8 @@ impl From<&mut crate::ptp_instance::PtpInstanceState> for ObservableInstanceStat
 }
 
 /// Observable version of the DefaultDS struct
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableDefaultDS {
     pub clock_identity: crate::config::ClockIdentity,
     pub number_ports: u16,
@@ -58,7 +57,8 @@ impl From<DefaultDS> for ObservableDefaultDS {
     }
 }
 
-#[derive(Debug, Default, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableCurrentDS {
     pub steps_removed: u16,
     pub offset_from_master: i128, // rounded nanos
@@ -75,7 +75,8 @@ impl From<CurrentDS> for ObservableCurrentDS {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableParentDS {
     pub parent_port_identity: PortIdentity,
     pub parent_stats: bool,
@@ -103,7 +104,8 @@ impl From<ParentDS> for ObservableParentDS {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ObservableTimePropertiesDS {
     pub current_utc_offset: Option<i16>,
     pub leap_indicator: LeapIndicator,

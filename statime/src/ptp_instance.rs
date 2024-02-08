@@ -17,7 +17,7 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::ObservableInstanceState,
+    observability::{ObservableTimePropertiesDS, ObservableParentDS, ObservableCurrentDS, ObservableDefaultDS},
     port::{InBmca, Port},
     time::Duration,
 };
@@ -104,7 +104,6 @@ impl PtpInstanceState {
         &mut self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
         bmca_interval: Duration,
-        observable_state_sender: &tokio::sync::watch::Sender<ObservableInstanceState>,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
 
@@ -146,10 +145,6 @@ impl PtpInstanceState {
         for port in ports.iter_mut() {
             port.step_announce_age(bmca_interval);
         }
-
-        // Update the observable state
-        // We don't care if there's nobody on the other side
-        let _ = observable_state_sender.send(self.into());
     }
 }
 
@@ -171,16 +166,26 @@ impl<F> PtpInstance<F> {
         }
     }
 
-    /// Read the current instance state in a serializable format
-    pub fn observe_state(&self) -> ObservableInstanceState {
-        let state = self.state.borrow();
-        ObservableInstanceState {
-            default_ds: state.default_ds.into(),
-            current_ds: state.current_ds.into(),
-            parent_ds: state.parent_ds.clone().into(),
-            time_properties_ds: state.time_properties_ds.into(),
-        }
+    /// Return IEEE-1588 defaultDS for introspection
+    pub fn default_ds(&self) -> ObservableDefaultDS {
+        self.state.borrow().default_ds.into()
     }
+
+    /// Return IEEE-1588 currentDS for introspection
+    pub fn current_ds(&self) -> ObservableCurrentDS {
+        self.state.borrow().current_ds.into()
+    }
+
+    /// Return IEEE-1588 parentDS for introspection
+    pub fn parent_ds(&self) -> ObservableParentDS {
+        self.state.borrow().parent_ds.clone().into()
+    }
+
+    /// Return IEEE-1588 timePropertiesDS for introspection
+    pub fn time_properties_ds(&self) -> ObservableTimePropertiesDS {
+        self.state.borrow().time_properties_ds.into()
+    }
+
 }
 
 impl<F: Filter> PtpInstance<F> {
@@ -225,14 +230,12 @@ impl<F: Filter> PtpInstance<F> {
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
         ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
-        observable_state_sender: &tokio::sync::watch::Sender<ObservableInstanceState>,
     ) {
         self.state.borrow_mut().bmca(
             ports,
             Duration::from_seconds(
                 2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
             ),
-            observable_state_sender,
         )
     }
 

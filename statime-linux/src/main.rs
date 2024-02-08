@@ -261,7 +261,12 @@ async fn actual_main() {
 
     // The observer for the metrics exporter
     let (instance_state_sender, instance_state_receiver) =
-        tokio::sync::watch::channel(instance.observe_state());
+        tokio::sync::watch::channel(ObservableInstanceState {
+            default_ds: instance.default_ds(),
+            current_ds: instance.current_ds(),
+            parent_ds: instance.parent_ds(),
+            time_properties_ds: instance.time_properties_ds(),
+        });
     statime_linux::observer::spawn(&config, instance_state_receiver).await;
 
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
@@ -434,7 +439,16 @@ async fn run(
             mut_bmca_ports.push(mut_bmca_port);
         }
 
-        instance.bmca(&mut mut_bmca_ports, &instance_state_sender);
+        instance.bmca(&mut mut_bmca_ports);
+
+        // Update instance state for observability
+        // We don't care if isn't anybody on the other side
+        let _ = instance_state_sender.send(ObservableInstanceState {
+            default_ds: instance.default_ds(),
+            current_ds: instance.current_ds(),
+            parent_ds: instance.parent_ds(),
+            time_properties_ds: instance.time_properties_ds(),
+        });
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];
         for (idx, port) in mut_bmca_ports.iter().enumerate() {
