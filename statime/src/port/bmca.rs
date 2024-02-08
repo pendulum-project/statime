@@ -1,10 +1,13 @@
 use rand::Rng;
 
-use super::{state::MasterState, InBmca, Port};
+use super::{state::MasterState, InBmca, Port, PortActionIterator, Running};
 use crate::{
     bmc::bmca::{BestAnnounceMessage, RecommendedState},
     config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
-    datastructures::datasets::{CurrentDS, DefaultDS, ParentDS},
+    datastructures::{
+        datasets::{CurrentDS, DefaultDS, ParentDS},
+        messages::Message,
+    },
     filters::Filter,
     port::{
         state::{PortState, SlaveState},
@@ -13,6 +16,26 @@ use crate::{
     time::Duration,
     Clock,
 };
+
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
+    pub(super) fn handle_announce<'b>(
+        &'b mut self,
+        message: &Message<'b>,
+        announce: crate::datastructures::messages::AnnounceMessage,
+    ) -> PortActionIterator<'b> {
+        if self
+            .bmca
+            .register_announce_message(&message.header, &announce)
+        {
+            actions![PortAction::ResetAnnounceReceiptTimer {
+                duration: self.config.announce_duration(&mut self.rng),
+            }]
+            .with_forward_tlvs(message.suffix.tlv(), message.header.source_port_identity)
+        } else {
+            actions![]
+        }
+    }
+}
 
 // BMCA related functionality of the port
 impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {

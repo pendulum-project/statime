@@ -9,8 +9,8 @@ use crate::{
     },
     filters::Filter,
     port::{
-        sequence_id::SequenceIdGenerator, Measurement, PortAction, PortActionIterator,
-        TimestampContext, TimestampContextInner,
+        actions::TimestampContextInner, sequence_id::SequenceIdGenerator, Measurement, PortAction,
+        PortActionIterator, TimestampContext,
     },
     time::{Duration, Time},
     Clock,
@@ -96,7 +96,7 @@ impl<F: Filter> SlaveState<F> {
         clock: &mut C,
     ) -> PortActionIterator<'a> {
         match context.inner {
-            crate::port::TimestampContextInner::DelayReq { id } => {
+            TimestampContextInner::DelayReq { id } => {
                 // handle our send timestamp on a delay request message
                 self.handle_delay_timestamp(delay_asymmetry, id, timestamp, clock)
             }
