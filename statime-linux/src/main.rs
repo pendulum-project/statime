@@ -8,7 +8,7 @@ use std::{
 use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    config::{ClockIdentity, InstanceConfig, SdoId, InternalTimePropertiesDS, TimeSource},
+    config::{ClockIdentity, InstanceConfig, InternalTimePropertiesDS, SdoId, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     observability::ObservableInstanceState,
     port::{

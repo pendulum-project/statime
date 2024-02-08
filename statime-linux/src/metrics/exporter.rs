@@ -11,9 +11,7 @@ use tokio::{
 };
 
 use crate::config::Config;
-use statime::observability::{
-    DefaultDS, ObservableInstanceState, TimePropertiesDS,
-};
+use statime::observability::{DefaultDS, ObservableInstanceState, TimePropertiesDS};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
@@ -194,10 +192,7 @@ impl MetricType {
     }
 }
 
-fn format_default_ds(
-    w: &mut impl std::fmt::Write,
-    default_ds: &DefaultDS,
-) -> std::fmt::Result {
+fn format_default_ds(w: &mut impl std::fmt::Write, default_ds: &DefaultDS) -> std::fmt::Result {
     let clock_identity = format!("{}", default_ds.clock_identity);
 
     format_metric(

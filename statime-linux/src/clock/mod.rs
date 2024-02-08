@@ -4,7 +4,7 @@ use std::path::Path;
 
 use clock_steering::{unix::UnixClock, TimeOffset};
 use statime::{
-    config::{LeapIndicator, InternalTimePropertiesDS},
+    config::{InternalTimePropertiesDS, LeapIndicator},
     time::{Duration, Time},
     Clock,
 };
@@ -127,7 +127,10 @@ impl Clock for LinuxClock {
         Ok(time_from_timestamp(timestamp, statime::Clock::now(self)))
     }
 
-    fn set_properties(&mut self, time_properties: &InternalTimePropertiesDS) -> Result<(), Self::Error> {
+    fn set_properties(
+        &mut self,
+        time_properties: &InternalTimePropertiesDS,
+    ) -> Result<(), Self::Error> {
         use clock_steering::Clock;
 
         // These properties should always be communicated to the system clock.
