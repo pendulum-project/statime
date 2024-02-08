@@ -7,6 +7,7 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS},
     },
 };
+
 /// Observable version of the InstanceState struct
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -15,17 +16,6 @@ pub struct ObservableInstanceState {
     pub current_ds: ObservableCurrentDS,
     pub parent_ds: ObservableParentDS,
     pub time_properties_ds: ObservableTimePropertiesDS,
-}
-
-impl From<&mut crate::ptp_instance::PtpInstanceState> for ObservableInstanceState {
-    fn from(v: &mut crate::ptp_instance::PtpInstanceState) -> Self {
-        Self {
-            default_ds: v.default_ds.into(),
-            current_ds: v.current_ds.into(),
-            parent_ds: v.parent_ds.clone().into(),
-            time_properties_ds: v.time_properties_ds.into(),
-        }
-    }
 }
 
 /// Observable version of the DefaultDS struct
