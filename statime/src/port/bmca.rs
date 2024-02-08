@@ -211,44 +211,14 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
 
 #[cfg(test)]
 mod tests {
-    use atomic_refcell::AtomicRefCell;
-
     use super::*;
     use crate::{
-        bmc::acceptable_master::AcceptAnyMaster,
-        config::{DelayMechanism, InstanceConfig, PortConfig},
         datastructures::messages::{
             AnnounceMessage, Header, Message, MessageBody, PtpVersion, MAX_DATA_LEN,
         },
-        filters::BasicFilter,
-        ptp_instance::PtpInstanceState,
-        time::{Interval, Time},
+        port::tests::{setup_test_port, setup_test_state},
+        time::Time,
     };
-
-    struct TestClock;
-
-    impl Clock for TestClock {
-        type Error = ();
-
-        fn set_frequency(&mut self, _freq: f64) -> Result<Time, Self::Error> {
-            Ok(Time::default())
-        }
-
-        fn now(&self) -> Time {
-            panic!("Shouldn't be called");
-        }
-
-        fn set_properties(
-            &mut self,
-            _time_properties_ds: &TimePropertiesDS,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        fn step_clock(&mut self, _offset: Duration) -> Result<Time, Self::Error> {
-            Ok(Time::default())
-        }
-    }
 
     fn default_announce_message_header() -> Header {
         Header {
@@ -290,44 +260,9 @@ mod tests {
 
     #[test]
     fn test_announce_receive() {
-        let default_ds = DefaultDS::new(InstanceConfig {
-            clock_identity: Default::default(),
-            priority_1: 255,
-            priority_2: 255,
-            domain_number: 0,
-            slave_only: false,
-            sdo_id: Default::default(),
-        });
+        let state = setup_test_state();
 
-        let parent_ds = ParentDS::new(default_ds);
-
-        let state = AtomicRefCell::new(PtpInstanceState {
-            default_ds,
-            current_ds: Default::default(),
-            parent_ds,
-            time_properties_ds: Default::default(),
-        });
-
-        let port = Port::<_, _, _, _, BasicFilter>::new(
-            &state,
-            PortConfig {
-                acceptable_master_list: AcceptAnyMaster,
-                delay_mechanism: DelayMechanism::E2E {
-                    interval: Interval::from_log_2(1),
-                },
-                announce_interval: Interval::from_log_2(1),
-                announce_receipt_timeout: 3,
-                sync_interval: Interval::from_log_2(0),
-                master_only: false,
-                delay_asymmetry: Duration::ZERO,
-            },
-            0.25,
-            TestClock,
-            Default::default(),
-            rand::rngs::mock::StepRng::new(2, 1),
-        );
-
-        let (mut port, _) = port.end_bmca();
+        let mut port = setup_test_port(&state);
 
         let mut announce = default_announce_message();
         announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -368,44 +303,9 @@ mod tests {
 
     #[test]
     fn test_announce_receive_via_event() {
-        let default_ds = DefaultDS::new(InstanceConfig {
-            clock_identity: Default::default(),
-            priority_1: 255,
-            priority_2: 255,
-            domain_number: 0,
-            slave_only: false,
-            sdo_id: Default::default(),
-        });
+        let state = setup_test_state();
 
-        let parent_ds = ParentDS::new(default_ds);
-
-        let state = AtomicRefCell::new(PtpInstanceState {
-            default_ds,
-            current_ds: Default::default(),
-            parent_ds,
-            time_properties_ds: Default::default(),
-        });
-
-        let port = Port::<_, _, _, _, BasicFilter>::new(
-            &state,
-            PortConfig {
-                acceptable_master_list: AcceptAnyMaster,
-                delay_mechanism: DelayMechanism::E2E {
-                    interval: Interval::from_log_2(1),
-                },
-                announce_interval: Interval::from_log_2(1),
-                announce_receipt_timeout: 3,
-                sync_interval: Interval::from_log_2(0),
-                master_only: false,
-                delay_asymmetry: Duration::ZERO,
-            },
-            0.25,
-            TestClock,
-            Default::default(),
-            rand::rngs::mock::StepRng::new(2, 1),
-        );
-
-        let (mut port, _) = port.end_bmca();
+        let mut port = setup_test_port(&state);
 
         let mut announce = default_announce_message();
         announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];

@@ -2,7 +2,7 @@
 //!
 //! See [`Port`] for a detailed description.
 
-use core::ops::Deref;
+use core::ops::ControlFlow;
 
 pub use actions::{
     ForwardedTLV, ForwardedTLVProvider, NoForwardedTLVs, PortAction, PortActionIterator,
@@ -58,8 +58,10 @@ macro_rules! actions {
 
 mod actions;
 mod bmca;
+mod master;
 mod measurement;
 mod sequence_id;
+mod slave;
 pub(crate) mod state;
 
 /// A single port of the PTP instance
@@ -305,17 +307,14 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         context: TimestampContext,
         timestamp: Time,
     ) -> PortActionIterator<'_> {
-        let actions = self.port_state.handle_timestamp(
-            self.config.delay_asymmetry,
-            context,
-            timestamp,
-            self.port_identity,
-            &self.lifecycle.state.default_ds,
-            &mut self.clock,
-            &mut self.packet_buffer,
-        );
-
-        actions
+        match context.inner {
+            actions::TimestampContextInner::Sync { id } => {
+                self.handle_sync_timestamp(id, timestamp)
+            }
+            actions::TimestampContextInner::DelayReq { id } => {
+                self.handle_delay_timestamp(id, timestamp)
+            }
+        }
     }
 
     /// Handle the announce timer going off
@@ -323,34 +322,17 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         &mut self,
         tlv_provider: &mut impl ForwardedTLVProvider,
     ) -> PortActionIterator<'_> {
-        self.port_state.send_announce(
-            self.lifecycle.state.deref(),
-            &self.config,
-            self.port_identity,
-            tlv_provider,
-            &mut self.packet_buffer,
-        )
+        self.send_announce(tlv_provider)
     }
 
     /// Handle the sync timer going off
     pub fn handle_sync_timer(&mut self) -> PortActionIterator<'_> {
-        self.port_state.send_sync(
-            &self.config,
-            self.port_identity,
-            &self.lifecycle.state.default_ds,
-            &mut self.packet_buffer,
-        )
+        self.send_sync()
     }
 
     /// Handle the delay request timer going off
     pub fn handle_delay_request_timer(&mut self) -> PortActionIterator<'_> {
-        self.port_state.send_delay_request(
-            &mut self.rng,
-            &self.config,
-            self.port_identity,
-            &self.lifecycle.state.default_ds,
-            &mut self.packet_buffer,
-        )
+        self.send_delay_request()
     }
 
     /// Handle the announce receipt timer going off
@@ -375,7 +357,12 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
     /// Handle the filter update timer going off
     pub fn handle_filter_update_timer(&mut self) -> PortActionIterator {
-        self.port_state.handle_filter_update(&mut self.clock)
+        match self.port_state {
+            PortState::Slave(ref mut state) => {
+                PortActionIterator::from_filter(state.filter.update(&mut self.clock))
+            }
+            _ => actions![],
+        }
     }
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
@@ -398,58 +385,54 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
         }
     }
 
+    // parse and do basic domain filtering on message
+    fn parse_and_filter<'b>(
+        &mut self,
+        data: &'b [u8],
+    ) -> ControlFlow<PortActionIterator<'b>, Message<'b>> {
+        let message = match Message::deserialize(data) {
+            Ok(message) => message,
+            Err(error) => {
+                log::warn!("Could not parse packet: {:?}", error);
+                return ControlFlow::Break(actions![]);
+            }
+        };
+        if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
+            || message.header().domain_number != self.lifecycle.state.default_ds.domain_number
+        {
+            return ControlFlow::Break(actions![]);
+        }
+        ControlFlow::Continue(message)
+    }
+
     /// Handle a message over the event channel
     pub fn handle_event_receive<'b>(
         &'b mut self,
         data: &'b [u8],
         timestamp: Time,
     ) -> PortActionIterator<'b> {
-        let message = match Message::deserialize(data) {
-            Ok(message) => message,
-            Err(error) => {
-                log::warn!("Could not parse packet: {:?}", error);
-                return actions![];
-            }
+        let message = match self.parse_and_filter(data) {
+            ControlFlow::Continue(value) => value,
+            ControlFlow::Break(value) => return value,
         };
 
-        // Only process messages from the same domain
-        if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
-            || message.header().domain_number != self.lifecycle.state.default_ds.domain_number
-        {
-            return actions![];
-        }
-
-        if message.is_event() {
-            self.port_state.handle_event_receive(
-                self.config.delay_asymmetry,
-                message,
-                timestamp,
-                self.config.min_delay_req_interval(),
-                self.port_identity,
-                &mut self.clock,
-                &mut self.packet_buffer,
-            )
-        } else {
-            self.handle_general_internal(message)
+        match message.body {
+            MessageBody::Sync(sync) => self.handle_sync(message.header, sync, timestamp),
+            MessageBody::DelayReq(delay_request) => {
+                self.handle_delay_req(message.header, delay_request, timestamp)
+            }
+            MessageBody::PDelayReq(_) => actions![],
+            MessageBody::PDelayResp(_) => actions![],
+            _ => self.handle_general_internal(message),
         }
     }
 
     /// Handle a general ptp message
     pub fn handle_general_receive<'b>(&'b mut self, data: &'b [u8]) -> PortActionIterator<'b> {
-        let message = match Message::deserialize(data) {
-            Ok(message) => message,
-            Err(error) => {
-                log::warn!("Could not parse packet: {:?}", error);
-                return actions![];
-            }
+        let message = match self.parse_and_filter(data) {
+            ControlFlow::Continue(value) => value,
+            ControlFlow::Break(value) => return value,
         };
-
-        // Only process messages from the same domain
-        if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
-            || message.header().domain_number != self.lifecycle.state.default_ds.domain_number
-        {
-            return actions![];
-        }
 
         self.handle_general_internal(message)
     }
@@ -457,12 +440,20 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     fn handle_general_internal<'b>(&'b mut self, message: Message<'b>) -> PortActionIterator<'b> {
         match message.body {
             MessageBody::Announce(announce) => self.handle_announce(&message, announce),
-            _ => self.port_state.handle_general_receive(
-                self.config.delay_asymmetry,
-                message,
-                self.port_identity,
-                &mut self.clock,
-            ),
+            MessageBody::FollowUp(follow_up) => self.handle_follow_up(message.header, follow_up),
+            MessageBody::DelayResp(delay_response) => {
+                self.handle_delay_resp(message.header, delay_response)
+            }
+            MessageBody::Sync(_)
+            | MessageBody::DelayReq(_)
+            | MessageBody::PDelayReq(_)
+            | MessageBody::PDelayResp(_) => {
+                log::warn!("Received event message over general interface");
+                actions![]
+            }
+            MessageBody::Management(_)
+            | MessageBody::PDelayRespFollowUp(_)
+            | MessageBody::Signaling(_) => actions![],
         }
     }
 }
@@ -500,7 +491,9 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
             state
         );
         core::mem::swap(&mut self.port_state, &mut state);
-        state.demobilize_filter(&mut self.clock);
+        if let PortState::Slave(state) = state {
+            state.filter.demobilize(&mut self.clock);
+        }
     }
 }
 
@@ -564,5 +557,119 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 state_refcell,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use atomic_refcell::AtomicRefCell;
+
+    use super::*;
+    use crate::{
+        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
+        datastructures::datasets::{DefaultDS, ParentDS},
+        filters::BasicFilter,
+        time::{Duration, Interval, Time},
+        Clock,
+    };
+
+    // General test infra
+    pub(super) struct TestClock;
+
+    impl Clock for TestClock {
+        type Error = ();
+
+        fn set_frequency(&mut self, _freq: f64) -> Result<Time, Self::Error> {
+            Ok(Time::default())
+        }
+
+        fn now(&self) -> Time {
+            panic!("Shouldn't be called");
+        }
+
+        fn set_properties(
+            &mut self,
+            _time_properties_ds: &TimePropertiesDS,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        fn step_clock(&mut self, _offset: Duration) -> Result<Time, Self::Error> {
+            Ok(Time::default())
+        }
+    }
+
+    pub(super) fn setup_test_port(
+        state: &AtomicRefCell<PtpInstanceState>,
+    ) -> Port<Running<'_>, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
+        let port = Port::<_, _, _, _, BasicFilter>::new(
+            &state,
+            PortConfig {
+                acceptable_master_list: AcceptAnyMaster,
+                delay_mechanism: DelayMechanism::E2E {
+                    interval: Interval::from_log_2(1),
+                },
+                announce_interval: Interval::from_log_2(1),
+                announce_receipt_timeout: 3,
+                sync_interval: Interval::from_log_2(0),
+                master_only: false,
+                delay_asymmetry: Duration::ZERO,
+            },
+            0.25,
+            TestClock,
+            Default::default(),
+            rand::rngs::mock::StepRng::new(2, 1),
+        );
+
+        let (port, _) = port.end_bmca();
+        port
+    }
+
+    pub(super) fn setup_test_port_custom_filter<F: Filter>(
+        state: &AtomicRefCell<PtpInstanceState>,
+        filter_config: F::Config,
+    ) -> Port<Running<'_>, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
+        let port = Port::<_, _, _, _, F>::new(
+            &state,
+            PortConfig {
+                acceptable_master_list: AcceptAnyMaster,
+                delay_mechanism: DelayMechanism::E2E {
+                    interval: Interval::from_log_2(1),
+                },
+                announce_interval: Interval::from_log_2(1),
+                announce_receipt_timeout: 3,
+                sync_interval: Interval::from_log_2(0),
+                master_only: false,
+                delay_asymmetry: Duration::ZERO,
+            },
+            filter_config,
+            TestClock,
+            Default::default(),
+            rand::rngs::mock::StepRng::new(2, 1),
+        );
+
+        let (port, _) = port.end_bmca();
+        port
+    }
+
+    pub(super) fn setup_test_state() -> AtomicRefCell<PtpInstanceState> {
+        let default_ds = DefaultDS::new(InstanceConfig {
+            clock_identity: Default::default(),
+            priority_1: 255,
+            priority_2: 255,
+            domain_number: 0,
+            slave_only: false,
+            sdo_id: Default::default(),
+        });
+
+        let parent_ds = ParentDS::new(default_ds);
+
+        let state = AtomicRefCell::new(PtpInstanceState {
+            default_ds,
+            current_ds: Default::default(),
+            parent_ds,
+            time_properties_ds: Default::default(),
+        });
+        state
     }
 }
