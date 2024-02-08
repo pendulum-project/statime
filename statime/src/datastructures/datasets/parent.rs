@@ -1,9 +1,9 @@
-use super::DefaultDS;
+use super::InternalDefaultDS;
 use crate::datastructures::common::{ClockIdentity, ClockQuality, PortIdentity};
 
 // TODO: Discuss moving this (and TimePropertiesDS, ...) to slave?
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ParentDS {
+pub(crate) struct InternalParentDS {
     pub(crate) parent_port_identity: PortIdentity,
     pub(crate) parent_stats: bool,
     pub(crate) observed_parent_offset_scaled_log_variance: u16,
@@ -14,9 +14,9 @@ pub(crate) struct ParentDS {
     pub(crate) grandmaster_priority_2: u8,
 }
 
-impl ParentDS {
-    pub(crate) fn new(default_ds: DefaultDS) -> Self {
-        ParentDS {
+impl InternalParentDS {
+    pub(crate) fn new(default_ds: InternalDefaultDS) -> Self {
+        InternalParentDS {
             parent_port_identity: PortIdentity {
                 clock_identity: default_ds.clock_identity,
                 port_number: 0,

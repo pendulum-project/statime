@@ -7,7 +7,7 @@ use crate::datastructures::common::{LeapIndicator, TimeSource};
 ///
 /// For more details see *IEEE1588-2019 section 8.2.4*.
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TimePropertiesDS {
+pub struct InternalTimePropertiesDS {
     pub(crate) current_utc_offset: Option<i16>,
     pub(crate) leap_indicator: LeapIndicator,
     pub(crate) time_traceable: bool,
@@ -16,7 +16,7 @@ pub struct TimePropertiesDS {
     pub(crate) time_source: TimeSource,
 }
 
-impl TimePropertiesDS {
+impl InternalTimePropertiesDS {
     /// Create a Time Properties data set for the PTP timescale.
     ///
     /// This creates a dataset for the default PTP timescale, which is UTC
@@ -31,7 +31,7 @@ impl TimePropertiesDS {
         frequency_traceable: bool,
         time_source: TimeSource,
     ) -> Self {
-        TimePropertiesDS {
+        InternalTimePropertiesDS {
             current_utc_offset,
             leap_indicator,
             time_traceable,
@@ -54,7 +54,7 @@ impl TimePropertiesDS {
         frequency_traceable: bool,
         time_source: TimeSource,
     ) -> Self {
-        TimePropertiesDS {
+        InternalTimePropertiesDS {
             current_utc_offset: None,
             leap_indicator: LeapIndicator::NoLeap,
             time_traceable,

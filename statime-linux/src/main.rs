@@ -8,7 +8,7 @@ use std::{
 use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
+    config::{ClockIdentity, InstanceConfig, SdoId, InternalTimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     observability::ObservableInstanceState,
     port::{
@@ -250,7 +250,7 @@ async fn actual_main() {
     };
 
     let time_properties_ds =
-        TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
+        InternalTimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
     // Leak to get a static reference, the ptp instance will be around for the rest
     // of the program anyway
@@ -304,7 +304,6 @@ async fn actual_main() {
                 (LinuxClock::CLOCK_TAI, InterfaceTimestampMode::SoftwareAll)
             }
         };
-
         let rng = StdRng::from_entropy();
         let port = instance.add_port(
             port_config.into(),

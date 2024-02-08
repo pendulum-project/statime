@@ -10,7 +10,7 @@ use super::{
 use crate::{
     datastructures::{
         common::{PortIdentity, TimeInterval},
-        datasets::DefaultDS,
+        datasets::InternalDefaultDS,
         messages::{AnnounceMessage, Header},
     },
     port::state::PortState,
@@ -106,7 +106,7 @@ impl<A> Bmca<A> {
     /// If None is returned, then the port should remain in the same state as it
     /// is now.
     pub(crate) fn calculate_recommended_state<F>(
-        own_data: &DefaultDS,
+        own_data: &InternalDefaultDS,
         best_global_announce_message: Option<BestAnnounceMessage>,
         best_port_announce_message: Option<BestAnnounceMessage>,
         port_state: &PortState<F>,
@@ -130,7 +130,7 @@ impl<A> Bmca<A> {
     }
 
     fn calculate_recommended_state_low_class(
-        own_data: &DefaultDS,
+        own_data: &InternalDefaultDS,
         best_port_announce_message: Option<BestAnnounceMessage>,
     ) -> RecommendedState {
         let d0 = ComparisonDataset::from_own_data(own_data);
@@ -143,7 +143,7 @@ impl<A> Bmca<A> {
     }
 
     fn calculate_recommended_state_high_class(
-        own_data: &DefaultDS,
+        own_data: &InternalDefaultDS,
         best_global_announce_message: Option<BestAnnounceMessage>,
         best_port_announce_message: Option<BestAnnounceMessage>,
     ) -> RecommendedState {
@@ -287,8 +287,8 @@ impl BestAnnounceMessage {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum RecommendedState {
-    M1(DefaultDS),
-    M2(DefaultDS),
+    M1(InternalDefaultDS),
+    M2(InternalDefaultDS),
     M3(AnnounceMessage),
     P1(AnnounceMessage),
     P2(AnnounceMessage),
@@ -443,7 +443,7 @@ mod tests {
         assert_eq!(message1.compare(&message2), Ordering::Less)
     }
 
-    fn default_own_data() -> DefaultDS {
+    fn default_own_data() -> InternalDefaultDS {
         let clock_identity = Default::default();
         let priority_1 = 0;
         let priority_2 = 0;
@@ -451,7 +451,7 @@ mod tests {
         let slave_only = false;
         let sdo_id = Default::default();
 
-        DefaultDS::new(InstanceConfig {
+        InternalDefaultDS::new(InstanceConfig {
             clock_identity,
             priority_1,
             priority_2,
@@ -492,7 +492,7 @@ mod tests {
         let slave_only = false;
         let sdo_id = Default::default();
 
-        let mut own_data = DefaultDS::new(InstanceConfig {
+        let mut own_data = InternalDefaultDS::new(InstanceConfig {
             clock_identity,
             priority_1,
             priority_2,

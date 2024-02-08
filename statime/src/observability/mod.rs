@@ -1,10 +1,10 @@
 //! Serializable implementations of datastructures to be used for observability
 #![allow(missing_docs)]
 use crate::{
-    config::{ClockIdentity, ClockQuality, LeapIndicator, TimePropertiesDS, TimeSource},
+    config::{ClockIdentity, ClockQuality, LeapIndicator, InternalTimePropertiesDS, TimeSource},
     datastructures::{
         common::PortIdentity,
-        datasets::{CurrentDS, DefaultDS, ParentDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS},
     },
 };
 
@@ -32,8 +32,8 @@ pub struct ObservableDefaultDS {
     pub sdo_id: crate::config::SdoId,
 }
 
-impl From<DefaultDS> for ObservableDefaultDS {
-    fn from(v: DefaultDS) -> Self {
+impl From<InternalDefaultDS> for ObservableDefaultDS {
+    fn from(v: InternalDefaultDS) -> Self {
         Self {
             clock_identity: v.clock_identity,
             number_ports: v.number_ports,
@@ -55,8 +55,8 @@ pub struct ObservableCurrentDS {
     pub mean_delay: i128,         // rounded nanos
 }
 
-impl From<CurrentDS> for ObservableCurrentDS {
-    fn from(v: CurrentDS) -> Self {
+impl From<InternalCurrentDS> for ObservableCurrentDS {
+    fn from(v: InternalCurrentDS) -> Self {
         Self {
             steps_removed: v.steps_removed,
             offset_from_master: v.offset_from_master.nanos_rounded(),
@@ -78,8 +78,8 @@ pub struct ObservableParentDS {
     pub grandmaster_priority_2: u8,
 }
 
-impl From<ParentDS> for ObservableParentDS {
-    fn from(v: ParentDS) -> Self {
+impl From<InternalParentDS> for ObservableParentDS {
+    fn from(v: InternalParentDS) -> Self {
         Self {
             parent_port_identity: v.parent_port_identity,
             parent_stats: v.parent_stats,
@@ -105,8 +105,8 @@ pub struct ObservableTimePropertiesDS {
     pub time_source: TimeSource,
 }
 
-impl From<TimePropertiesDS> for ObservableTimePropertiesDS {
-    fn from(v: TimePropertiesDS) -> Self {
+impl From<InternalTimePropertiesDS> for ObservableTimePropertiesDS {
+    fn from(v: InternalTimePropertiesDS) -> Self {
         Self {
             current_utc_offset: v.current_utc_offset,
             leap_indicator: v.leap_indicator,

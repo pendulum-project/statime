@@ -23,7 +23,7 @@ use crate::{
     config::PortConfig,
     datastructures::{
         common::{LeapIndicator, PortIdentity, TimeSource, Tlv, TlvSetIterator},
-        datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalTimePropertiesDS},
         messages::{Message, MessageBody},
     },
     filters::{Filter, FilterUpdate},
@@ -732,10 +732,10 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
     pub(crate) fn set_recommended_state(
         &mut self,
         recommended_state: RecommendedState,
-        time_properties_ds: &mut TimePropertiesDS,
-        current_ds: &mut CurrentDS,
-        parent_ds: &mut ParentDS,
-        default_ds: &DefaultDS,
+        time_properties_ds: &mut InternalTimePropertiesDS,
+        current_ds: &mut InternalCurrentDS,
+        parent_ds: &mut InternalParentDS,
+        default_ds: &InternalDefaultDS,
     ) {
         self.set_recommended_port_state(&recommended_state, default_ds);
 
@@ -794,7 +794,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
     fn set_recommended_port_state(
         &mut self,
         recommended_state: &RecommendedState,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
     ) {
         match recommended_state {
             // TODO set things like steps_removed once they are added
@@ -938,7 +938,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &TimePropertiesDS,
+            _time_properties_ds: &InternalTimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -988,7 +988,7 @@ mod tests {
 
     #[test]
     fn test_announce_receive() {
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: Default::default(),
             priority_1: 255,
             priority_2: 255,
@@ -997,7 +997,7 @@ mod tests {
             sdo_id: Default::default(),
         });
 
-        let parent_ds = ParentDS::new(default_ds);
+        let parent_ds = InternalParentDS::new(default_ds);
 
         let state = AtomicRefCell::new(PtpInstanceState {
             default_ds,
@@ -1066,7 +1066,7 @@ mod tests {
 
     #[test]
     fn test_announce_receive_via_event() {
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: Default::default(),
             priority_1: 255,
             priority_2: 255,
@@ -1075,7 +1075,7 @@ mod tests {
             sdo_id: Default::default(),
         });
 
-        let parent_ds = ParentDS::new(default_ds);
+        let parent_ds = InternalParentDS::new(default_ds);
 
         let state = AtomicRefCell::new(PtpInstanceState {
             default_ds,

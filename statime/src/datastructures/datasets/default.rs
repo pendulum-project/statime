@@ -15,7 +15,7 @@ use crate::{
 /// [TimePropertiesDS](crate::TimePropertiesDS) dataset.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct DefaultDS {
+pub(crate) struct InternalDefaultDS {
     pub(crate) clock_identity: ClockIdentity,
     pub(crate) number_ports: u16,
     pub(crate) clock_quality: ClockQuality,
@@ -26,7 +26,7 @@ pub(crate) struct DefaultDS {
     pub(crate) sdo_id: SdoId,
 }
 
-impl DefaultDS {
+impl InternalDefaultDS {
     pub(crate) fn new(config: InstanceConfig) -> Self {
         Self {
             clock_identity: config.clock_identity,

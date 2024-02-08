@@ -14,7 +14,7 @@ use crate::{
     config::{InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
-        datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalTimePropertiesDS},
     },
     filters::Filter,
     observability::{
@@ -93,10 +93,10 @@ pub struct PtpInstance<F> {
 
 #[derive(Debug)]
 pub(crate) struct PtpInstanceState {
-    pub(crate) default_ds: DefaultDS,
-    pub(crate) current_ds: CurrentDS,
-    pub(crate) parent_ds: ParentDS,
-    pub(crate) time_properties_ds: TimePropertiesDS,
+    pub(crate) default_ds: InternalDefaultDS,
+    pub(crate) current_ds: InternalCurrentDS,
+    pub(crate) parent_ds: InternalParentDS,
+    pub(crate) time_properties_ds: InternalTimePropertiesDS,
 }
 
 impl PtpInstanceState {
@@ -151,14 +151,14 @@ impl PtpInstanceState {
 impl<F> PtpInstance<F> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
-    pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
-        let default_ds = DefaultDS::new(config);
+    pub fn new(config: InstanceConfig, time_properties_ds: InternalTimePropertiesDS) -> Self {
+        let default_ds = InternalDefaultDS::new(config);
 
         Self {
             state: AtomicRefCell::new(PtpInstanceState {
                 default_ds,
                 current_ds: Default::default(),
-                parent_ds: ParentDS::new(default_ds),
+                parent_ds: InternalParentDS::new(default_ds),
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),

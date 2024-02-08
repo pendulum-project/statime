@@ -4,7 +4,7 @@ use crate::{
     config::PortConfig,
     datastructures::{
         common::{PortIdentity, TlvSetBuilder},
-        datasets::DefaultDS,
+        datasets::InternalDefaultDS,
         messages::{DelayReqMessage, Header, Message, MessageBody, MAX_DATA_LEN},
     },
     port::{
@@ -34,7 +34,7 @@ impl MasterState {
         context: TimestampContext,
         timestamp: Time,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match context.inner {
@@ -53,7 +53,7 @@ impl MasterState {
         id: u16,
         timestamp: Time,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         let packet_length =
@@ -77,7 +77,7 @@ impl MasterState {
         &mut self,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         log::trace!("sending sync message");
@@ -231,7 +231,7 @@ mod tests {
         config::{DelayMechanism, InstanceConfig},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
-            datasets::{CurrentDS, ParentDS, TimePropertiesDS},
+            datasets::{InternalCurrentDS, InternalParentDS, InternalTimePropertiesDS},
             messages::{Header, SdoId, MAX_DATA_LEN},
         },
         port::NoForwardedTLVs,
@@ -350,7 +350,7 @@ mod tests {
     fn test_announce() {
         let mut buffer = [0u8; MAX_DATA_LEN];
 
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: ClockIdentity::default(),
             priority_1: 15,
             priority_2: 128,
@@ -358,10 +358,10 @@ mod tests {
             slave_only: false,
             sdo_id: SdoId::default(),
         });
-        let mut parent_ds = ParentDS::new(default_ds);
+        let mut parent_ds = InternalParentDS::new(default_ds);
         parent_ds.grandmaster_priority_1 = 15;
-        let current_ds = CurrentDS::default();
-        let time_properties_ds = TimePropertiesDS::default();
+        let current_ds = InternalCurrentDS::default();
+        let time_properties_ds = InternalTimePropertiesDS::default();
         let global = PtpInstanceState {
             default_ds,
             current_ds,
@@ -455,7 +455,7 @@ mod tests {
         };
 
         let mut state = MasterState::new();
-        let defaultds = DefaultDS::new(InstanceConfig {
+        let defaultds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: ClockIdentity::default(),
             priority_1: 15,
             priority_2: 128,

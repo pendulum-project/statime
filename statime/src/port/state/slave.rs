@@ -4,7 +4,7 @@ use crate::{
     config::{DelayMechanism, PortConfig},
     datastructures::{
         common::PortIdentity,
-        datasets::DefaultDS,
+        datasets::InternalDefaultDS,
         messages::{DelayRespMessage, FollowUpMessage, Header, Message, MessageBody, SyncMessage},
     },
     filters::Filter,
@@ -352,7 +352,7 @@ impl<F> SlaveState<F> {
         rng: &mut impl Rng,
         port_config: &PortConfig<()>,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         log::debug!("Starting new delay measurement");
@@ -444,7 +444,7 @@ impl<F> SlaveState<F> {
 mod tests {
     use super::*;
     use crate::{
-        config::{InstanceConfig, TimePropertiesDS},
+        config::{InstanceConfig, InternalTimePropertiesDS},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             messages::{Header, SdoId, MAX_DATA_LEN},
@@ -502,7 +502,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &TimePropertiesDS,
+            _time_properties_ds: &InternalTimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -653,7 +653,7 @@ mod tests {
         let mut state = SlaveState::<TestFilter>::new(Default::default(), ());
 
         let mut buffer = [0u8; MAX_DATA_LEN];
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: ClockIdentity::default(),
             priority_1: 15,
             priority_2: 128,
@@ -1119,7 +1119,7 @@ mod tests {
         let mut state = SlaveState::<TestFilter>::new(Default::default(), ());
         let mut buffer = [0u8; MAX_DATA_LEN];
 
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: ClockIdentity::default(),
             priority_1: 15,
             priority_2: 128,

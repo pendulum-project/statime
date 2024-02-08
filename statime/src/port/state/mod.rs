@@ -5,7 +5,7 @@ use rand::Rng;
 use super::{ForwardedTLVProvider, PortActionIterator, TimestampContext};
 use crate::{
     config::PortConfig,
-    datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
+    datastructures::{common::PortIdentity, datasets::InternalDefaultDS, messages::Message},
     filters::Filter,
     ptp_instance::PtpInstanceState,
     time::{Duration, Interval, Time},
@@ -35,7 +35,7 @@ impl<F: Filter> PortState<F> {
         context: TimestampContext,
         timestamp: Time,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         clock: &mut C,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
@@ -121,7 +121,7 @@ impl<F> PortState<F> {
         &mut self,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match self {
@@ -139,7 +139,7 @@ impl<F> PortState<F> {
         rng: &mut impl Rng,
         port_config: &PortConfig<()>,
         port_identity: PortIdentity,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match self {
