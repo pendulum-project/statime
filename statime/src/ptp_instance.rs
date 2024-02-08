@@ -17,7 +17,9 @@ use crate::{
         datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::{ObservableTimePropertiesDS, ObservableParentDS, ObservableCurrentDS, ObservableDefaultDS},
+    observability::{
+        ObservableCurrentDS, ObservableDefaultDS, ObservableParentDS, ObservableTimePropertiesDS,
+    },
     port::{InBmca, Port},
     time::Duration,
 };
@@ -185,7 +187,6 @@ impl<F> PtpInstance<F> {
     pub fn time_properties_ds(&self) -> ObservableTimePropertiesDS {
         self.state.borrow().time_properties_ds.into()
     }
-
 }
 
 impl<F: Filter> PtpInstance<F> {
