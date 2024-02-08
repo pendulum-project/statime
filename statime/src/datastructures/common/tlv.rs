@@ -1,4 +1,30 @@
+use core::iter::FusedIterator;
+
 use crate::datastructures::WireFormatError;
+
+#[derive(PartialEq, Eq)]
+pub(crate) struct TlvSetBuilder<'a> {
+    buffer: &'a mut [u8],
+    used: usize,
+}
+
+impl<'a> TlvSetBuilder<'a> {
+    pub(crate) fn new(buffer: &'a mut [u8]) -> Self {
+        Self { buffer, used: 0 }
+    }
+
+    pub(crate) fn add(&mut self, tlv: Tlv<'_>) -> Result<(), WireFormatError> {
+        tlv.serialize(&mut self.buffer[self.used..])?;
+        self.used += tlv.wire_size();
+        Ok(())
+    }
+
+    pub(crate) fn build(self) -> TlvSet<'a> {
+        TlvSet {
+            bytes: &self.buffer[..self.used],
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Default)]
 pub(crate) struct TlvSet<'a> {
@@ -66,41 +92,60 @@ impl<'a> TlvSet<'a> {
         self.tlv().filter(|tlv| tlv.tlv_type.announce_propagate())
     }
 
-    pub(crate) fn tlv(&self) -> impl Iterator<Item = Tlv<'a>> + 'a {
-        let mut buffer = self.bytes;
-
-        core::iter::from_fn(move || {
-            if buffer.len() <= 4 {
-                debug_assert_eq!(buffer.len(), 0);
-                return None;
-            }
-
-            // we've validated the buffer; this should never fail!
-            let tlv = Tlv::deserialize(buffer).unwrap();
-
-            buffer = &buffer[tlv.wire_size()..];
-
-            Some(tlv)
-        })
+    pub(crate) fn tlv(&self) -> TlvSetIterator<'a> {
+        TlvSetIterator { buffer: self.bytes }
     }
 }
+
+#[derive(Debug)]
+pub(crate) struct TlvSetIterator<'a> {
+    buffer: &'a [u8],
+}
+
+impl<'a> TlvSetIterator<'a> {
+    pub(crate) fn empty() -> Self {
+        Self { buffer: &[] }
+    }
+}
+
+impl<'a> Iterator for TlvSetIterator<'a> {
+    type Item = Tlv<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buffer.len() <= 4 {
+            debug_assert_eq!(self.buffer.len(), 0);
+            return None;
+        }
+
+        // we've validated the buffer; this should never fail!
+        let tlv = Tlv::deserialize(self.buffer).unwrap();
+
+        self.buffer = &self.buffer[tlv.wire_size()..];
+
+        Some(tlv)
+    }
+}
+
+impl<'a> FusedIterator for TlvSetIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Tlv<'a> {
     pub tlv_type: TlvType,
+    #[cfg(not(feature = "std"))]
     pub value: &'a [u8],
+    #[cfg(feature = "std")]
+    pub value: std::borrow::Cow<'a, [u8]>,
 }
 
 impl<'a> Tlv<'a> {
-    fn wire_size(&self) -> usize {
+    pub(crate) fn wire_size(&self) -> usize {
         4 + self.value.len()
     }
 
-    #[allow(unused)]
-    fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
+    pub(crate) fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         buffer[0..][..2].copy_from_slice(&self.tlv_type.to_primitive().to_be_bytes());
         buffer[2..][..2].copy_from_slice(&(self.value.len() as u16).to_be_bytes());
-        buffer[4..][..self.value.len()].copy_from_slice(self.value);
+        buffer[4..][..self.value.len()].copy_from_slice(self.value.as_ref());
 
         Ok(())
     }
@@ -119,7 +164,18 @@ impl<'a> Tlv<'a> {
         }
 
         let value = &buffer[4..][..length as usize];
-        Ok(Self { tlv_type, value })
+        Ok(Self {
+            tlv_type,
+            value: value.into(),
+        })
+    }
+
+    #[cfg(feature = "std")]
+    pub fn into_owned(self) -> Tlv<'static> {
+        Tlv {
+            tlv_type: self.tlv_type,
+            value: self.value.into_owned().into(),
+        }
     }
 }
 
@@ -232,7 +288,7 @@ mod tests {
     fn serialize_management() {
         let tlv = Tlv {
             tlv_type: TlvType::Management,
-            value: &b"hello!"[..],
+            value: (&b"hello!"[..]).into(),
         };
 
         let mut buffer = [0; 256];
@@ -253,7 +309,7 @@ mod tests {
 
         let tlv1 = Tlv {
             tlv_type: TlvType::Management,
-            value: &b"hello!"[..],
+            value: (&b"hello!"[..]).into(),
         };
         tlv1.serialize(buffer).unwrap();
         buffer = &mut buffer[tlv1.wire_size()..];
@@ -261,7 +317,7 @@ mod tests {
 
         let tlv2 = Tlv {
             tlv_type: TlvType::PathTrace,
-            value: &b"PathTrace!"[..],
+            value: (&b"PathTrace!"[..]).into(),
         };
         tlv2.serialize(buffer).unwrap();
         buffer = &mut buffer[tlv2.wire_size()..];
@@ -269,7 +325,7 @@ mod tests {
 
         let tlv3 = Tlv {
             tlv_type: TlvType::OrganizationExtensionPropagate,
-            value: &b"OrganizationExtensionPropagate"[..],
+            value: (&b"OrganizationExtensionPropagate"[..]).into(),
         };
         tlv3.serialize(buffer).unwrap();
         buffer = &mut buffer[tlv3.wire_size()..];

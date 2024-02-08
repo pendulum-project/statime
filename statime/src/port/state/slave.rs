@@ -163,13 +163,13 @@ impl<F: Filter> SlaveState<F> {
         }
     }
 
-    pub(crate) fn handle_general_receive<C: Clock>(
+    pub(crate) fn handle_general_receive<'a, C: Clock>(
         &mut self,
         delay_asymmetry: Duration,
-        message: Message,
+        message: Message<'a>,
         port_identity: PortIdentity,
         clock: &mut C,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'a> {
         let header = &message.header;
 
         // Ignore everything not from master
@@ -263,13 +263,13 @@ impl<F: Filter> SlaveState<F> {
         }
     }
 
-    fn handle_follow_up<C: Clock>(
+    fn handle_follow_up<'a, C: Clock>(
         &mut self,
         delay_asymmetry: Duration,
         header: &Header,
         message: FollowUpMessage,
         clock: &mut C,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'a> {
         log::debug!("Received FollowUp {:?}", header.sequence_id);
 
         let packet_send_time =
@@ -304,14 +304,14 @@ impl<F: Filter> SlaveState<F> {
         }
     }
 
-    fn handle_delay_resp<C: Clock>(
+    fn handle_delay_resp<'a, C: Clock>(
         &mut self,
         delay_asymmetry: Duration,
         header: &Header,
         message: DelayRespMessage,
         port_identity: PortIdentity,
         clock: &mut C,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'a> {
         log::debug!("Received DelayResp");
         if port_identity != message.requesting_port_identity {
             return actions![];

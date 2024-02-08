@@ -2,7 +2,7 @@ use core::fmt::{Display, Formatter};
 
 use rand::Rng;
 
-use super::{PortActionIterator, TimestampContext};
+use super::{ForwardedTLVProvider, PortActionIterator, TimestampContext};
 use crate::{
     config::PortConfig,
     datastructures::{common::PortIdentity, datasets::DefaultDS, messages::Message},
@@ -76,13 +76,13 @@ impl<F: Filter> PortState<F> {
         }
     }
 
-    pub(crate) fn handle_general_receive<C: Clock>(
+    pub(crate) fn handle_general_receive<'a, C: Clock>(
         &mut self,
         delay_asymmetry: Duration,
-        message: Message,
+        message: Message<'a>,
         port_identity: PortIdentity,
         clock: &mut C,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'a> {
         match self {
             PortState::Master(_) => {
                 if message.header().source_port_identity != port_identity {
@@ -157,11 +157,12 @@ impl<F> PortState<F> {
         global: &PtpInstanceState,
         config: &PortConfig<()>,
         port_identity: PortIdentity,
+        tlv_provider: &mut impl ForwardedTLVProvider,
         buffer: &'a mut [u8],
     ) -> PortActionIterator<'a> {
         match self {
             PortState::Master(master) => {
-                master.send_announce(global, config, port_identity, buffer)
+                master.send_announce(global, config, port_identity, tlv_provider, buffer)
             }
             PortState::Slave(_) | PortState::Listening | PortState::Passive => actions![],
         }

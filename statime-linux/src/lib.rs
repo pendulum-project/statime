@@ -5,6 +5,7 @@ pub mod config;
 pub mod metrics;
 pub mod observer;
 pub mod socket;
+pub mod tlvforwarder;
 
 use fern::colors::Color;
 pub use metrics::exporter::main as metrics_exporter_main;

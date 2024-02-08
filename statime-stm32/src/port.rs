@@ -13,7 +13,7 @@ use statime::{
         TimePropertiesDS, TimeSource,
     },
     filters::BasicFilter,
-    port::{InBmca, PortAction, PortActionIterator, Running, TimestampContext},
+    port::{InBmca, NoForwardedTLVs, PortAction, PortActionIterator, Running, TimestampContext},
     time::{Duration, Interval, Time},
     PtpInstance,
 };
@@ -72,7 +72,7 @@ impl Port {
     pub fn handle_timer(&mut self, timer: TimerName, net: &mut impl Mutex<T = NetworkStack>) {
         let mut running_port_state = self.state.take_running();
         let actions = match timer {
-            TimerName::Announce => running_port_state.handle_announce_timer(),
+            TimerName::Announce => running_port_state.handle_announce_timer(&mut NoForwardedTLVs),
             TimerName::Sync => running_port_state.handle_sync_timer(),
             TimerName::DelayRequest => running_port_state.handle_delay_request_timer(),
             TimerName::AnnounceReceipt => running_port_state.handle_announce_receipt_timer(),
@@ -164,6 +164,8 @@ impl Port {
                         .try_send((TimerName::FilterUpdate, duration))
                         .ok());
                 }
+                // Single port implementation, so no need to forward TLVs
+                PortAction::ForwardTLV { .. } => {}
             }
         }
     }
