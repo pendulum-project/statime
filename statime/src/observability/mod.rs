@@ -1,6 +1,12 @@
 //! Serializable implementations of datastructures to be used for observability
 #![allow(missing_docs)]
-use crate::{datastructures::{datasets::{DefaultDS, CurrentDS, ParentDS}, common::PortIdentity}, config::{ClockIdentity, ClockQuality, LeapIndicator, TimeSource, TimePropertiesDS}};
+use crate::{
+    config::{ClockIdentity, ClockQuality, LeapIndicator, TimePropertiesDS, TimeSource},
+    datastructures::{
+        common::PortIdentity,
+        datasets::{CurrentDS, DefaultDS, ParentDS},
+    },
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +62,7 @@ impl From<DefaultDS> for ObservableDefaultDS {
 pub struct ObservableCurrentDS {
     pub steps_removed: u16,
     pub offset_from_master: i128, // rounded nanos
-    pub mean_delay: i128, // rounded nanos
+    pub mean_delay: i128,         // rounded nanos
 }
 
 impl From<CurrentDS> for ObservableCurrentDS {
@@ -86,7 +92,8 @@ impl From<ParentDS> for ObservableParentDS {
         Self {
             parent_port_identity: v.parent_port_identity,
             parent_stats: v.parent_stats,
-            observed_parent_offset_scaled_log_variance: v.observed_parent_offset_scaled_log_variance,
+            observed_parent_offset_scaled_log_variance: v
+                .observed_parent_offset_scaled_log_variance,
             observed_parent_clock_phase_change_rate: v.observed_parent_clock_phase_change_rate,
             grandmaster_identity: v.grandmaster_identity,
             grandmaster_clock_quality: v.grandmaster_clock_quality,

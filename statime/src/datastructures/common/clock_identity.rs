@@ -53,7 +53,7 @@ impl core::fmt::Display for ClockIdentity {
             if i != 0 {
                 write!(f, ":")?;
             }
-            
+
             write!(f, "{:02x}", val)?;
         }
 

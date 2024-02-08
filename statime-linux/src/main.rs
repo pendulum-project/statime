@@ -10,11 +10,12 @@ use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
+    observability::ObservableInstanceState,
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
-    PtpInstance, observability::ObservableInstanceState,
+    PtpInstance,
 };
 use statime_linux::{
     clock::LinuxClock,
@@ -23,7 +24,7 @@ use statime_linux::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,
     },
-    tlvforwarder::TlvForwarder, metrics::exporter::ObservableState,
+    tlvforwarder::TlvForwarder,
 };
 use timestamped_socket::{
     interface::interfaces,
@@ -257,9 +258,10 @@ async fn actual_main() {
         instance_config,
         time_properties_ds,
     )));
-        
+
     // The observer for the metrics exporter
-    let (instance_state_sender, instance_state_receiver) = tokio::sync::watch::channel(instance.observe_state());
+    let (instance_state_sender, instance_state_receiver) =
+        tokio::sync::watch::channel(instance.observe_state());
     statime_linux::observer::spawn(&config, instance_state_receiver).await;
 
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
@@ -297,7 +299,7 @@ async fn actual_main() {
                 (LinuxClock::CLOCK_TAI, InterfaceTimestampMode::SoftwareAll)
             }
         };
-        
+
         let rng = StdRng::from_entropy();
         let port = instance.add_port(
             port_config.into(),
@@ -315,7 +317,7 @@ async fn actual_main() {
         ports.push(port);
         main_task_senders.push(main_task_sender);
         main_task_receivers.push(main_task_receiver);
-        
+
         match network_mode {
             statime_linux::config::NetworkMode::Ipv4 => {
                 let event_socket = open_ipv4_event_socket(interface, timestamping)

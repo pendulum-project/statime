@@ -11,7 +11,9 @@ use tokio::{
 };
 
 use crate::config::Config;
-use statime::observability::{ObservableDefaultDS, ObservableInstanceState, ObservableTimePropertiesDS};
+use statime::observability::{
+    ObservableDefaultDS, ObservableInstanceState, ObservableTimePropertiesDS,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
@@ -249,7 +251,10 @@ fn format_default_ds(
     Ok(())
 }
 
-pub fn format_time_properties_ds(w: &mut impl std::fmt::Write, time_properties_ds: &ObservableTimePropertiesDS) -> std::fmt::Result {
+pub fn format_time_properties_ds(
+    w: &mut impl std::fmt::Write,
+    time_properties_ds: &ObservableTimePropertiesDS,
+) -> std::fmt::Result {
     format_metric(
         w,
         "current_utc_offset",
@@ -284,7 +289,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
 
     format_default_ds(w, &state.instance.default_ds)?;
     format_time_properties_ds(w, &state.instance.time_properties_ds)?;
-    
+
     w.write_str("# EOF\n")?;
     Ok(())
 }

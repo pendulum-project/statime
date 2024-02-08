@@ -8,7 +8,10 @@ use crate::{
     metrics::exporter::{ObservableState, ProgramData},
 };
 
-pub async fn spawn(config: &Config, instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>) -> JoinHandle<std::io::Result<()>> {
+pub async fn spawn(
+    config: &Config,
+    instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>,
+) -> JoinHandle<std::io::Result<()>> {
     let config = config.clone();
     tokio::spawn(async move {
         let result = observer(config, instance_state_receiver).await;
@@ -22,7 +25,7 @@ pub async fn spawn(config: &Config, instance_state_receiver: tokio::sync::watch:
 
 async fn observer(
     config: Config,
-    instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>
+    instance_state_receiver: tokio::sync::watch::Receiver<ObservableInstanceState>,
 ) -> std::io::Result<()> {
     let start_time = Instant::now();
 
