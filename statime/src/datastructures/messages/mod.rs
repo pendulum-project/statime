@@ -373,6 +373,44 @@ impl Message<'_> {
             suffix: TlvSet::default(),
         }
     }
+
+    pub(crate) fn pdelay_resp(
+        default_ds: &DefaultDS,
+        port_identity: PortIdentity,
+        request_header: Header,
+        timestamp: Time,
+    ) -> Self {
+        // We implement Option B from IEEE 1588-2019 page 202
+        Message {
+            header: Header {
+                two_step_flag: true,
+                correction_field: request_header.correction_field,
+                ..base_header(default_ds, port_identity, request_header.sequence_id)
+            },
+            body: MessageBody::PDelayResp(PDelayRespMessage {
+                request_receive_timestamp: timestamp.into(),
+                requesting_port_identity: request_header.source_port_identity,
+            }),
+            suffix: TlvSet::default(),
+        }
+    }
+
+    pub(crate) fn pdelay_resp_follow_up(
+        default_ds: &DefaultDS,
+        port_identity: PortIdentity,
+        requestor_identity: PortIdentity,
+        sequence_id: u16,
+        timestamp: Time,
+    ) -> Self {
+        Message {
+            header: base_header(default_ds, port_identity, sequence_id),
+            body: MessageBody::PDelayRespFollowUp(PDelayRespFollowUpMessage {
+                response_origin_timestamp: timestamp.into(),
+                requesting_port_identity: requestor_identity,
+            }),
+            suffix: TlvSet::default(),
+        }
+    }
 }
 
 impl<'a> Message<'a> {

@@ -344,6 +344,10 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             actions::TimestampContextInner::PDelayReq { id } => {
                 self.handle_pdelay_timestamp(id, timestamp)
             }
+            actions::TimestampContextInner::PDelayResp {
+                id,
+                requestor_identity,
+            } => self.handle_pdelay_response_timestamp(id, requestor_identity, timestamp),
         }
     }
 
@@ -458,7 +462,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             MessageBody::DelayReq(delay_request) => {
                 self.handle_delay_req(message.header, delay_request, timestamp)
             }
-            MessageBody::PDelayReq(_) => actions![],
+            MessageBody::PDelayReq(_) => self.handle_pdelay_req(message.header, timestamp),
             MessageBody::PDelayResp(peer_delay_response) => {
                 self.handle_peer_delay_response(message.header, peer_delay_response, timestamp)
             }
