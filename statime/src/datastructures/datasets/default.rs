@@ -14,7 +14,6 @@ use crate::{
 /// those related to timebase, which is contained in the
 /// [TimePropertiesDS](crate::TimePropertiesDS) dataset.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct InternalDefaultDS {
     pub(crate) clock_identity: ClockIdentity,
     pub(crate) number_ports: u16,
