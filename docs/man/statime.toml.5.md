@@ -58,7 +58,11 @@ will be indicated by each configuration setting shown.
 :   Correct for a difference between slave-to-master and master-to-slave propagation time.
     The value is positive when the slave-to-master propagation time is longer than the master-to-slave propagation time.
 
-`delay-mechanism` = *interval* (**0**)
+`delay-mechanism` = *mechanism* (**E2E**)
+:   Which delay mechanism to use on the port. Either `"E2E"` for end-to-end delay determination, or `"P2P"` for the peer
+    to peer delay mechanism.
+
+`delay-interval` = *interval* (**0**)
 :   How often delay request messages are sent by a slave in end-to-end mode.
     Currently the only supported delay mechanism is end-to-end (E2E).
     Defined as an exponent of 2, so a value of 0 means every 2^0 = 1 seconds
