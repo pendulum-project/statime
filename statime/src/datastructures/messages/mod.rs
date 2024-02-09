@@ -238,7 +238,11 @@ impl MessageBody {
     }
 }
 
-fn base_header(default_ds: &InternalDefaultDS, port_identity: PortIdentity, sequence_id: u16) -> Header {
+fn base_header(
+    default_ds: &InternalDefaultDS,
+    port_identity: PortIdentity,
+    sequence_id: u16,
+) -> Header {
     Header {
         sdo_id: default_ds.sdo_id,
         domain_number: default_ds.domain_number,

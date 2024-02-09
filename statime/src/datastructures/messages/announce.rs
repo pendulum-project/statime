@@ -1,7 +1,7 @@
 use super::Header;
 use crate::datastructures::{
     common::{ClockIdentity, ClockQuality, LeapIndicator, TimeSource, WireTimestamp},
-    datasets::InternalTimePropertiesDS,
+    datasets::TimePropertiesDS,
     WireFormat, WireFormatError,
 };
 
@@ -62,7 +62,7 @@ impl AnnounceMessage {
         })
     }
 
-    pub(crate) fn time_properties(&self) -> InternalTimePropertiesDS {
+    pub(crate) fn time_properties(&self) -> TimePropertiesDS {
         let leap_indicator = if self.header.leap59 {
             LeapIndicator::Leap59
         } else if self.header.leap61 {
@@ -76,7 +76,7 @@ impl AnnounceMessage {
             .current_utc_offset_valid
             .then_some(self.current_utc_offset);
 
-        InternalTimePropertiesDS {
+        TimePropertiesDS {
             current_utc_offset,
             leap_indicator,
             time_traceable: self.header.time_tracable,

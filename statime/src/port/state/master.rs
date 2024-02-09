@@ -231,7 +231,7 @@ mod tests {
         config::{DelayMechanism, InstanceConfig},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
-            datasets::{InternalCurrentDS, InternalParentDS, InternalTimePropertiesDS},
+            datasets::{InternalCurrentDS, InternalParentDS, TimePropertiesDS},
             messages::{Header, SdoId, MAX_DATA_LEN},
         },
         port::NoForwardedTLVs,
@@ -361,7 +361,7 @@ mod tests {
         let mut parent_ds = InternalParentDS::new(default_ds);
         parent_ds.grandmaster_priority_1 = 15;
         let current_ds = InternalCurrentDS::default();
-        let time_properties_ds = InternalTimePropertiesDS::default();
+        let time_properties_ds = TimePropertiesDS::default();
         let global = PtpInstanceState {
             default_ds,
             current_ds,

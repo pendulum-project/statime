@@ -23,7 +23,7 @@ use crate::{
     config::PortConfig,
     datastructures::{
         common::{LeapIndicator, PortIdentity, TimeSource, Tlv, TlvSetIterator},
-        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalTimePropertiesDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, TimePropertiesDS},
         messages::{Message, MessageBody},
     },
     filters::{Filter, FilterUpdate},
@@ -732,7 +732,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
     pub(crate) fn set_recommended_state(
         &mut self,
         recommended_state: RecommendedState,
-        time_properties_ds: &mut InternalTimePropertiesDS,
+        time_properties_ds: &mut TimePropertiesDS,
         current_ds: &mut InternalCurrentDS,
         parent_ds: &mut InternalParentDS,
         default_ds: &InternalDefaultDS,
@@ -938,7 +938,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &InternalTimePropertiesDS,
+            _time_properties_ds: &TimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }

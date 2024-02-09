@@ -11,7 +11,10 @@ use tokio::{
 };
 
 use crate::config::Config;
-use statime::observability::{DefaultDS, ObservableInstanceState, TimePropertiesDS};
+use statime::{
+    config::TimePropertiesDS,
+    observability::{DefaultDS, ObservableInstanceState},
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {

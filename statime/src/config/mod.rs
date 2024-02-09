@@ -19,7 +19,7 @@ pub use crate::{
     bmc::acceptable_master::{AcceptAnyMaster, AcceptableMasterList},
     datastructures::{
         common::{ClockAccuracy, ClockIdentity, ClockQuality, LeapIndicator, TimeSource},
-        datasets::InternalTimePropertiesDS,
+        datasets::TimePropertiesDS,
         messages::SdoId,
     },
 };

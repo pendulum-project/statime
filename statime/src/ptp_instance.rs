@@ -14,12 +14,10 @@ use crate::{
     config::{InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
-        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalTimePropertiesDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::{
-        CurrentDS, DefaultDS, ParentDS, TimePropertiesDS,
-    },
+    observability::{CurrentDS, DefaultDS, ParentDS},
     port::{InBmca, Port},
     time::Duration,
 };
@@ -96,7 +94,7 @@ pub(crate) struct PtpInstanceState {
     pub(crate) default_ds: InternalDefaultDS,
     pub(crate) current_ds: InternalCurrentDS,
     pub(crate) parent_ds: InternalParentDS,
-    pub(crate) time_properties_ds: InternalTimePropertiesDS,
+    pub(crate) time_properties_ds: TimePropertiesDS,
 }
 
 impl PtpInstanceState {
@@ -151,7 +149,7 @@ impl PtpInstanceState {
 impl<F> PtpInstance<F> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
-    pub fn new(config: InstanceConfig, time_properties_ds: InternalTimePropertiesDS) -> Self {
+    pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
         let default_ds = InternalDefaultDS::new(config);
 
         Self {
@@ -183,7 +181,7 @@ impl<F> PtpInstance<F> {
 
     /// Return IEEE-1588 timePropertiesDS for introspection
     pub fn time_properties_ds(&self) -> TimePropertiesDS {
-        self.state.borrow().time_properties_ds.into()
+        self.state.borrow().time_properties_ds
     }
 }
 

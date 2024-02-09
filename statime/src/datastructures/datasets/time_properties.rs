@@ -7,16 +7,25 @@ use crate::datastructures::common::{LeapIndicator, TimeSource};
 ///
 /// For more details see *IEEE1588-2019 section 8.2.4*.
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
-pub struct InternalTimePropertiesDS {
-    pub(crate) current_utc_offset: Option<i16>,
-    pub(crate) leap_indicator: LeapIndicator,
-    pub(crate) time_traceable: bool,
-    pub(crate) frequency_traceable: bool,
-    pub(crate) ptp_timescale: bool,
-    pub(crate) time_source: TimeSource,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TimePropertiesDS {
+    /// The offset off UTC time compared to TAI time in seconds.
+    pub current_utc_offset: Option<i16>,
+    /// Describes upcoming leap seconds.
+    pub leap_indicator: LeapIndicator,
+    /// Wheter the timescale is tracable to a primary reference
+    pub time_traceable: bool,
+    /// Wheter the frequence determining the timescale is tracable to a primary
+    /// reference. True when the timescale is PTP, false when the timescale is
+    /// ARB.
+    pub frequency_traceable: bool,
+    /// Wheter the timescale of the Grandmaster PTP Instance is PTP.
+    pub ptp_timescale: bool,
+    /// The time source used by the Grandmaster PTP instance.
+    pub time_source: TimeSource,
 }
 
-impl InternalTimePropertiesDS {
+impl TimePropertiesDS {
     /// Create a Time Properties data set for the PTP timescale.
     ///
     /// This creates a dataset for the default PTP timescale, which is UTC
@@ -31,7 +40,7 @@ impl InternalTimePropertiesDS {
         frequency_traceable: bool,
         time_source: TimeSource,
     ) -> Self {
-        InternalTimePropertiesDS {
+        TimePropertiesDS {
             current_utc_offset,
             leap_indicator,
             time_traceable,
@@ -54,7 +63,7 @@ impl InternalTimePropertiesDS {
         frequency_traceable: bool,
         time_source: TimeSource,
     ) -> Self {
-        InternalTimePropertiesDS {
+        TimePropertiesDS {
             current_utc_offset: None,
             leap_indicator: LeapIndicator::NoLeap,
             time_traceable,

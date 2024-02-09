@@ -1,7 +1,7 @@
 //! Definitions and implementations of the abstract clock types
 
 use crate::{
-    datastructures::datasets::InternalTimePropertiesDS,
+    datastructures::datasets::TimePropertiesDS,
     time::{Duration, Time},
 };
 
@@ -45,5 +45,5 @@ pub trait Clock {
     /// Adjust the timescale properties of the clock, including
     /// things like the leap indicator, to the extend supported by the
     /// system.
-    fn set_properties(&mut self, time_properties_ds: &InternalTimePropertiesDS) -> Result<(), Self::Error>;
+    fn set_properties(&mut self, time_properties_ds: &TimePropertiesDS) -> Result<(), Self::Error>;
 }

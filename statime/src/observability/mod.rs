@@ -1,7 +1,7 @@
 //! Serializable implementations of datastructures to be used for observability
 #![allow(missing_docs)]
 use crate::{
-    config::{ClockIdentity, ClockQuality, LeapIndicator, InternalTimePropertiesDS, TimeSource},
+    config::{ClockIdentity, ClockQuality, TimePropertiesDS},
     datastructures::{
         common::PortIdentity,
         datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS},
@@ -90,30 +90,6 @@ impl From<InternalParentDS> for ParentDS {
             grandmaster_clock_quality: v.grandmaster_clock_quality,
             grandmaster_priority_1: v.grandmaster_priority_1,
             grandmaster_priority_2: v.grandmaster_priority_2,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TimePropertiesDS {
-    pub current_utc_offset: Option<i16>,
-    pub leap_indicator: LeapIndicator,
-    pub time_traceable: bool,
-    pub frequency_traceable: bool,
-    pub ptp_timescale: bool,
-    pub time_source: TimeSource,
-}
-
-impl From<InternalTimePropertiesDS> for TimePropertiesDS {
-    fn from(v: InternalTimePropertiesDS) -> Self {
-        Self {
-            current_utc_offset: v.current_utc_offset,
-            leap_indicator: v.leap_indicator,
-            time_traceable: v.time_traceable,
-            frequency_traceable: v.frequency_traceable,
-            ptp_timescale: v.ptp_timescale,
-            time_source: v.time_source,
         }
     }
 }

@@ -444,7 +444,7 @@ impl<F> SlaveState<F> {
 mod tests {
     use super::*;
     use crate::{
-        config::{InstanceConfig, InternalTimePropertiesDS},
+        config::{InstanceConfig, TimePropertiesDS},
         datastructures::{
             common::{ClockIdentity, TimeInterval, TlvSet},
             messages::{Header, SdoId, MAX_DATA_LEN},
@@ -502,7 +502,7 @@ mod tests {
 
         fn set_properties(
             &mut self,
-            _time_properties_ds: &InternalTimePropertiesDS,
+            _time_properties_ds: &TimePropertiesDS,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
