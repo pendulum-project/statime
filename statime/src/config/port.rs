@@ -15,6 +15,12 @@ pub enum DelayMechanism {
         /// The time between sending two delay requests
         interval: Interval,
     },
+    /// Peer to peer delay mechanism. Delay measurement is done on the
+    /// individaul links.
+    P2P {
+        /// The time between sending two peer delay requests
+        interval: Interval,
+    },
     // No support for other delay mechanisms
 }
 
@@ -56,6 +62,7 @@ impl<A> PortConfig<A> {
     pub fn min_delay_req_interval(&self) -> Interval {
         match self.delay_mechanism {
             DelayMechanism::E2E { interval } => interval,
+            DelayMechanism::P2P { .. } => todo!(),
         }
     }
 

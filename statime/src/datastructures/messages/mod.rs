@@ -5,12 +5,12 @@ pub(crate) use delay_req::*;
 pub(crate) use delay_resp::*;
 pub(crate) use follow_up::*;
 pub use header::*;
+pub(crate) use p_delay_req::*;
+pub(crate) use p_delay_resp::*;
+pub(crate) use p_delay_resp_follow_up::*;
 pub(crate) use sync::*;
 
-use self::{
-    management::ManagementMessage, p_delay_req::PDelayReqMessage, p_delay_resp::PDelayRespMessage,
-    p_delay_resp_follow_up::PDelayRespFollowUpMessage, signalling::SignalingMessage,
-};
+use self::{management::ManagementMessage, signalling::SignalingMessage};
 use super::{
     common::{PortIdentity, TimeInterval, TlvSet, WireTimestamp},
     datasets::DefaultDS,
@@ -356,6 +356,20 @@ impl Message<'_> {
         Message {
             header,
             body,
+            suffix: TlvSet::default(),
+        }
+    }
+
+    pub(crate) fn pdelay_req(
+        default_ds: &DefaultDS,
+        port_identity: PortIdentity,
+        sequence_id: u16,
+    ) -> Self {
+        Message {
+            header: base_header(default_ds, port_identity, sequence_id),
+            body: MessageBody::PDelayReq(PDelayReqMessage {
+                origin_timestamp: WireTimestamp::default(),
+            }),
             suffix: TlvSet::default(),
         }
     }

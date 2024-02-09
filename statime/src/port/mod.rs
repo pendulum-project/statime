@@ -30,7 +30,7 @@ use crate::{
     },
     filters::Filter,
     ptp_instance::PtpInstanceState,
-    time::Time,
+    time::{Duration, Time},
 };
 
 // Needs to be here because of use rules
@@ -276,7 +276,7 @@ pub struct Port<L, A, R, C, F: Filter> {
     // PortDS port_identity
     pub(crate) port_identity: PortIdentity,
     // Corresponds with PortDS port_state and enabled
-    port_state: PortState<F>,
+    port_state: PortState,
     bmca: Bmca<A>,
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
@@ -285,6 +285,23 @@ pub struct Port<L, A, R, C, F: Filter> {
     announce_seq_ids: SequenceIdGenerator,
     sync_seq_ids: SequenceIdGenerator,
     delay_seq_ids: SequenceIdGenerator,
+    pdelay_seq_ids: SequenceIdGenerator,
+
+    filter: F,
+    mean_delay: Option<Duration>,
+    peer_delay_state: PeerDelayState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PeerDelayState {
+    Empty,
+    Measuring {
+        id: u16,
+        request_send_time: Option<Time>,
+        request_recv_time: Option<Time>,
+        response_send_time: Option<Time>,
+        response_recv_time: Option<Time>,
+    },
 }
 
 /// Type state of [`Port`] entered by [`Port::end_bmca`]
@@ -318,6 +335,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             }
             actions::TimestampContextInner::DelayReq { id } => {
                 self.handle_delay_timestamp(id, timestamp)
+            }
+            actions::TimestampContextInner::PDelayReq { id } => {
+                self.handle_pdelay_timestamp(id, timestamp)
             }
         }
     }
@@ -362,12 +382,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
     /// Handle the filter update timer going off
     pub fn handle_filter_update_timer(&mut self) -> PortActionIterator {
-        match self.port_state {
-            PortState::Slave(ref mut state) => {
-                PortActionIterator::from_filter(state.filter.update(&mut self.clock))
-            }
-            _ => actions![],
+        let update = self.filter.update(&mut self.clock);
+        if update.mean_delay.is_some() {
+            self.mean_delay = update.mean_delay;
         }
+        PortActionIterator::from_filter(update)
     }
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
@@ -390,6 +409,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             announce_seq_ids: self.announce_seq_ids,
             sync_seq_ids: self.sync_seq_ids,
             delay_seq_ids: self.delay_seq_ids,
+            pdelay_seq_ids: self.pdelay_seq_ids,
+
+            filter: self.filter,
+            mean_delay: self.mean_delay,
+            peer_delay_state: self.peer_delay_state,
         }
     }
 
@@ -430,7 +454,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 self.handle_delay_req(message.header, delay_request, timestamp)
             }
             MessageBody::PDelayReq(_) => actions![],
-            MessageBody::PDelayResp(_) => actions![],
+            MessageBody::PDelayResp(peer_delay_response) => {
+                self.handle_peer_delay_response(message.header, peer_delay_response, timestamp)
+            }
             _ => self.handle_general_internal(message),
         }
     }
@@ -452,6 +478,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             MessageBody::DelayResp(delay_response) => {
                 self.handle_delay_resp(message.header, delay_response)
             }
+            MessageBody::PDelayRespFollowUp(peer_delay_follow_up) => {
+                self.handle_peer_delay_response_follow_up(message.header, peer_delay_follow_up)
+            }
             MessageBody::Sync(_)
             | MessageBody::DelayReq(_)
             | MessageBody::PDelayReq(_)
@@ -459,9 +488,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 log::warn!("Received event message over general interface");
                 actions![]
             }
-            MessageBody::Management(_)
-            | MessageBody::PDelayRespFollowUp(_)
-            | MessageBody::Signaling(_) => actions![],
+            MessageBody::Management(_) | MessageBody::Signaling(_) => actions![],
         }
     }
 }
@@ -487,6 +514,10 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
                 announce_seq_ids: self.announce_seq_ids,
                 sync_seq_ids: self.sync_seq_ids,
                 delay_seq_ids: self.delay_seq_ids,
+                pdelay_seq_ids: self.pdelay_seq_ids,
+                filter: self.filter,
+                mean_delay: self.mean_delay,
+                peer_delay_state: self.peer_delay_state,
             },
             self.lifecycle.pending_action,
         )
@@ -494,7 +525,7 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
 }
 
 impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
-    fn set_forced_port_state(&mut self, mut state: PortState<F>) {
+    fn set_forced_port_state(&mut self, mut state: PortState) {
         log::info!(
             "new state for port {}: {} -> {}",
             self.port_identity.port_number,
@@ -502,8 +533,10 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
             state
         );
         core::mem::swap(&mut self.port_state, &mut state);
-        if let PortState::Slave(state) = state {
-            state.filter.demobilize(&mut self.clock);
+        if matches!(state, PortState::Slave(_)) {
+            let mut filter = F::new(self.filter_config.clone());
+            core::mem::swap(&mut filter, &mut self.filter);
+            filter.demobilize(&mut self.clock);
         }
     }
 }
@@ -519,7 +552,7 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
         matches!(self.port_state, PortState::Master)
     }
 
-    pub(crate) fn state(&self) -> &PortState<F> {
+    pub(crate) fn state(&self) -> &PortState {
         &self.port_state
     }
 
@@ -544,6 +577,8 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
             config.announce_interval.as_duration().into(),
             port_identity,
         );
+
+        let filter = F::new(filter_config.clone());
 
         Port {
             config: PortConfig {
@@ -570,6 +605,10 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
             announce_seq_ids: SequenceIdGenerator::new(),
             sync_seq_ids: SequenceIdGenerator::new(),
             delay_seq_ids: SequenceIdGenerator::new(),
+            pdelay_seq_ids: SequenceIdGenerator::new(),
+            filter,
+            mean_delay: None,
+            peer_delay_state: PeerDelayState::Empty,
         }
     }
 }
