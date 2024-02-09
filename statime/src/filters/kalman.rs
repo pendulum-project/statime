@@ -93,7 +93,7 @@ fn chi_1(chi: f64) -> f64 {
     const A4: f64 = -1.453152027;
     const A5: f64 = 1.061405429;
 
-    let x = (chi / 2.).sqrt();
+    let x = (chi / 2.).max(0.0).sqrt();
     let t = 1. / (1. + P * x);
     (A1 * t + A2 * t * t + A3 * t * t * t + A4 * t * t * t * t + A5 * t * t * t * t * t)
         * (-(x * x)).exp()
@@ -175,7 +175,7 @@ impl MeasurementErrorEstimator {
                     );
                     log::info!(
                         "New uncertainty estimate: {}ns",
-                        self.measurement_variance(config).sqrt() * 1e9,
+                        self.measurement_variance(config).max(0.0).sqrt() * 1e9,
                     );
                 } else {
                     self.last_sync = Some((m.event_time, sync_offset));
@@ -194,7 +194,7 @@ impl MeasurementErrorEstimator {
                     );
                     log::info!(
                         "New uncertainty estimate: {}ns",
-                        self.measurement_variance(config).sqrt() * 1e9,
+                        self.measurement_variance(config).max(0.0).sqrt() * 1e9,
                     );
                 } else {
                     self.last_delay = Some((m.event_time, delay_offset));
@@ -409,7 +409,7 @@ impl BaseFilter {
     fn offset_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(0, 0).sqrt())
+            .map(|inner| inner.uncertainty.entry(0, 0).max(0.0).sqrt())
             .unwrap_or(config.step_threshold.seconds())
     }
 
@@ -423,7 +423,7 @@ impl BaseFilter {
     fn freq_offset_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(1, 1).sqrt())
+            .map(|inner| inner.uncertainty.entry(1, 1).max(0.0).sqrt())
             .unwrap_or(config.initial_frequency_uncertainty)
     }
 
@@ -437,7 +437,7 @@ impl BaseFilter {
     fn mean_delay_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(2, 2).sqrt())
+            .map(|inner| inner.uncertainty.entry(2, 2).max(0.0).sqrt())
             .unwrap_or(config.step_threshold.seconds())
     }
 
@@ -497,6 +497,7 @@ impl Filter for KalmanFilter {
             wander: config.initial_wander,
             wander_measurement_error: measurement_error_estimator
                 .measurement_variance(&config)
+                .max(0.0)
                 .sqrt(),
             measurement_error_estimator,
             cur_frequency: None,
@@ -649,20 +650,25 @@ impl KalmanFilter {
     }
 
     fn wander_score_update(&mut self, uncertainty: f64, prediction: f64, actual: f64) {
-        log::info!("Wander uncertainty: {}ns", uncertainty.sqrt() * 1e9);
+        log::info!(
+            "Wander uncertainty: {}ns",
+            uncertainty.max(0.0).sqrt() * 1e9
+        );
         if self.wander_measurement_error
             > 10.0
                 * self
                     .measurement_error_estimator
                     .measurement_variance(&self.config)
+                    .max(0.0)
                     .sqrt()
         {
             self.wander_filter = self.running_filter.clone();
             self.wander_measurement_error = self
                 .measurement_error_estimator
                 .measurement_variance(&self.config)
+                .max(0.0)
                 .sqrt()
-        } else if uncertainty.sqrt() > 10.0 * self.wander_measurement_error {
+        } else if uncertainty.max(0.0).sqrt() > 10.0 * self.wander_measurement_error {
             log::info!(
                 "Wander update predict: {}ns, actual: {}ns",
                 prediction * 1e9,
@@ -670,7 +676,8 @@ impl KalmanFilter {
             );
             let p = 1.
                 - chi_1(
-                    sqr(actual - prediction) / (uncertainty + sqr(self.wander_measurement_error)),
+                    sqr(actual - prediction)
+                        / (uncertainty + sqr(self.wander_measurement_error)).max(f64::EPSILON),
                 );
             log::info!("p: {}", p);
             if p < self.config.precision_low_probability {
@@ -685,6 +692,7 @@ impl KalmanFilter {
             self.wander_measurement_error = self
                 .measurement_error_estimator
                 .measurement_variance(&self.config)
+                .max(0.0)
                 .sqrt();
         }
     }
