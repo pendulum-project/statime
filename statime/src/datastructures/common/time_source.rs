@@ -7,6 +7,7 @@
 /// For more details see *IEEE1588-2019 section 7.6.2.8*
 #[allow(missing_docs)] // These varaiants are pretty self explaining
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimeSource {
     AtomicClock,
     Gnss,

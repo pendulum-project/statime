@@ -121,7 +121,6 @@ pub(crate) mod state;
 /// use statime::PtpInstance;
 /// use statime::time::Interval;
 ///
-/// # let (instance_config, time_properties_ds) = unimplemented!();
 /// let mut instance = PtpInstance::<BasicFilter>::new(instance_config, time_properties_ds);
 ///
 /// // TODO make these values sensible
@@ -631,7 +630,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
-        datastructures::datasets::{DefaultDS, ParentDS},
+        datastructures::datasets::{InternalDefaultDS, InternalParentDS},
         filters::BasicFilter,
         time::{Duration, Interval, Time},
         Clock,
@@ -717,7 +716,7 @@ mod tests {
     }
 
     pub(super) fn setup_test_state() -> AtomicRefCell<PtpInstanceState> {
-        let default_ds = DefaultDS::new(InstanceConfig {
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: Default::default(),
             priority_1: 255,
             priority_2: 255,
@@ -726,7 +725,7 @@ mod tests {
             sdo_id: Default::default(),
         });
 
-        let parent_ds = ParentDS::new(default_ds);
+        let parent_ds = InternalParentDS::new(default_ds);
 
         let state = AtomicRefCell::new(PtpInstanceState {
             default_ds,

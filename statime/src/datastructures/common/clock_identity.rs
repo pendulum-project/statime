@@ -8,6 +8,7 @@ use crate::datastructures::{WireFormat, WireFormatError};
 ///
 /// For more details, see *IEEE1588-2019 section 7.5.2.2.2*.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClockIdentity(pub [u8; 8]);
 
 impl ClockIdentity {
@@ -42,6 +43,21 @@ impl WireFormat for ClockIdentity {
 
     fn deserialize(buffer: &[u8]) -> Result<Self, WireFormatError> {
         Ok(Self(buffer[0..8].try_into().unwrap()))
+    }
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for ClockIdentity {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for (i, val) in self.0.iter().enumerate() {
+            if i != 0 {
+                write!(f, ":")?;
+            }
+
+            write!(f, "{:02x}", val)?;
+        }
+
+        Ok(())
     }
 }
 

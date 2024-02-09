@@ -13,7 +13,7 @@ pub(crate) use sync::*;
 use self::{management::ManagementMessage, signalling::SignalingMessage};
 use super::{
     common::{PortIdentity, TimeInterval, TlvSet, WireTimestamp},
-    datasets::DefaultDS,
+    datasets::InternalDefaultDS,
     WireFormatError,
 };
 use crate::{
@@ -223,7 +223,11 @@ impl MessageBody {
     }
 }
 
-fn base_header(default_ds: &DefaultDS, port_identity: PortIdentity, sequence_id: u16) -> Header {
+fn base_header(
+    default_ds: &InternalDefaultDS,
+    port_identity: PortIdentity,
+    sequence_id: u16,
+) -> Header {
     Header {
         sdo_id: default_ds.sdo_id,
         domain_number: default_ds.domain_number,
@@ -235,7 +239,7 @@ fn base_header(default_ds: &DefaultDS, port_identity: PortIdentity, sequence_id:
 
 impl Message<'_> {
     pub(crate) fn sync(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
     ) -> Self {
@@ -254,7 +258,7 @@ impl Message<'_> {
     }
 
     pub(crate) fn follow_up(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
         timestamp: Time,
@@ -310,7 +314,7 @@ impl Message<'_> {
     }
 
     pub(crate) fn delay_req(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
     ) -> Self {
@@ -361,7 +365,7 @@ impl Message<'_> {
     }
 
     pub(crate) fn pdelay_req(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
     ) -> Self {
@@ -375,7 +379,7 @@ impl Message<'_> {
     }
 
     pub(crate) fn pdelay_resp(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         request_header: Header,
         timestamp: Time,
@@ -396,7 +400,7 @@ impl Message<'_> {
     }
 
     pub(crate) fn pdelay_resp_follow_up(
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         requestor_identity: PortIdentity,
         sequence_id: u16,

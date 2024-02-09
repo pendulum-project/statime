@@ -517,6 +517,7 @@ dependencies = [
  "libm",
  "log",
  "rand",
+ "serde",
 ]
 
 [[package]]

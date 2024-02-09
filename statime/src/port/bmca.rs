@@ -5,7 +5,7 @@ use crate::{
     bmc::bmca::{BestAnnounceMessage, RecommendedState},
     config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
     datastructures::{
-        datasets::{CurrentDS, DefaultDS, ParentDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS},
         messages::Message,
     },
     filters::Filter,
@@ -73,9 +73,9 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
         &mut self,
         recommended_state: RecommendedState,
         time_properties_ds: &mut TimePropertiesDS,
-        current_ds: &mut CurrentDS,
-        parent_ds: &mut ParentDS,
-        default_ds: &DefaultDS,
+        current_ds: &mut InternalCurrentDS,
+        parent_ds: &mut InternalParentDS,
+        default_ds: &InternalDefaultDS,
     ) {
         self.set_recommended_port_state(&recommended_state, default_ds);
 
@@ -134,7 +134,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
     fn set_recommended_port_state(
         &mut self,
         recommended_state: &RecommendedState,
-        default_ds: &DefaultDS,
+        default_ds: &InternalDefaultDS,
     ) {
         match recommended_state {
             // TODO set things like steps_removed once they are added

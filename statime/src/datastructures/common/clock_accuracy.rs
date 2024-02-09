@@ -1,6 +1,7 @@
 use core::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// How accurate the underlying clock device is expected to be when not
 /// synchronized.
 pub enum ClockAccuracy {
@@ -67,7 +68,8 @@ pub enum ClockAccuracy {
 }
 
 impl ClockAccuracy {
-    pub(crate) fn to_primitive(self) -> u8 {
+    /// Converts enum to u8 literals
+    pub fn to_primitive(self) -> u8 {
         match self {
             Self::Reserved => 0x00,
             Self::PS1 => 0x17,
