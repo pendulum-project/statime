@@ -151,10 +151,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 };
 
                 if update_state {
-                    let state = PortState::Slave(SlaveState::new(
-                        remote_master,
-                        self.filter_config.clone(),
-                    ));
+                    let state = PortState::Slave(SlaveState::new(remote_master));
                     self.set_forced_port_state(state);
 
                     let duration = self.config.announce_duration(&mut self.rng);

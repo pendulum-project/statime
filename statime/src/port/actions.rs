@@ -64,6 +64,7 @@ pub struct TimestampContext {
 pub(super) enum TimestampContextInner {
     Sync { id: u16 },
     DelayReq { id: u16 },
+    PDelayReq { id: u16 },
 }
 
 /// An action the [`Port`] needs the user to perform

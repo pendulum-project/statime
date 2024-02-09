@@ -5,8 +5,8 @@ use crate::datastructures::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PDelayRespMessage {
-    pub(super) request_receive_timestamp: WireTimestamp,
-    pub(super) requesting_port_identity: PortIdentity,
+    pub(crate) request_receive_timestamp: WireTimestamp,
+    pub(crate) requesting_port_identity: PortIdentity,
 }
 
 impl PDelayRespMessage {

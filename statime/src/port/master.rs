@@ -386,7 +386,7 @@ mod tests {
 
         let id = match context.inner {
             TimestampContextInner::Sync { id } => id,
-            TimestampContextInner::DelayReq { .. } => panic!("Wrong type of context"),
+            _ => panic!("Wrong type of context"),
         };
 
         let mut actions = port.handle_sync_timestamp(
@@ -444,7 +444,7 @@ mod tests {
 
         let id = match context.inner {
             TimestampContextInner::Sync { id } => id,
-            TimestampContextInner::DelayReq { .. } => panic!("wrong type of context"),
+            _ => panic!("wrong type of context"),
         };
 
         let mut actions = port.handle_sync_timestamp(
