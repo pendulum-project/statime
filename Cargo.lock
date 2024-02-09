@@ -518,7 +518,6 @@ dependencies = [
  "log",
  "rand",
  "serde",
- "tokio",
 ]
 
 [[package]]

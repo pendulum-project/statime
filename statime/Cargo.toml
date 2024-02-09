@@ -12,11 +12,10 @@ publish.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std", "serde", "tokio"]
+default = ["std", "serde"]
 std = []
 fuzz = ["std"]
 serde = ["dep:serde"]
-tokio = ["dep:tokio"]
 
 [dependencies]
 arrayvec.workspace = true
@@ -27,4 +26,3 @@ log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
 atomic_refcell.workspace = true
 serde = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["sync"] }
