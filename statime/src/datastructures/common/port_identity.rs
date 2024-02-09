@@ -3,11 +3,12 @@ use crate::datastructures::{WireFormat, WireFormatError};
 
 /// Identity of a single port of a PTP instance
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
-pub(crate) struct PortIdentity {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PortIdentity {
     /// Identity of the clock this port is part of
-    pub(crate) clock_identity: ClockIdentity,
+    pub clock_identity: ClockIdentity,
     /// Index of the port (1-based).
-    pub(crate) port_number: u16,
+    pub port_number: u16,
 }
 
 impl WireFormat for PortIdentity {

@@ -10,6 +10,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
+    observability::ObservableInstanceState,
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
@@ -260,6 +261,16 @@ async fn actual_main() {
         time_properties_ds,
     )));
 
+    // The observer for the metrics exporter
+    let (instance_state_sender, instance_state_receiver) =
+        tokio::sync::watch::channel(ObservableInstanceState {
+            default_ds: instance.default_ds(),
+            current_ds: instance.current_ds(),
+            parent_ds: instance.parent_ds(),
+            time_properties_ds: instance.time_properties_ds(),
+        });
+    statime_linux::observer::spawn(&config, instance_state_receiver).await;
+
     let (bmca_notify_sender, bmca_notify_receiver) = tokio::sync::watch::channel(false);
 
     let mut main_task_senders = Vec::with_capacity(config.ports.len());
@@ -295,6 +306,7 @@ async fn actual_main() {
                 (LinuxClock::CLOCK_TAI, InterfaceTimestampMode::SoftwareAll)
             }
         };
+
         let rng = StdRng::from_entropy();
         let port = instance.add_port(
             port_config.into(),
@@ -376,12 +388,10 @@ async fn actual_main() {
             .expect("space in channel buffer");
     }
 
-    // The observer for the metrics exporter
-    statime_linux::observer::spawn(&config.observability).await;
-
     run(
         instance,
         bmca_notify_sender,
+        instance_state_sender,
         main_task_receivers,
         main_task_senders,
         internal_sync_senders,
@@ -393,6 +403,7 @@ async fn actual_main() {
 async fn run(
     instance: &'static PtpInstance<KalmanFilter>,
     bmca_notify_sender: tokio::sync::watch::Sender<bool>,
+    instance_state_sender: tokio::sync::watch::Sender<ObservableInstanceState>,
     mut main_task_receivers: Vec<Receiver<BmcaPort>>,
     main_task_senders: Vec<Sender<BmcaPort>>,
     internal_sync_senders: Vec<tokio::sync::watch::Sender<ClockSyncMode>>,
@@ -431,6 +442,15 @@ async fn run(
         }
 
         instance.bmca(&mut mut_bmca_ports);
+
+        // Update instance state for observability
+        // We don't care if isn't anybody on the other side
+        let _ = instance_state_sender.send(ObservableInstanceState {
+            default_ds: instance.default_ds(),
+            current_ds: instance.current_ds(),
+            parent_ds: instance.parent_ds(),
+            time_properties_ds: instance.time_properties_ds(),
+        });
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];
         for (idx, port) in mut_bmca_ports.iter().enumerate() {

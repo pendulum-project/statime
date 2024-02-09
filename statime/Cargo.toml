@@ -12,9 +12,10 @@ publish.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["std"]
+default = ["std", "serde"]
 std = []
 fuzz = ["std"]
+serde = ["dep:serde"]
 
 [dependencies]
 arrayvec.workspace = true
@@ -24,3 +25,4 @@ libm.workspace = true
 log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
 atomic_refcell.workspace = true
+serde = { workspace = true, optional = true }

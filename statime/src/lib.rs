@@ -89,6 +89,7 @@ pub mod config;
 pub(crate) mod datastructures;
 pub mod filters;
 mod float_polyfill;
+pub mod observability;
 pub mod port;
 mod ptp_instance;
 pub mod time;

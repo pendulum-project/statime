@@ -14,9 +14,12 @@ use crate::{
     config::{InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
-        datasets::{CurrentDS, DefaultDS, ParentDS, TimePropertiesDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, TimePropertiesDS},
     },
     filters::Filter,
+    observability::{
+        current::CurrentDS, default::DefaultDS, parent::ParentDS, ObservableInstanceState,
+    },
     port::{InBmca, Port},
     time::Duration,
 };
@@ -71,6 +74,7 @@ use crate::{
 /// let mut instance = PtpInstance::<BasicFilter>::new(
 ///     instance_config,
 ///     time_properties_ds,
+///     instance_sender,
 /// );
 ///
 /// let mut port = instance.add_port(port_config, filter_config, clock, rng);
@@ -90,9 +94,9 @@ pub struct PtpInstance<F> {
 
 #[derive(Debug)]
 pub(crate) struct PtpInstanceState {
-    pub(crate) default_ds: DefaultDS,
-    pub(crate) current_ds: CurrentDS,
-    pub(crate) parent_ds: ParentDS,
+    pub(crate) default_ds: InternalDefaultDS,
+    pub(crate) current_ds: InternalCurrentDS,
+    pub(crate) parent_ds: InternalParentDS,
     pub(crate) time_properties_ds: TimePropertiesDS,
 }
 
@@ -149,17 +153,38 @@ impl<F> PtpInstance<F> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
     pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
-        let default_ds = DefaultDS::new(config);
+        let default_ds = InternalDefaultDS::new(config);
+
         Self {
             state: AtomicRefCell::new(PtpInstanceState {
                 default_ds,
                 current_ds: Default::default(),
-                parent_ds: ParentDS::new(default_ds),
+                parent_ds: InternalParentDS::new(default_ds),
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),
             _filter: PhantomData,
         }
+    }
+
+    /// Return IEEE-1588 defaultDS for introspection
+    pub fn default_ds(&self) -> DefaultDS {
+        (&self.state.borrow().default_ds).into()
+    }
+
+    /// Return IEEE-1588 currentDS for introspection
+    pub fn current_ds(&self) -> CurrentDS {
+        (&self.state.borrow().current_ds).into()
+    }
+
+    /// Return IEEE-1588 parentDS for introspection
+    pub fn parent_ds(&self) -> ParentDS {
+        (&self.state.borrow().parent_ds).into()
+    }
+
+    /// Return IEEE-1588 timePropertiesDS for introspection
+    pub fn time_properties_ds(&self) -> TimePropertiesDS {
+        self.state.borrow().time_properties_ds
     }
 }
 
@@ -187,6 +212,7 @@ impl<F: Filter> PtpInstance<F> {
             port_number: state.default_ds.number_ports,
         };
         state.default_ds.number_ports += 1;
+
         Port::new(
             &self.state,
             config,
@@ -218,5 +244,16 @@ impl<F: Filter> PtpInstance<F> {
         core::time::Duration::from_secs_f64(
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
+    }
+
+    /// Read the current instance state in a serializable format
+    pub fn observe_state(&self) -> ObservableInstanceState {
+        let state = self.state.borrow();
+        ObservableInstanceState {
+            default_ds: (&state.default_ds).into(),
+            current_ds: (&state.current_ds).into(),
+            parent_ds: (&state.parent_ds.clone()).into(),
+            time_properties_ds: state.time_properties_ds,
+        }
     }
 }

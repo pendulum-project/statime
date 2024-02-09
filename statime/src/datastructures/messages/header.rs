@@ -157,6 +157,7 @@ impl Default for Header {
 /// assert!(SdoId::try_from(0x1000).is_err());
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SdoId(u16);
 
 impl core::fmt::Display for SdoId {

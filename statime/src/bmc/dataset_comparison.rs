@@ -4,7 +4,7 @@ use core::cmp::Ordering;
 
 use crate::datastructures::{
     common::{ClockIdentity, ClockQuality, PortIdentity},
-    datasets::DefaultDS,
+    datasets::InternalDefaultDS,
     messages::AnnounceMessage,
 };
 
@@ -42,7 +42,7 @@ impl ComparisonDataset {
         }
     }
 
-    pub(crate) fn from_own_data(data: &DefaultDS) -> Self {
+    pub(crate) fn from_own_data(data: &InternalDefaultDS) -> Self {
         Self {
             gm_priority_1: data.priority_1,
             gm_identity: data.clock_identity,
