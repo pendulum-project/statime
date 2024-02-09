@@ -7,18 +7,19 @@ pub(crate) struct PDelayReqMessage {
 
 impl PDelayReqMessage {
     pub(crate) fn content_size(&self) -> usize {
-        10
+        20
     }
 
     pub(crate) fn serialize_content(
         &self,
         buffer: &mut [u8],
     ) -> Result<(), crate::datastructures::WireFormatError> {
-        if buffer.len() < 10 {
+        if buffer.len() < 20 {
             return Err(WireFormatError::BufferTooShort);
         }
 
         self.origin_timestamp.serialize(&mut buffer[0..10])?;
+        buffer[10..20].fill(0);
 
         Ok(())
     }
@@ -26,7 +27,7 @@ impl PDelayReqMessage {
     pub(crate) fn deserialize_content(
         buffer: &[u8],
     ) -> Result<Self, crate::datastructures::WireFormatError> {
-        let slice = buffer.get(0..10).ok_or(WireFormatError::BufferTooShort)?;
+        let slice = buffer.get(0..20).ok_or(WireFormatError::BufferTooShort)?;
 
         Ok(Self {
             origin_timestamp: WireTimestamp::deserialize(slice)?,
@@ -41,7 +42,10 @@ mod tests {
     #[test]
     fn timestamp_wireformat() {
         let representations = [(
-            [0x00, 0x00, 0x45, 0xb1, 0x11, 0x5a, 0x0a, 0x64, 0xfa, 0xb0],
+            [
+                0x00, 0x00, 0x45, 0xb1, 0x11, 0x5a, 0x0a, 0x64, 0xfa, 0xb0, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ],
             PDelayReqMessage {
                 origin_timestamp: WireTimestamp {
                     seconds: 1169232218,
@@ -52,7 +56,7 @@ mod tests {
 
         for (byte_representation, object_representation) in representations {
             // Test the serialization output
-            let mut serialization_buffer = [0; 10];
+            let mut serialization_buffer = [0; 20];
             object_representation
                 .serialize_content(&mut serialization_buffer)
                 .unwrap();
