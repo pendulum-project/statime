@@ -496,6 +496,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
                     inner: TimestampContextInner::PDelayReq { id: pdelay_id },
                 },
                 data: &self.packet_buffer[..message_length],
+                link_local: true,
             }
         ]
     }
@@ -542,6 +543,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
                             inner: TimestampContextInner::DelayReq { id: delay_id },
                         },
                         data: &self.packet_buffer[..message_length],
+                        link_local: false,
                     }
                 ]
             }
@@ -764,7 +766,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: false,
+        }) = action.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -842,7 +849,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: false,
+        }) = action.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1152,7 +1164,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = action.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: false,
+        }) = action.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1263,7 +1280,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1323,7 +1345,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1400,7 +1427,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1478,7 +1510,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();
@@ -1546,7 +1583,12 @@ mod tests {
             panic!("Unexpected action");
         };
 
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         let data = data.to_owned();

@@ -167,7 +167,7 @@ pub(crate) mod state;
 /// #     }
 /// #     pub struct UdpSocket;
 /// #     impl UdpSocket {
-/// #         pub fn send(&mut self, buf: &[u8]) -> statime::time::Time { unimplemented!() }
+/// #         pub fn send(&mut self, buf: &[u8], link_local: bool) -> statime::time::Time { unimplemented!() }
 /// #     }
 /// # }
 /// struct MyPortResources {
@@ -184,12 +184,12 @@ pub(crate) mod state;
 /// fn handle_actions(resources: &mut MyPortResources, actions: PortActionIterator) {
 ///     for action in actions {
 ///         match action {
-///             PortAction::SendEvent { context, data } => {
-///                 let timestamp = resources.time_critical_socket.send(data);
+///             PortAction::SendEvent { context, data, link_local } => {
+///                 let timestamp = resources.time_critical_socket.send(data, link_local);
 ///                 resources.send_timestamp = Some((context, timestamp));
 ///             }
-///             PortAction::SendGeneral { data } => {
-///                 resources.general_socket.send(data);
+///             PortAction::SendGeneral { data, link_local } => {
+///                 resources.general_socket.send(data, link_local);
 ///             }
 ///             PortAction::ResetAnnounceTimer { duration } => {
 ///                 resources.announce_timer.expire_in(duration)

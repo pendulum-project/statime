@@ -35,6 +35,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
                         inner: TimestampContextInner::Sync { id: seq_id },
                     },
                     data: &self.packet_buffer[..packet_length],
+                    link_local: false,
                 }
             ]
         } else {
@@ -64,6 +65,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
 
             actions![PortAction::SendGeneral {
                 data: &self.packet_buffer[..packet_length],
+                link_local: false,
             }]
         } else {
             actions![]
@@ -123,7 +125,8 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
                     duration: self.config.announce_interval.as_core_duration(),
                 },
                 PortAction::SendGeneral {
-                    data: &self.packet_buffer[..packet_length]
+                    data: &self.packet_buffer[..packet_length],
+                    link_local: false,
                 }
             ]
         } else {
@@ -157,6 +160,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
 
             actions![PortAction::SendGeneral {
                 data: &self.packet_buffer[..packet_length],
+                link_local: false,
             }]
         } else {
             actions![]
@@ -210,7 +214,11 @@ mod tests {
             Time::from_fixed_nanos(U96F32::from_bits((200000 << 32) + (500 << 16))),
         );
 
-        let Some(PortAction::SendGeneral { data }) = action.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = action.next()
+        else {
             panic!("Unexpected resulting action");
         };
         assert!(action.next().is_none());
@@ -259,7 +267,11 @@ mod tests {
             Time::from_fixed_nanos(U96F32::from_bits((220000 << 32) + (300 << 16))),
         );
 
-        let Some(PortAction::SendGeneral { data }) = action.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = action.next()
+        else {
             panic!("Unexpected resulting action");
         };
         assert!(action.next().is_none());
@@ -310,7 +322,11 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetAnnounceTimer { .. })
         ));
-        let Some(PortAction::SendGeneral { data }) = actions.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -332,7 +348,11 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetAnnounceTimer { .. })
         ));
-        let Some(PortAction::SendGeneral { data }) = actions.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -370,7 +390,12 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetSyncTimer { .. })
         ));
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -394,7 +419,11 @@ mod tests {
             Time::from_fixed_nanos(U96F32::from_bits((601300 << 32) + (230 << 16))),
         );
 
-        let Some(PortAction::SendGeneral { data }) = actions.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -428,7 +457,12 @@ mod tests {
             actions.next(),
             Some(PortAction::ResetSyncTimer { .. })
         ));
-        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());
@@ -452,7 +486,11 @@ mod tests {
             Time::from_fixed_nanos(U96F32::from_bits((1000601300 << 32) + (543 << 16))),
         );
 
-        let Some(PortAction::SendGeneral { data }) = actions.next() else {
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
             panic!("Unexpected action");
         };
         assert!(actions.next().is_none());

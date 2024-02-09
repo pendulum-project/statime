@@ -77,14 +77,23 @@ pub enum PortAction<'a> {
     /// Once the packet is sent and the transmit timestamp known the user should
     /// return the given [`TimestampContext`] using
     /// [`Port::handle_send_timestamp`].
+    ///
+    /// Packets marked as link local should be sent per the instructions
+    /// for sending peer to peer delay mechanism messages of the relevant
+    /// transport specification of PTP.
     SendEvent {
         context: TimestampContext,
         data: &'a [u8],
+        link_local: bool,
     },
     /// Send a general packet
     ///
     /// For a packet sent this way no timestamp needs to be captured.
-    SendGeneral { data: &'a [u8] },
+    ///
+    /// Packets marked as link local should be sent per the instructions
+    /// for sending peer to peer delay mechanism messages of the relevant
+    /// transport specification of PTP.
+    SendGeneral { data: &'a [u8], link_local: bool },
     /// Call [`Port::handle_announce_timer`] in `duration` from now
     ResetAnnounceTimer { duration: core::time::Duration },
     /// Call [`Port::handle_sync_timer`] in `duration` from now

@@ -115,7 +115,7 @@ impl Port {
 
         for action in actions {
             match action {
-                PortAction::SendEvent { context, data } => {
+                PortAction::SendEvent { context, data, .. } => {
                     const TO: IpEndpoint = IpEndpoint {
                         addr: IpAddress::v4(224, 0, 1, 129),
                         port: 319,
@@ -127,7 +127,7 @@ impl Port {
                         }
                     }
                 }
-                PortAction::SendGeneral { data } => {
+                PortAction::SendGeneral { data, .. } => {
                     const TO: IpEndpoint = IpEndpoint {
                         addr: IpAddress::v4(224, 0, 1, 129),
                         port: 320,

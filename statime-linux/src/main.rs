@@ -714,10 +714,21 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
 
     for action in actions {
         match action {
-            PortAction::SendEvent { context, data } => {
+            PortAction::SendEvent {
+                context,
+                data,
+                link_local,
+            } => {
                 // send timestamp of the send
                 let time = event_socket
-                    .send_to(data, A::PRIMARY_EVENT)
+                    .send_to(
+                        data,
+                        if link_local {
+                            A::PDELAY_EVENT
+                        } else {
+                            A::PRIMARY_EVENT
+                        },
+                    )
                     .await
                     .expect("Failed to send event message");
 
@@ -733,9 +744,16 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
                     log::error!("Missing send timestamp");
                 }
             }
-            PortAction::SendGeneral { data } => {
+            PortAction::SendGeneral { data, link_local } => {
                 general_socket
-                    .send_to(data, A::PRIMARY_GENERAL)
+                    .send_to(
+                        data,
+                        if link_local {
+                            A::PDELAY_GENERAL
+                        } else {
+                            A::PRIMARY_GENERAL
+                        },
+                    )
                     .await
                     .expect("Failed to send general message");
             }
@@ -775,14 +793,26 @@ async fn handle_actions_ethernet(
 
     for action in actions {
         match action {
-            PortAction::SendEvent { context, data } => {
+            PortAction::SendEvent {
+                context,
+                data,
+                link_local,
+            } => {
                 // send timestamp of the send
                 let time = socket
                     .send_to(
                         data,
                         EthernetAddress::new(
-                            EthernetAddress::PRIMARY_EVENT.protocol(),
-                            EthernetAddress::PRIMARY_EVENT.mac(),
+                            if link_local {
+                                EthernetAddress::PDELAY_EVENT.protocol()
+                            } else {
+                                EthernetAddress::PRIMARY_EVENT.protocol()
+                            },
+                            if link_local {
+                                EthernetAddress::PDELAY_EVENT.mac()
+                            } else {
+                                EthernetAddress::PRIMARY_EVENT.mac()
+                            },
                             interface,
                         ),
                     )
@@ -801,13 +831,21 @@ async fn handle_actions_ethernet(
                     log::error!("Missing send timestamp");
                 }
             }
-            PortAction::SendGeneral { data } => {
+            PortAction::SendGeneral { data, link_local } => {
                 socket
                     .send_to(
                         data,
                         EthernetAddress::new(
-                            EthernetAddress::PRIMARY_GENERAL.protocol(),
-                            EthernetAddress::PRIMARY_GENERAL.mac(),
+                            if link_local {
+                                EthernetAddress::PDELAY_GENERAL.protocol()
+                            } else {
+                                EthernetAddress::PRIMARY_GENERAL.protocol()
+                            },
+                            if link_local {
+                                EthernetAddress::PDELAY_GENERAL.mac()
+                            } else {
+                                EthernetAddress::PRIMARY_GENERAL.mac()
+                            },
                             interface,
                         ),
                     )
