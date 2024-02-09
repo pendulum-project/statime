@@ -297,10 +297,15 @@ enum PeerDelayState {
     Empty,
     Measuring {
         id: u16,
+        responder_identity: Option<PortIdentity>,
         request_send_time: Option<Time>,
         request_recv_time: Option<Time>,
         response_send_time: Option<Time>,
         response_recv_time: Option<Time>,
+    },
+    PostMeasurement {
+        id: u16,
+        responder_identity: PortIdentity,
     },
 }
 
@@ -533,7 +538,9 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
             state
         );
         core::mem::swap(&mut self.port_state, &mut state);
-        if matches!(state, PortState::Slave(_)) {
+        if matches!(state, PortState::Slave(_) | PortState::Faulty)
+            || matches!(self.port_state, PortState::Faulty)
+        {
             let mut filter = F::new(self.filter_config.clone());
             core::mem::swap(&mut filter, &mut self.filter);
             filter.demobilize(&mut self.clock);

@@ -54,7 +54,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
         // in the global operation of the best master clock algorithm or in the update
         // of data sets. We still need them during the calculation of the recommended
         // port state though to avoid getting multiple masters in the segment.
-        if self.config.master_only {
+        if self.config.master_only || matches!(self.port_state, PortState::Faulty) {
             None
         } else {
             self.lifecycle.local_best
@@ -146,6 +146,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 let remote_master = announce_message.header.source_port_identity;
 
                 let update_state = match &self.port_state {
+                    PortState::Faulty => false,
                     PortState::Listening | PortState::Master | PortState::Passive => true,
                     PortState::Slave(old_state) => old_state.remote_master() != remote_master,
                 };
@@ -165,7 +166,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
             RecommendedState::M1(_) | RecommendedState::M2(_) | RecommendedState::M3(_) => {
                 if default_ds.slave_only {
                     match self.port_state {
-                        PortState::Listening => { /* do nothing */ }
+                        PortState::Listening | PortState::Faulty => { /* do nothing */ }
                         PortState::Slave(_) | PortState::Passive => {
                             self.set_forced_port_state(PortState::Listening);
 
@@ -192,7 +193,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                                 PortAction::ResetSyncTimer { duration }
                             ];
                         }
-                        PortState::Master => { /* do nothing */ }
+                        PortState::Master | PortState::Faulty => { /* do nothing */ }
                     }
                 }
             }
@@ -200,7 +201,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
                 PortState::Listening | PortState::Slave(_) | PortState::Master => {
                     self.set_forced_port_state(PortState::Passive)
                 }
-                PortState::Passive => {}
+                PortState::Passive | PortState::Faulty => {}
             },
         }
     }

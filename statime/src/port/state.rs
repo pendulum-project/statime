@@ -9,6 +9,7 @@ use crate::{
 #[allow(private_interfaces)]
 pub(crate) enum PortState {
     #[default]
+    Faulty,
     Listening,
     Master,
     Passive,
@@ -22,6 +23,7 @@ impl Display for PortState {
             PortState::Master => write!(f, "Master"),
             PortState::Passive => write!(f, "Passive"),
             PortState::Slave(_) => write!(f, "Slave"),
+            PortState::Faulty => write!(f, "Faulty"),
         }
     }
 }

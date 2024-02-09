@@ -255,6 +255,27 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         }
 
         match self.peer_delay_state {
+            PeerDelayState::PostMeasurement {
+                id,
+                responder_identity,
+            } if id == header.sequence_id && responder_identity != header.source_port_identity => {
+                log::error!(
+                    "Responses from multiple devices to peer delay request, disabling port!"
+                );
+                self.set_forced_port_state(PortState::Faulty);
+                actions![]
+            }
+            PeerDelayState::Measuring {
+                id,
+                responder_identity: Some(identity),
+                ..
+            } if id == header.sequence_id && identity != header.source_port_identity => {
+                log::error!(
+                    "Responses from multiple devices to peer delay request, disabling port!"
+                );
+                self.set_forced_port_state(PortState::Faulty);
+                actions![]
+            }
             PeerDelayState::Measuring {
                 id,
                 response_recv_time: Some(_),
@@ -268,10 +289,12 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
                 ref mut request_recv_time,
                 ref mut response_recv_time,
                 ref mut response_send_time,
+                ref mut responder_identity,
                 ..
             } if id == header.sequence_id => {
                 *response_recv_time = Some(recv_time - Duration::from(header.correction_field));
                 *request_recv_time = Some(message.request_receive_timestamp.into());
+                *responder_identity = Some(header.source_port_identity);
 
                 if !header.two_step_flag {
                     *response_send_time = Some(message.request_receive_timestamp.into());
@@ -295,6 +318,27 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         }
 
         match self.peer_delay_state {
+            PeerDelayState::PostMeasurement {
+                id,
+                responder_identity,
+            } if id == header.sequence_id && responder_identity != header.source_port_identity => {
+                log::error!(
+                    "Responses from multiple devices to peer delay request, disabling port!"
+                );
+                self.set_forced_port_state(PortState::Faulty);
+                actions![]
+            }
+            PeerDelayState::Measuring {
+                id,
+                responder_identity: Some(identity),
+                ..
+            } if id == header.sequence_id && identity != header.source_port_identity => {
+                log::error!(
+                    "Responses from multiple devices to peer delay request, disabling port!"
+                );
+                self.set_forced_port_state(PortState::Faulty);
+                actions![]
+            }
             PeerDelayState::Measuring {
                 id,
                 response_send_time: Some(_),
@@ -306,12 +350,14 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
             PeerDelayState::Measuring {
                 id,
                 ref mut response_send_time,
+                ref mut responder_identity,
                 ..
             } if id == header.sequence_id => {
                 *response_send_time = Some(
                     Time::from(message.response_origin_timestamp)
                         + Duration::from(header.correction_field),
                 );
+                *responder_identity = Some(header.source_port_identity);
                 self.handle_time_measurement()
             }
             _ => {
@@ -329,7 +375,8 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
             request_recv_time: Some(request_recv_time),
             response_send_time: Some(response_send_time),
             response_recv_time: Some(response_recv_time),
-            ..
+            responder_identity: Some(responder_identity),
+            id,
         } = self.peer_delay_state
         {
             result.event_time = response_recv_time;
@@ -338,9 +385,17 @@ impl<'a, A, C: Clock, F: Filter, R> Port<Running<'a>, A, R, C, F> {
                     - (response_send_time - request_recv_time))
                     / 2.0,
             );
-            self.peer_delay_state = PeerDelayState::Empty;
+            self.peer_delay_state = PeerDelayState::PostMeasurement {
+                id,
+                responder_identity,
+            };
 
             log::info!("Measurement: {:?}", result);
+
+            if matches!(self.port_state, PortState::Faulty) {
+                log::info!("Recovered port");
+                self.set_forced_port_state(PortState::Listening);
+            }
 
             return Some(result);
         }
@@ -421,6 +476,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
 
         self.peer_delay_state = PeerDelayState::Measuring {
             id: pdelay_id,
+            responder_identity: None,
             request_send_time: None,
             request_recv_time: None,
             response_send_time: None,
@@ -1286,6 +1342,7 @@ mod tests {
             Header {
                 two_step_flag: true,
                 correction_field: TimeInterval(1000.into()),
+                sequence_id: req.header.sequence_id,
                 ..Default::default()
             },
             PDelayRespMessage {
@@ -1297,15 +1354,18 @@ mod tests {
         assert!(actions.next().is_none());
         drop(actions);
         assert!(port.filter.last_measurement.take().is_none());
-        
+
         let mut actions = port.handle_peer_delay_response_follow_up(
             Header {
                 correction_field: TimeInterval(1000.into()),
+                sequence_id: req.header.sequence_id,
                 ..Default::default()
-            }, PDelayRespFollowUpMessage {
+            },
+            PDelayRespFollowUpMessage {
                 response_origin_timestamp: Time::from_micros(103).into(),
                 requesting_port_identity: req.header.source_port_identity,
-            });
+            },
+        );
         assert!(actions.next().is_none());
         drop(actions);
         assert_eq!(
@@ -1358,11 +1418,14 @@ mod tests {
         let mut actions = port.handle_peer_delay_response_follow_up(
             Header {
                 correction_field: TimeInterval(1000.into()),
+                sequence_id: req.header.sequence_id,
                 ..Default::default()
-            }, PDelayRespFollowUpMessage {
+            },
+            PDelayRespFollowUpMessage {
                 response_origin_timestamp: Time::from_micros(103).into(),
                 requesting_port_identity: req.header.source_port_identity,
-            });
+            },
+        );
         assert!(actions.next().is_none());
         drop(actions);
         assert!(port.filter.last_measurement.take().is_none());
@@ -1371,6 +1434,7 @@ mod tests {
             Header {
                 two_step_flag: true,
                 correction_field: TimeInterval(1000.into()),
+                sequence_id: req.header.sequence_id,
                 ..Default::default()
             },
             PDelayRespMessage {
@@ -1381,7 +1445,7 @@ mod tests {
         );
         assert!(actions.next().is_none());
         drop(actions);
-        
+
         assert_eq!(
             port.filter.last_measurement.take(),
             Some(Measurement {
@@ -1393,5 +1457,135 @@ mod tests {
                 raw_delay_offset: None,
             })
         );
+    }
+
+    #[test]
+    fn test_peer_delay_faulty() {
+        let state = setup_test_state();
+
+        let mut port = setup_test_port_custom_filter::<TestFilter>(&state, ());
+        port.config.delay_mechanism = DelayMechanism::P2P {
+            interval: Interval::from_log_2(1),
+        };
+
+        let state = SlaveState::new(Default::default());
+
+        port.set_forced_port_state(PortState::Slave(state));
+
+        let mut actions = port.send_delay_request();
+
+        let Some(PortAction::ResetDelayRequestTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+
+        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        let data = data.to_owned();
+        drop(actions);
+        assert!(port.filter.last_measurement.take().is_none());
+
+        let mut actions = port.handle_send_timestamp(context, Time::from_micros(50));
+        assert!(actions.next().is_none());
+        drop(actions);
+        assert!(port.filter.last_measurement.take().is_none());
+
+        let req = Message::deserialize(&data).unwrap();
+        assert!(matches!(req.body, MessageBody::PDelayReq(_)));
+
+        let mut actions = port.handle_peer_delay_response(
+            Header {
+                correction_field: TimeInterval(2000.into()),
+                sequence_id: req.header.sequence_id,
+                ..Default::default()
+            },
+            PDelayRespMessage {
+                request_receive_timestamp: Time::from_micros(100).into(),
+                requesting_port_identity: req.header.source_port_identity,
+            },
+            Time::from_micros(152),
+        );
+        assert!(actions.next().is_none());
+        drop(actions);
+        assert_eq!(
+            port.filter.last_measurement.take(),
+            Some(Measurement {
+                event_time: Time::from_micros(150),
+                offset: None,
+                delay: None,
+                peer_delay: Some(Duration::from_micros(50)),
+                raw_sync_offset: None,
+                raw_delay_offset: None,
+            })
+        );
+        assert!(!matches!(port.port_state, PortState::Faulty));
+
+        let mut actions = port.handle_peer_delay_response(
+            Header {
+                source_port_identity: PortIdentity {
+                    clock_identity: Default::default(),
+                    port_number: 5,
+                },
+                correction_field: TimeInterval(2000.into()),
+                ..Default::default()
+            },
+            PDelayRespMessage {
+                request_receive_timestamp: Time::from_micros(100).into(),
+                requesting_port_identity: req.header.source_port_identity,
+            },
+            Time::from_micros(152),
+        );
+        assert!(actions.next().is_none());
+        drop(actions);
+        assert!(port.filter.last_measurement.take().is_none());
+        assert!(matches!(port.port_state, PortState::Faulty));
+
+        let mut actions = port.send_delay_request();
+
+        let Some(PortAction::ResetDelayRequestTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+
+        let Some(PortAction::SendEvent { context, data }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        let data = data.to_owned();
+        drop(actions);
+        assert!(port.filter.last_measurement.take().is_none());
+
+        let mut actions = port.handle_send_timestamp(context, Time::from_micros(50));
+        assert!(actions.next().is_none());
+        drop(actions);
+        assert!(port.filter.last_measurement.take().is_none());
+
+        let req = Message::deserialize(&data).unwrap();
+        assert!(matches!(req.body, MessageBody::PDelayReq(_)));
+
+        let mut actions = port.handle_peer_delay_response(
+            Header {
+                correction_field: TimeInterval(2000.into()),
+                sequence_id: req.header.sequence_id,
+                ..Default::default()
+            },
+            PDelayRespMessage {
+                request_receive_timestamp: Time::from_micros(100).into(),
+                requesting_port_identity: req.header.source_port_identity,
+            },
+            Time::from_micros(152),
+        );
+        assert!(actions.next().is_none());
+        drop(actions);
+        assert_eq!(
+            port.filter.last_measurement.take(),
+            Some(Measurement {
+                event_time: Time::from_micros(150),
+                offset: None,
+                delay: None,
+                peer_delay: Some(Duration::from_micros(50)),
+                raw_sync_offset: None,
+                raw_delay_offset: None,
+            })
+        );
+        assert!(!matches!(port.port_state, PortState::Faulty));
     }
 }
