@@ -58,8 +58,10 @@ pub struct PortConfig {
     pub master_only: bool,
     #[serde(default = "default_delay_asymmetry")]
     pub delay_asymmetry: i64,
-    #[serde(default = "default_delay_mechanism")]
-    pub delay_mechanism: i8,
+    #[serde(default)]
+    pub delay_mechanism: DelayType,
+    #[serde(default = "default_delay_interval")]
+    pub delay_interval: i8,
 }
 
 fn deserialize_loglevel<'de, D>(deserializer: D) -> Result<log::LevelFilter, D::Error>
@@ -114,8 +116,13 @@ impl From<PortConfig> for statime::config::PortConfig<Option<Vec<ClockIdentity>>
             announce_receipt_timeout: pc.announce_receipt_timeout,
             master_only: pc.master_only,
             delay_asymmetry: Duration::from_nanos(pc.delay_asymmetry),
-            delay_mechanism: DelayMechanism::E2E {
-                interval: Interval::from_log_2(pc.delay_mechanism),
+            delay_mechanism: match pc.delay_mechanism {
+                DelayType::E2E => DelayMechanism::E2E {
+                    interval: Interval::from_log_2(pc.delay_interval),
+                },
+                DelayType::P2P => DelayMechanism::P2P {
+                    interval: Interval::from_log_2(pc.delay_interval),
+                },
             },
         }
     }
@@ -128,6 +135,14 @@ pub enum NetworkMode {
     Ipv4,
     Ipv6,
     Ethernet,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum DelayType {
+    #[default]
+    E2E,
+    P2P,
 }
 
 impl Config {
@@ -211,7 +226,7 @@ fn default_delay_asymmetry() -> i64 {
     0
 }
 
-fn default_delay_mechanism() -> i8 {
+fn default_delay_interval() -> i8 {
     0
 }
 
@@ -280,7 +295,8 @@ interface = "enp0s31f6"
             announce_receipt_timeout: 3,
             master_only: false,
             delay_asymmetry: 0,
-            delay_mechanism: 0,
+            delay_mechanism: crate::config::DelayType::E2E,
+            delay_interval: 0,
         };
 
         let expected = crate::config::Config {
