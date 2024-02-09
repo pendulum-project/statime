@@ -1,7 +1,7 @@
 use super::{state::PortState, ForwardedTLVProvider, Port, PortActionIterator, Running};
 use crate::{
     datastructures::{
-        common::TlvSetBuilder,
+        common::{PortIdentity, TlvSetBuilder},
         messages::{DelayReqMessage, Header, Message, MAX_DATA_LEN},
     },
     filters::Filter,
@@ -165,6 +165,67 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         } else {
             actions![]
         }
+    }
+
+    pub(super) fn handle_pdelay_req(
+        &mut self,
+        header: Header,
+        timestamp: Time,
+    ) -> PortActionIterator {
+        log::debug!("Received PDelayReq");
+        let pdelay_resp_message = Message::pdelay_resp(
+            &self.lifecycle.state.default_ds,
+            self.port_identity,
+            header,
+            timestamp,
+        );
+
+        let packet_length = match pdelay_resp_message.serialize(&mut self.packet_buffer) {
+            Ok(length) => length,
+            Err(error) => {
+                log::error!("Could not serialize pdelay response: {:?}", error);
+                return actions![];
+            }
+        };
+
+        actions![PortAction::SendEvent {
+            data: &self.packet_buffer[..packet_length],
+            context: TimestampContext {
+                inner: TimestampContextInner::PDelayResp {
+                    id: header.sequence_id,
+                    requestor_identity: header.source_port_identity
+                }
+            },
+            link_local: true,
+        }]
+    }
+
+    pub(super) fn handle_pdelay_response_timestamp(
+        &mut self,
+        id: u16,
+        requestor_identity: PortIdentity,
+        timestamp: Time,
+    ) -> PortActionIterator {
+        let pdelay_resp_follow_up_messgae = Message::pdelay_resp_follow_up(
+            &self.lifecycle.state.default_ds,
+            self.port_identity,
+            requestor_identity,
+            id,
+            timestamp,
+        );
+
+        let packet_length = match pdelay_resp_follow_up_messgae.serialize(&mut self.packet_buffer) {
+            Ok(length) => length,
+            Err(error) => {
+                log::error!("Could not serialize pdelay_response_followup: {:?}", error);
+                return actions![];
+            }
+        };
+
+        actions![PortAction::SendGeneral {
+            data: &self.packet_buffer[..packet_length],
+            link_local: true,
+        }]
     }
 }
 
@@ -517,5 +578,57 @@ mod tests {
             follow2_header.correction_field,
             TimeInterval(I48F16::from_bits(543))
         );
+    }
+
+    #[test]
+    fn test_peer_delay() {
+        let state = setup_test_state();
+
+        let mut port = setup_test_port(&state);
+
+        let mut actions = port.handle_pdelay_req(Header::default(), Time::from_micros(500));
+
+        let Some(PortAction::SendEvent {
+            context,
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
+            panic!("Unexpected action");
+        };
+
+        let response = Message::deserialize(data).unwrap();
+        let MessageBody::PDelayResp(response_body) = response.body else {
+            panic!("Unexpected message sent by port");
+        };
+        assert_eq!(
+            response_body.request_receive_timestamp,
+            Time::from_micros(500).into()
+        );
+        drop(response);
+        assert!(actions.next().is_none());
+        drop(actions);
+
+        let mut actions = port.handle_send_timestamp(context, Time::from_micros(550));
+
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: true,
+        }) = actions.next()
+        else {
+            panic!("Unexpected action");
+        };
+
+        let response = Message::deserialize(data).unwrap();
+        let MessageBody::PDelayRespFollowUp(response_body) = response.body else {
+            panic!("Unexpected message sent by port");
+        };
+        assert_eq!(
+            response_body.response_origin_timestamp,
+            Time::from_micros(550).into()
+        );
+        drop(response);
+        assert!(actions.next().is_none());
+        drop(actions);
     }
 }
