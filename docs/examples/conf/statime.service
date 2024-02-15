@@ -13,7 +13,7 @@ Environment="RUST_LOG=info"
 RuntimeDirectory=statime
 User=statime
 Group=statime
-AmbientCapabilities=CAP_SYS_TIME CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_SYS_TIME CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
 
 [Install]
 WantedBy=multi-user.target

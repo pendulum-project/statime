@@ -43,6 +43,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		fi
 		deb-systemd-invoke $_dh_action statime.service >/dev/null || true
 	fi
+
+    if [ -d /run/udev ]; then
+        udevadm control -R
+        udevadm trigger
+    fi
 fi
 
 #DEBHELPER#

@@ -1,0 +1,1 @@
+KERNEL=="ptp[0-9]*", SUBSYSTEM=="ptp", GROUP="statime", MODE="0660"
