@@ -402,9 +402,21 @@ mod tests {
 
     #[test]
     fn sdo_id_checks() {
-        let sdo_id = SdoId::try_from(0xfff).unwrap();
-        assert_eq!(0xfff, u16::from(sdo_id));
+        use serde_test::{assert_de_tokens_error, assert_tokens, Token};
+        let correct_sdo_id = SdoId::try_from(0xfff).unwrap();
+        let faulty_sdo_id = SdoId::try_from(0x1000);
 
-        assert!(SdoId::try_from(0x1000).is_err());
+        assert_eq!(0xfff, u16::from(correct_sdo_id));
+        assert!(faulty_sdo_id.is_err());
+
+        assert_tokens(
+            &correct_sdo_id,
+            &[Token::NewtypeStruct { name: "SdoId" }, Token::U16(4095)],
+        );
+
+        assert_de_tokens_error::<SdoId>(
+            &[Token::NewtypeStruct { name: "SdoId" }, Token::U16(4096)],
+            "invalid type: newtype struct, expected a 12 bit value within the 0..=0xFFF range",
+        );
     }
 }

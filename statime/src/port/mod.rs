@@ -115,6 +115,7 @@ pub(crate) mod state;
 /// #         }
 /// #     }
 /// # }
+/// # let (instance_config, time_properties_ds) = unimplemented!();
 /// use rand::thread_rng;
 /// use statime::config::{AcceptAnyMaster, DelayMechanism, PortConfig};
 /// use statime::filters::BasicFilter;
