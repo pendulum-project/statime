@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     config::LeapIndicator,
-    crypto::{NoSpaceError, SecurityAssociation, SecurityAssociationProvider},
+    crypto::{NoSpaceError, SecurityAssociation, SecurityAssociationProvider, SenderIdentificaton},
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
 };
@@ -42,7 +42,7 @@ mod sync;
 /// `statime`.
 pub const MAX_DATA_LEN: usize = 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum MessageType {
     Sync = 0x0,
@@ -327,7 +327,7 @@ impl Message<'_> {
                 }
 
                 // get the security association and key
-                let Some(association) = provider.lookup(spp) else {
+                let Some(mut association) = provider.lookup(spp) else {
                     return false;
                 };
                 let Some(key) = association.mac(key_id) else {
@@ -351,10 +351,24 @@ impl Message<'_> {
                     buffer[8..16].fill(0)
                 }
 
-                return key.verify(
+                if !key.verify(
                     &buffer[..self.header.wire_size() + self.body.wire_size() + tlv_offset + 10],
                     &tlv.value[6..6 + key.output_size()],
+                ) {
+                    return false;
+                }
+
+                // Check sequence id is acceptable
+                association.register_sequence_id(
+                    key_id,
+                    SenderIdentificaton {
+                        message_type: self.body.content_type(),
+                        source_port_id: self.header.source_port_identity,
+                    },
+                    self.header.sequence_id,
                 );
+
+                return true;
             }
 
             tlv_offset += tlv.wire_size();
@@ -631,6 +645,15 @@ mod tests {
             Some(std::boxed::Box::leak(std::boxed::Box::new(
                 HmacSha256_128::new([0; 32]),
             )))
+        }
+
+        fn register_sequence_id(
+            &mut self,
+            _key_id: u32,
+            _sender: crate::crypto::SenderIdentificaton,
+            _sequence_id: u16,
+        ) -> bool {
+            true
         }
 
         fn signing_mac(&self) -> (u32, &dyn crate::crypto::Mac) {
