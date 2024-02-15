@@ -40,6 +40,9 @@ if [ $1 -eq 1 ] ; then
     create_user
     link_man_page
     init_systemd_service
+
+    udevadm control -R
+    udevadm trigger
 fi
 '''
 
@@ -64,4 +67,8 @@ if [ $1 -ge 1 ] ; then
     systemd_postun_with_restart statime.service
     systemd_triggers
 fi
+
+#trigger udev regardless of upgrade or removal
+udevadm control -R
+udevadm trigger
 '''
