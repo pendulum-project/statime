@@ -560,13 +560,7 @@ impl Filter for KalmanFilter {
             .progress_filtertime(m.event_time, self.wander, &self.config);
         if let Some(sync_offset) = m.raw_sync_offset {
             // We can start controlling, so need a proper frequency.
-            if self.cur_frequency.is_none() {
-                if clock.set_frequency(0.0).is_ok() {
-                    self.cur_frequency = Some(0.0);
-                } else {
-                    log::error!("Could not adjust clock frequency");
-                }
-            }
+            self.ensure_freq_init(clock);
 
             self.running_filter.absorb_sync_offset(
                 sync_offset.seconds(),
@@ -582,13 +576,7 @@ impl Filter for KalmanFilter {
         }
         if let Some(delay_offset) = m.raw_delay_offset {
             // We can start controlling, so need a proper frequency.
-            if self.cur_frequency.is_none() {
-                if clock.set_frequency(0.0).is_ok() {
-                    self.cur_frequency = Some(0.0);
-                } else {
-                    log::error!("Could not adjust clock frequency");
-                }
-            }
+            self.ensure_freq_init(clock);
 
             self.running_filter.absorb_delay_offset(
                 delay_offset.seconds(),
@@ -784,6 +772,18 @@ impl KalmanFilter {
             self.wander *= 4.0;
             self.wander_score = 0;
             log::info!("Updated wander estimate: {:e}", self.wander);
+        }
+    }
+
+    fn ensure_freq_init<C: crate::Clock>(&mut self, clock: &mut C) {
+        // TODO: At some point we should probably look at a better
+        // mechanism for this than just resetting the frequency.
+        if self.cur_frequency.is_none() {
+            if clock.set_frequency(0.0).is_ok() {
+                self.cur_frequency = Some(0.0);
+            } else {
+                log::error!("Could not adjust clock frequency");
+            }
         }
     }
 }
