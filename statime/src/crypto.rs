@@ -21,11 +21,20 @@ mod ring;
 #[cfg(feature = "ring")]
 pub use ring::*;
 
+use crate::datastructures::{common::PortIdentity, messages::MessageType};
+
 /// Policy data for a ptp security association (see IEEE1588-2019 section 16.14)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SecurityPolicy {
     /// Whether or not the correction field is signed
     pub ignore_correction: bool,
+}
+
+/// Identification of a sender for sequence id generation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SenderIdentificaton {
+    pub(crate) message_type: MessageType,
+    pub(crate) source_port_id: PortIdentity,
 }
 
 /// Data for a ptp security association (see IEEE1588-2019 section 16.14)
@@ -35,6 +44,25 @@ pub trait SecurityAssociation {
 
     /// Lookup a specific key for the association
     fn mac(&self, key_id: u32) -> Option<&dyn Mac>;
+
+    /// Register an observed message sequence id, returning whether it
+    /// is acceptable for further processing.
+    ///
+    /// Per the specification, once a sequence_id has been seen for a
+    /// combination of sender and key_id, only higher sequence_id's must be
+    /// accepted, allowing for rollover of the sequence id. Typically, this
+    /// should check whether the signed difference between the last sequence
+    /// id and the provided sequence id is larger than 0 and smaller than
+    /// some configured limit. Note that it should only actually register
+    /// id's if they are acceptable, as otherwise an attacker can still
+    /// avoid the checks by first sending an even older sequence id than
+    /// what he wants the instance to accept.
+    fn register_sequence_id(
+        &mut self,
+        key_id: u32,
+        sender: SenderIdentificaton,
+        sequence_id: u16,
+    ) -> bool;
 
     /// Get key that should be used for signing
     fn signing_mac(&self) -> (u32, &dyn Mac);
@@ -58,6 +86,15 @@ impl SecurityAssociation for NoSecurityAssocation {
     }
 
     fn mac(&self, _key_id: u32) -> Option<&dyn Mac> {
+        unreachable!()
+    }
+
+    fn register_sequence_id(
+        &mut self,
+        _key_id: u32,
+        _sender: SenderIdentificaton,
+        _sequence_id: u16,
+    ) -> bool {
         unreachable!()
     }
 
