@@ -62,7 +62,7 @@ impl<A> PortConfig<A> {
     pub fn min_delay_req_interval(&self) -> Interval {
         match self.delay_mechanism {
             DelayMechanism::E2E { interval } => interval,
-            DelayMechanism::P2P { .. } => todo!(),
+            DelayMechanism::P2P { interval } => interval,
         }
     }
 
