@@ -157,7 +157,7 @@ impl Default for Header {
 /// assert!(SdoId::try_from(0x1000).is_err());
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct SdoId(u16);
 
 impl core::fmt::Display for SdoId {
@@ -173,6 +173,38 @@ impl SdoId {
 
     const fn low_byte(self) -> u8 {
         self.0 as u8
+    }
+}
+
+#[cfg(feature = "serde")]
+struct SdoIdVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SdoId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_u16(SdoIdVisitor)
+    }
+}
+
+#[cfg(all(feature = "serde", feature = "std"))]
+impl<'de> serde::de::Visitor<'de> for SdoIdVisitor {
+    type Value = SdoId;
+
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        formatter.write_str("a 12 bit value within the 0..=0xFFF range")
+    }
+
+    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        SdoId::try_from(v).or(Err(E::custom(std::format!(
+            "SdoId not in range of 0..=0xFFF: {}",
+            v
+        ))))
     }
 }
 
