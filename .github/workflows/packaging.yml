@@ -11,7 +11,7 @@ on:
 
 jobs:
   package:
-    uses: NLnetLabs/ploutos/.github/workflows/pkg-rust.yml@v7
+    uses: davidv1992/ploutos/.github/workflows/pkg-rust.yml@main
     with:
       workspace_package: statime-linux
 
