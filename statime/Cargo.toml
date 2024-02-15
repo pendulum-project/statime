@@ -26,3 +26,6 @@ log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
 atomic_refcell.workspace = true
 serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_test.workspace = true
