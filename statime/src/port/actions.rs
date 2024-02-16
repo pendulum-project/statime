@@ -49,11 +49,12 @@ impl ForwardedTLVProvider for NoForwardedTLVs {
 /// Identification of a packet that should be sent out.
 ///
 /// The caller receives this from a [`PortAction::SendEvent`] and should return
-/// it to the [`Port`] with [`Port::handle_send_timestamp`] once the transmit
-/// timestamp of that packet is known.
+/// it to the [`Port`](`super::Port`) with
+/// [`Port::handle_send_timestamp`](`super::Port::handle_send_timestamp`) once
+/// the transmit timestamp of that packet is known.
 ///
 /// This type is non-copy and non-clone on purpose to ensures a single
-/// [`handle_send_timestamp`](`Port::handle_send_timestamp`) per
+/// [`handle_send_timestamp`](`super::Port::handle_send_timestamp`) per
 /// [`SendEvent`](`PortAction::SendEvent`).
 #[derive(Debug)]
 pub struct TimestampContext {
@@ -77,7 +78,7 @@ pub(super) enum TimestampContextInner {
     },
 }
 
-/// An action the [`Port`] needs the user to perform
+/// An action the [`Port`](`super::Port`) needs the user to perform
 #[derive(Debug)]
 #[must_use]
 #[allow(missing_docs)] // Explaining the fields as well as the variants does not add value
@@ -86,7 +87,7 @@ pub enum PortAction<'a> {
     ///
     /// Once the packet is sent and the transmit timestamp known the user should
     /// return the given [`TimestampContext`] using
-    /// [`Port::handle_send_timestamp`].
+    /// [`Port::handle_send_timestamp`](`super::Port::handle_send_timestamp`).
     ///
     /// Packets marked as link local should be sent per the instructions
     /// for sending peer to peer delay mechanism messages of the relevant
@@ -104,15 +105,16 @@ pub enum PortAction<'a> {
     /// for sending peer to peer delay mechanism messages of the relevant
     /// transport specification of PTP.
     SendGeneral { data: &'a [u8], link_local: bool },
-    /// Call [`Port::handle_announce_timer`] in `duration` from now
+    /// Call [`Port::handle_announce_timer`](`super::Port::handle_announce_timer`) in `duration` from now
     ResetAnnounceTimer { duration: core::time::Duration },
-    /// Call [`Port::handle_sync_timer`] in `duration` from now
+    /// Call [`Port::handle_sync_timer`](`super::Port::handle_sync_timer`) in
+    /// `duration` from now
     ResetSyncTimer { duration: core::time::Duration },
-    /// Call [`Port::handle_delay_request_timer`] in `duration` from now
+    /// Call [`Port::handle_delay_request_timer`](`super::Port::handle_delay_request_timer`) in `duration` from now
     ResetDelayRequestTimer { duration: core::time::Duration },
-    /// Call [`Port::handle_announce_receipt_timer`] in `duration` from now
+    /// Call [`Port::handle_announce_receipt_timer`](`super::Port::handle_announce_receipt_timer`) in `duration` from now
     ResetAnnounceReceiptTimer { duration: core::time::Duration },
-    /// Call [`Port::handle_filter_update_timer`] in `duration` from now
+    /// Call [`Port::handle_filter_update_timer`](`super::Port::handle_filter_update_timer`) in `duration` from now
     ResetFilterUpdateTimer { duration: core::time::Duration },
     /// Forward this TLV to the announce timer call of all other ports.
     /// The receiver must ensure the TLV is yielded only once to the announce
@@ -127,8 +129,8 @@ const MAX_ACTIONS: usize = 2;
 
 /// An Iterator over [`PortAction`]s
 ///
-/// These are returned by [`Port`] when ever the library needs the user to
-/// perform actions to the system.
+/// These are returned by [`Port`](`super::Port`) when ever the library needs
+/// the user to perform actions to the system.
 ///
 /// **Guarantees to end user:** Any set of actions will only ever contain a
 /// single event send
