@@ -185,7 +185,7 @@ impl<'de> serde::Deserialize<'de> for SdoId {
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_u16(SdoIdVisitor)
+        deserializer.deserialize_newtype_struct("SdoId", SdoIdVisitor)
     }
 }
 
@@ -195,6 +195,19 @@ impl<'de> serde::de::Visitor<'de> for SdoIdVisitor {
 
     fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("a 12 bit value within the 0..=0xFFF range")
+    }
+
+    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        use serde::Deserialize;
+        let v = u16::deserialize(deserializer)?;
+        SdoId::try_from(v).or(Err(D::Error::custom(std::format!(
+            "SdoId not in range of 0..=0xFFF: {}",
+            v
+        ))))
     }
 
     fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
@@ -416,7 +429,7 @@ mod tests {
 
         assert_de_tokens_error::<SdoId>(
             &[Token::NewtypeStruct { name: "SdoId" }, Token::U16(4096)],
-            "invalid type: newtype struct, expected a 12 bit value within the 0..=0xFFF range",
+            "SdoId not in range of 0..=0xFFF: 4096",
         );
     }
 }
