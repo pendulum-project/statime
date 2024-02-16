@@ -38,6 +38,7 @@ impl LinuxClock {
         // CLOCK_REALTIME timescale which is UTC, not TAI, so we need to correct
         // here.
         self.clock.system_offset().map(|(mut t1, t2, mut t3)| {
+            use clock_steering::Clock;
             let tai_offset = UnixClock::CLOCK_REALTIME.get_tai().unwrap();
             t1.seconds += tai_offset as libc::time_t;
             t3.seconds += tai_offset as libc::time_t;
@@ -50,6 +51,7 @@ impl LinuxClock {
     }
 
     pub fn get_tai_offset(&self) -> Result<i32, clock_steering::unix::Error> {
+        use clock_steering::Clock;
         if self.is_tai {
             UnixClock::CLOCK_REALTIME.get_tai()
         } else {

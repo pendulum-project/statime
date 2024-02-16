@@ -175,9 +175,9 @@ checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 
 [[package]]
 name = "clock-steering"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ac48dbcd3a6fa19104a04f468da9680dac59f7456159511490d438a501e9e1"
+checksum = "e8078994a6ef3fefa4c9cc2e69af9ee94cac7804e4ec065d794cd36728c12c02"
 dependencies = [
  "libc",
 ]
@@ -559,9 +559,9 @@ dependencies = [
 
 [[package]]
 name = "timestamped-socket"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caaff75f66683c9953194a55b9ed214d93cb4c99ab333623dff91e2bae7860c6"
+checksum = "c5caba8d0c821442603f7e148c7cfc34e916a8c7f66ac3ce56d8a7bf928acbd4"
 dependencies = [
  "libc",
  "serde",
