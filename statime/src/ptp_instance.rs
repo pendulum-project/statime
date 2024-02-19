@@ -251,7 +251,7 @@ impl<F: Filter> PtpInstance<F> {
         ObservableInstanceState {
             default_ds: (&state.default_ds).into(),
             current_ds: (&state.current_ds).into(),
-            parent_ds: (&state.parent_ds.clone()).into(),
+            parent_ds: (&state.parent_ds).into(),
             time_properties_ds: state.time_properties_ds,
         }
     }
