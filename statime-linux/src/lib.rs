@@ -5,6 +5,7 @@ pub mod config;
 mod ke;
 pub mod metrics;
 pub mod observer;
+pub mod securityprovider;
 pub mod socket;
 pub mod tlvforwarder;
 
