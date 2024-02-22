@@ -1,6 +1,9 @@
 use std::fmt::Write;
 
-use statime::{config::TimePropertiesDS, observability::default::DefaultDS};
+use statime::{
+    config::TimePropertiesDS,
+    observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS},
+};
 
 use super::exporter::ObservableState;
 
@@ -84,6 +87,195 @@ fn format_default_ds(
     Ok(())
 }
 
+pub fn format_current_ds(
+    w: &mut impl std::fmt::Write,
+    current_ds: &CurrentDS,
+    labels: Vec<(&'static str, String)>,
+) -> std::fmt::Result {
+    format_metric(
+        w,
+        "steps_removed",
+        "The number of paths traversed between this instance and the Grandmaster PTP instance",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: current_ds.steps_removed,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "offset_from_master",
+        "Time difference between a Master PTP Instance as calculated by the Slave instance",
+        MetricType::Gauge,
+        Some(Unit::Nanoseconds),
+        vec![Measurement {
+            labels: labels.clone(),
+            value: current_ds.offset_from_master,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "mean_delay",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        Some(Unit::Nanoseconds),
+        vec![Measurement {
+            labels: labels.clone(),
+            value: current_ds.mean_delay,
+        }],
+    )?;
+
+    Ok(())
+}
+
+pub fn format_parent_ds(
+    w: &mut impl std::fmt::Write,
+    parent_ds: &ParentDS,
+    labels: Vec<(&'static str, String)>,
+) -> std::fmt::Result {
+    /* TODO: Determine how and if to format this
+    format_metric(
+        w,
+        "parent_port_identity",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: format_bool!(parent_ds.parent_stats),
+        }],
+    )?;
+    */
+
+    format_metric(
+        w,
+        "parent_stats",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: format_bool!(parent_ds.parent_stats),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "observed_parent_offset_scaled_log_variance",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds.observed_parent_offset_scaled_log_variance,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "observed_parent_clock_phase_change_rate",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds.observed_parent_clock_phase_change_rate,
+        }],
+    )?;
+
+    /* TODO: Determine how and if to format this
+    format_metric(
+        w,
+        "grandmaster_identity",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: format_bool!(parent_ds.grandmaster_identity),
+        }],
+    )?;
+    */
+    format_metric(
+        w,
+        "grandmaster_clock_quality_class",
+        "The PTP clock class",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds.grandmaster_clock_quality.clock_class,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "grandmaster_clock_quality_accuracy",
+        "The quality of the clock",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds
+                .grandmaster_clock_quality
+                .clock_accuracy
+                .to_primitive(),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "grandmaster_clock_quality_offset_scaled_log_variance",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds
+                .grandmaster_clock_quality
+                .offset_scaled_log_variance,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "grandmaster_priority_1",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds.grandmaster_priority_1,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "grandmaster_priority_2",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: parent_ds.grandmaster_priority_2,
+        }],
+    )?;
+
+    Ok(())
+}
+
 pub fn format_time_properties_ds(
     w: &mut impl std::fmt::Write,
     time_properties_ds: &TimePropertiesDS,
@@ -131,6 +323,42 @@ pub fn format_time_properties_ds(
         }],
     )?;
 
+    format_metric(
+        w,
+        "frequency_traceable",
+        "Wheter the frequence determining the timescale is tracable to a primary reference",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: format_bool!(time_properties_ds.frequency_traceable),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "ptp_timescale",
+        "Wheter the timescale of the Grandmaster PTP Instance is PTP",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: format_bool!(time_properties_ds.ptp_timescale),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "time_source",
+        "Wheter the timescale of the Grandmaster PTP Instance is PTP",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: time_properties_ds.time_source.to_primitive(),
+        }],
+    )?;
+
     Ok(())
 }
 
@@ -151,17 +379,15 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
         }],
     )?;
 
-    let clock_identity = vec![(
+    let labels = vec![(
         "clock_identity",
         format!("{}", &state.instance.default_ds.clock_identity),
     )];
 
-    format_default_ds(w, &state.instance.default_ds, clock_identity.clone())?;
-    format_time_properties_ds(
-        w,
-        &state.instance.time_properties_ds,
-        clock_identity.clone(),
-    )?;
+    format_default_ds(w, &state.instance.default_ds, labels.clone())?;
+    format_current_ds(w, &state.instance.current_ds, labels.clone())?;
+    format_parent_ds(w, &state.instance.parent_ds, labels.clone())?;
+    format_time_properties_ds(w, &state.instance.time_properties_ds, labels.clone())?;
 
     w.write_str("# EOF\n")?;
     Ok(())
@@ -226,11 +452,15 @@ struct Measurement<T> {
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Unit {
     Seconds,
+    Nanoseconds,
 }
 
 impl Unit {
     fn as_str(&self) -> &str {
-        "seconds"
+        match self {
+            Unit::Seconds => "seconds",
+            Unit::Nanoseconds => "nanoseconds",
+        }
     }
 }
 
