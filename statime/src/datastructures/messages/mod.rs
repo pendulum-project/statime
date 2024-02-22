@@ -665,9 +665,9 @@ mod tests {
     }
 
     impl SecurityAssociationProvider for TestSecurityProvider {
-        type Association = TestSecurityAssociation;
+        type Association<'a> = TestSecurityAssociation;
 
-        fn lookup(&self, _spp: u8) -> Option<Self::Association> {
+        fn lookup(&self, _spp: u8) -> Option<Self::Association<'_>> {
             Some(TestSecurityAssociation(self.0))
         }
     }
