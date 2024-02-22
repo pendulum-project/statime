@@ -71,10 +71,12 @@ pub trait SecurityAssociation {
 /// Interface to the database of security associations
 pub trait SecurityAssociationProvider {
     /// Type used for the security assocations
-    type Association: SecurityAssociation;
+    type Association<'a>: SecurityAssociation
+    where
+        Self: 'a;
 
     /// Lookup a specific security association
-    fn lookup(&self, spp: u8) -> Option<Self::Association>;
+    fn lookup(&self, spp: u8) -> Option<Self::Association<'_>>;
 }
 
 /// Association type for the empty security association provider
@@ -107,9 +109,9 @@ impl SecurityAssociation for NoSecurityAssocation {
 pub struct NoSecurityProvider;
 
 impl SecurityAssociationProvider for NoSecurityProvider {
-    type Association = NoSecurityAssocation;
+    type Association<'a> = NoSecurityAssocation;
 
-    fn lookup(&self, _spp: u8) -> Option<Self::Association> {
+    fn lookup(&self, _spp: u8) -> Option<Self::Association<'_>> {
         None
     }
 }
