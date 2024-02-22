@@ -84,6 +84,32 @@ fn format_default_ds(
         }],
     )?;
 
+    format_metric(
+        w,
+        "priority_1",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: default_ds.priority_1,
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "priority_2",
+        // TODO: Provide a meaningful description
+        "",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: default_ds.priority_2,
+        }],
+    )?;
+
     Ok(())
 }
 
@@ -168,8 +194,7 @@ pub fn format_parent_ds(
     format_metric(
         w,
         "observed_parent_offset_scaled_log_variance",
-        // TODO: Provide a meaningful description
-        "",
+        "Estimate of the variance in the phase offset to the parent",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -181,8 +206,7 @@ pub fn format_parent_ds(
     format_metric(
         w,
         "observed_parent_clock_phase_change_rate",
-        // TODO: Provide a meaningful description
-        "",
+        "Estimate of the phase change rate of the local clock as measured by the Slave instance",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -235,8 +259,7 @@ pub fn format_parent_ds(
     format_metric(
         w,
         "grandmaster_clock_quality_offset_scaled_log_variance",
-        // TODO: Provide a meaningful description
-        "",
+        "2-log of the variance (in seconds^2) of the grandmaster clock when not synchronized",
         MetricType::Gauge,
         None,
         vec![Measurement {
