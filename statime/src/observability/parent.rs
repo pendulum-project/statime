@@ -3,7 +3,7 @@ use crate::{
     datastructures::{common::PortIdentity, datasets::InternalParentDS},
 };
 
-/// A concrete implementation of the PTP Current dataset (IEEE1588-2019 section
+/// A concrete implementation of the PTP Parent dataset (IEEE1588-2019 section
 /// 8.2.3)
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
