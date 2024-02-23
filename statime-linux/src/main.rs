@@ -288,6 +288,7 @@ async fn actual_main() {
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
+        let bind_phc = port_config.bind_phc;
         let (port_clock, timestamping) = match &port_config.hardware_clock {
             Some(path) => {
                 let clock = LinuxClock::open(path).expect("Unable to open clock");
@@ -327,7 +328,7 @@ async fn actual_main() {
 
         match network_mode {
             statime_linux::config::NetworkMode::Ipv4 => {
-                let event_socket = open_ipv4_event_socket(interface, timestamping)
+                let event_socket = open_ipv4_event_socket(interface, timestamping, bind_phc)
                     .expect("Could not open event socket");
                 let general_socket =
                     open_ipv4_general_socket(interface).expect("Could not open general socket");
@@ -343,7 +344,7 @@ async fn actual_main() {
                 ));
             }
             statime_linux::config::NetworkMode::Ipv6 => {
-                let event_socket = open_ipv6_event_socket(interface, timestamping)
+                let event_socket = open_ipv6_event_socket(interface, timestamping, bind_phc)
                     .expect("Could not open event socket");
                 let general_socket =
                     open_ipv6_general_socket(interface).expect("Could not open general socket");
@@ -359,8 +360,8 @@ async fn actual_main() {
                 ));
             }
             statime_linux::config::NetworkMode::Ethernet => {
-                let socket =
-                    open_ethernet_socket(interface, timestamping).expect("Could not open socket");
+                let socket = open_ethernet_socket(interface, timestamping, bind_phc)
+                    .expect("Could not open socket");
 
                 tokio::spawn(ethernet_port_task(
                     port_task_receiver,
@@ -536,7 +537,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
                             // get_tai gives zero if this is a hardware clock, and the needed
                             // correction when this port uses software timestamping
                             timestamp.seconds += clock.get_tai_offset().expect("Unable to get tai offset") as i64;
-                            log::trace!("Recv timestamp: {:?}", packet.timestamp);
+                            log::info!("Recv timestamp: {:?}", packet.timestamp);
                             port.handle_event_receive(&event_buffer[..packet.bytes_read], timestamp_to_time(timestamp))
                         } else {
                             log::error!("Missing recv timestamp");
@@ -754,6 +755,7 @@ async fn handle_actions<A: NetworkAddress + PtpTargetAddress>(
 
                 // anything we send later will have a later pending (send) timestamp
                 if let Some(mut time) = time {
+                    log::info!("send ts: {:?}", time);
                     // get_tai gives zero if this is a hardware clock, and the needed
                     // correction when this port uses software timestamping
                     time.seconds +=
