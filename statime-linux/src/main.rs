@@ -844,7 +844,7 @@ async fn handle_actions_ethernet(
                     // get_tai gives zero if this is a hardware clock, and the needed
                     // correction when this port uses software timestamping
                     time.seconds +=
-                        clock.get_tai_offset().expect("Unable to get tai offset") as libc::time_t;
+                        clock.get_tai_offset().expect("Unable to get tai offset") as i64;
                     log::trace!("Send timestamp {:?}", time);
                     pending_timestamp = Some((context, timestamp_to_time(time)));
                 } else {
