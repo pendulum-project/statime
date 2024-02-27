@@ -19,6 +19,10 @@ path = "src/main.rs"
 name = "statime-metrics-exporter"
 path = "bin/statime-metrics-exporter.rs"
 
+[[bin]]
+name = "statime-ke"
+path = "bin/statime-ke.rs"
+
 [dependencies]
 statime.workspace = true
 
@@ -30,10 +34,14 @@ libc.workspace = true
 log = { workspace = true, default-features = true }
 pin-project-lite.workspace = true
 toml.workspace = true
-tokio = { workspace = true, features = ["net", "rt-multi-thread", "time", "macros", "sync", "io-util"] }
+tokio = { workspace = true, features = ["net", "fs", "rt-multi-thread", "time", "macros", "sync", "io-util"] }
 rand = { workspace = true, default-features = false, features = ["std", "std_rng"] }
 serde.workspace = true
 serde_json.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+tokio-util.workspace = true
 
 clock-steering.workspace = true
 timestamped-socket.workspace = true

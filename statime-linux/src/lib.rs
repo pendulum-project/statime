@@ -2,12 +2,14 @@ extern crate core;
 
 pub mod clock;
 pub mod config;
+mod ke;
 pub mod metrics;
 pub mod observer;
 pub mod socket;
 pub mod tlvforwarder;
 
 use fern::colors::Color;
+pub use ke::main as ke_main;
 pub use metrics::exporter::main as metrics_exporter_main;
 
 pub fn setup_logger(level: log::LevelFilter) -> Result<(), fern::InitError> {
