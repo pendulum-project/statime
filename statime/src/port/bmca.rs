@@ -86,7 +86,6 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
 
                 current_ds.steps_removed = 0;
                 current_ds.offset_from_master = Duration::ZERO;
-                current_ds.mean_delay = Duration::ZERO;
 
                 parent_ds.parent_port_identity.clock_identity = defaultds.clock_identity;
                 parent_ds.parent_port_identity.port_number = 0;

@@ -87,8 +87,7 @@ fn format_default_ds(
     format_metric(
         w,
         "priority_1",
-        // TODO: Provide a meaningful description
-        "",
+        "priority 1 used in the BMCA",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -100,8 +99,7 @@ fn format_default_ds(
     format_metric(
         w,
         "priority_2",
-        // TODO: Provide a meaningful description
-        "",
+        "priority 1 used in the BMCA",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -139,19 +137,6 @@ pub fn format_current_ds(
         vec![Measurement {
             labels: labels.clone(),
             value: current_ds.offset_from_master,
-        }],
-    )?;
-
-    format_metric(
-        w,
-        "mean_delay",
-        // TODO: Provide a meaningful description
-        "",
-        MetricType::Gauge,
-        Some(Unit::Nanoseconds),
-        vec![Measurement {
-            labels: labels.clone(),
-            value: current_ds.mean_delay,
         }],
     )?;
 
@@ -273,8 +258,7 @@ pub fn format_parent_ds(
     format_metric(
         w,
         "grandmaster_priority_1",
-        // TODO: Provide a meaningful description
-        "",
+        "priority 1 of the parent's grandmaster",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -286,8 +270,7 @@ pub fn format_parent_ds(
     format_metric(
         w,
         "grandmaster_priority_2",
-        // TODO: Provide a meaningful description
-        "",
+        "priority 2 of the parent's grandmaster",
         MetricType::Gauge,
         None,
         vec![Measurement {
