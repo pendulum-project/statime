@@ -288,6 +288,8 @@ pub struct Port<L, A, R, C, F: Filter> {
     pdelay_seq_ids: SequenceIdGenerator,
 
     filter: F,
+    /// Mean delay means either `mean_path_delay` when DelayMechanism is E2E,
+    /// or `mean_link_delay` when DelayMechanism is P2P.
     mean_delay: Option<Duration>,
     peer_delay_state: PeerDelayState,
 }

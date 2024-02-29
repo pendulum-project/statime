@@ -5,17 +5,20 @@ use crate::{
 
 /// A concrete implementation of the PTP Parent dataset (IEEE1588-2019 section
 /// 8.2.3)
+///
+/// These fields aren't implemented, because they are currently unused:
+/// - parentStats
+/// - observedParentOffsetScaledLogVariance
+/// - observedParentClockPhaseChangeRate
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParentDS {
     /// See *IEEE1588-2019 section 8.2.3.2*.
     pub parent_port_identity: PortIdentity,
-    /// See *IEEE1588-2019 section 8.2.3.3*.
-    pub parent_stats: bool,
-    /// See *IEEE1588-2019 section 8.2.3.4*.
-    pub observed_parent_offset_scaled_log_variance: u16,
-    /// See *IEEE1588-2019 section 8.2.3.5*.
-    pub observed_parent_clock_phase_change_rate: u32,
+    // pub parent_stats: bool,
+    // pub observed_parent_offset_scaled_log_variance: u16,
+    // pub observed_parent_clock_phase_change_rate: u32,
     /// See *IEEE1588-2019 section 8.2.3.6*.
     pub grandmaster_identity: ClockIdentity,
     /// See *IEEE1588-2019 section 8.2.3.7*.
@@ -30,10 +33,10 @@ impl From<&InternalParentDS> for ParentDS {
     fn from(v: &InternalParentDS) -> Self {
         Self {
             parent_port_identity: v.parent_port_identity,
-            parent_stats: v.parent_stats,
-            observed_parent_offset_scaled_log_variance: v
-                .observed_parent_offset_scaled_log_variance,
-            observed_parent_clock_phase_change_rate: v.observed_parent_clock_phase_change_rate,
+            // parent_stats: v.parent_stats,
+            // observed_parent_offset_scaled_log_variance: v
+            //     .observed_parent_offset_scaled_log_variance,
+            // observed_parent_clock_phase_change_rate: v.observed_parent_clock_phase_change_rate,
             grandmaster_identity: v.grandmaster_identity,
             grandmaster_clock_quality: v.grandmaster_clock_quality,
             grandmaster_priority_1: v.grandmaster_priority_1,

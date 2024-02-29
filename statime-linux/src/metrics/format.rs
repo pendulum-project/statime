@@ -99,7 +99,7 @@ fn format_default_ds(
     format_metric(
         w,
         "priority_2",
-        "priority 1 used in the BMCA",
+        "priority 2 used in the BMCA",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -148,72 +148,6 @@ pub fn format_parent_ds(
     parent_ds: &ParentDS,
     labels: Vec<(&'static str, String)>,
 ) -> std::fmt::Result {
-    /* TODO: Determine how and if to format this
-    format_metric(
-        w,
-        "parent_port_identity",
-        // TODO: Provide a meaningful description
-        "",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: labels.clone(),
-            value: format_bool!(parent_ds.parent_stats),
-        }],
-    )?;
-    */
-
-    format_metric(
-        w,
-        "parent_stats",
-        // TODO: Provide a meaningful description
-        "",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: labels.clone(),
-            value: format_bool!(parent_ds.parent_stats),
-        }],
-    )?;
-
-    format_metric(
-        w,
-        "observed_parent_offset_scaled_log_variance",
-        "Estimate of the variance in the phase offset to the parent",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: labels.clone(),
-            value: parent_ds.observed_parent_offset_scaled_log_variance,
-        }],
-    )?;
-
-    format_metric(
-        w,
-        "observed_parent_clock_phase_change_rate",
-        "Estimate of the phase change rate of the local clock as measured by the Slave instance",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: labels.clone(),
-            value: parent_ds.observed_parent_clock_phase_change_rate,
-        }],
-    )?;
-
-    /* TODO: Determine how and if to format this
-    format_metric(
-        w,
-        "grandmaster_identity",
-        // TODO: Provide a meaningful description
-        "",
-        MetricType::Gauge,
-        None,
-        vec![Measurement {
-            labels: labels.clone(),
-            value: format_bool!(parent_ds.grandmaster_identity),
-        }],
-    )?;
-    */
     format_metric(
         w,
         "grandmaster_clock_quality_class",
