@@ -17,9 +17,7 @@ use crate::{
         datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, TimePropertiesDS},
     },
     filters::Filter,
-    observability::{
-        current::CurrentDS, default::DefaultDS, parent::ParentDS, ObservableInstanceState,
-    },
+    observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS},
     port::{InBmca, Port},
     time::Duration,
 };
@@ -243,16 +241,5 @@ impl<F: Filter> PtpInstance<F> {
         core::time::Duration::from_secs_f64(
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
-    }
-
-    /// Read the current instance state in a serializable format
-    pub fn observe_state(&self) -> ObservableInstanceState {
-        let state = self.state.borrow();
-        ObservableInstanceState {
-            default_ds: (&state.default_ds).into(),
-            current_ds: (&state.current_ds).into(),
-            parent_ds: (&state.parent_ds).into(),
-            time_properties_ds: state.time_properties_ds,
-        }
     }
 }
