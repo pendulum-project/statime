@@ -62,6 +62,8 @@ pub struct PortConfig {
     pub delay_mechanism: DelayType,
     #[serde(default = "default_delay_interval")]
     pub delay_interval: i8,
+    #[serde(default)]
+    pub bind_phc: Option<u32>,
 }
 
 fn deserialize_loglevel<'de, D>(deserializer: D) -> Result<log::LevelFilter, D::Error>
@@ -297,6 +299,7 @@ interface = "enp0s31f6"
             delay_asymmetry: 0,
             delay_mechanism: crate::config::DelayType::E2E,
             delay_interval: 0,
+            bind_phc: None,
         };
 
         let expected = crate::config::Config {
