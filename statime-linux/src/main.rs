@@ -10,7 +10,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
-    observability::ObservableInstanceState,
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
@@ -20,6 +19,7 @@ use statime::{
 use statime_linux::{
     clock::LinuxClock,
     config::Config,
+    observer::ObservableInstanceState,
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,

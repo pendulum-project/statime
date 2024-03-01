@@ -2,13 +2,12 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
-use statime::observability::ObservableInstanceState;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, UnixStream},
 };
 
-use crate::config::Config;
+use crate::{config::Config, observer::ObservableInstanceState};
 
 use super::format::format_response;
 
