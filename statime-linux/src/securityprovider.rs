@@ -1,12 +1,114 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc};
 
 use rand::Rng;
+use rustls::{ClientConfig, RootCertStore};
 use statime::crypto::{
-    SecurityAssociation, SecurityAssociationProvider, SecurityPolicy, SenderIdentificaton,
+    HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy,
+    SenderIdentificaton,
+};
+
+use crate::ke::{
+    client::fetch_data,
+    common::{load_certs, load_private_key},
 };
 
 pub struct NTSProvider {
     associations: Arc<HashMap<u8, Arc<std::sync::Mutex<NTSAssociationInner>>>>,
+}
+
+impl NTSProvider {
+    async fn new(
+        server_name: String,
+        client_key: PathBuf,
+        client_cert: PathBuf,
+        server_root: PathBuf,
+    ) -> Result<(Self, u8), Box<dyn Error>> {
+        let client_key = load_private_key(client_key).await?;
+        let client_chain = load_certs(client_cert).await?;
+        let mut root_store = RootCertStore::empty();
+        for cert in load_certs(server_root).await?.into_iter() {
+            root_store.add(cert)?;
+        }
+
+        let config = Arc::new(
+            ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_client_auth_cert(client_chain, client_key)?,
+        );
+
+        let initial_data = fetch_data(&server_name, config.clone()).await?;
+        let now = std::time::Instant::now();
+
+        let mut keys = HashMap::new();
+        keys.insert(
+            initial_data.current_parameters.security_assocation.key_id,
+            NTSKey {
+                key: statime::crypto::HmacSha256_128::new(
+                    initial_data
+                        .current_parameters
+                        .security_assocation
+                        .key
+                        .as_ref()
+                        .try_into()?,
+                ),
+                valid_till: now
+                    + std::time::Duration::from_secs(
+                        initial_data.current_parameters.validity_period.lifetime as _,
+                    ),
+            },
+        );
+        let next_key = if let Some(next_parameters) = initial_data.next_parameters {
+            keys.insert(
+                next_parameters.security_assocation.key_id,
+                NTSKey {
+                    key: statime::crypto::HmacSha256_128::new(
+                        next_parameters
+                            .security_assocation
+                            .key
+                            .as_ref()
+                            .try_into()?,
+                    ),
+                    valid_till: now
+                        + std::time::Duration::from_secs(
+                            next_parameters.validity_period.lifetime as _,
+                        ),
+                },
+            );
+            Some(next_parameters.security_assocation.key_id)
+        } else {
+            None
+        };
+
+        let association = Arc::new(std::sync::Mutex::new(NTSAssociationInner {
+            grace_period: std::time::Duration::from_secs(
+                initial_data.current_parameters.validity_period.grace_period as _,
+            ),
+            transition_period: std::time::Duration::from_secs(
+                initial_data
+                    .current_parameters
+                    .validity_period
+                    .update_period as _,
+            ),
+            keys,
+            current_key: initial_data.current_parameters.security_assocation.key_id,
+            next_key,
+            sequence_ids: Default::default(),
+        }));
+
+        let spp = initial_data.current_parameters.security_assocation.spp;
+
+        tokio::spawn(assocation_manager(association.clone(), server_name, config));
+
+        let mut associations = HashMap::new();
+        associations.insert(spp, association);
+
+        Ok((
+            NTSProvider {
+                associations: Arc::new(associations),
+            },
+            spp,
+        ))
+    }
 }
 
 struct NTSAssociationInner {
@@ -100,39 +202,74 @@ impl NTSAssociationInner {
 }
 
 #[allow(unused)]
-// await_holding_lock is somewhat buggy (see https://github.com/rust-lang/rust-clippy/issues/9683)
-#[allow(clippy::await_holding_lock)]
-async fn assocation_manager(association: Arc<std::sync::Mutex<NTSAssociationInner>>) {
-    let mut this = association.lock().unwrap();
-
+async fn assocation_manager(
+    association: Arc<std::sync::Mutex<NTSAssociationInner>>,
+    server_name: String,
+    config: Arc<ClientConfig>,
+) {
     loop {
-        // wait for new parameters
-        if this.next_key.is_none() {
-            let transition_start = this.keys[&this.current_key].valid_till - this.transition_period;
-            let random_offset = this
-                .transition_period
-                .mul_f32(rand::thread_rng().gen_range(0.0..0.75));
-            drop(this);
-            tokio::time::sleep_until((transition_start + random_offset).into()).await;
-            this = association.lock().unwrap();
-            // TODO: Fetch new parameters
-        }
+        let deadline = {
+            let mut this = association.lock().unwrap();
+            this.clean_keys();
+            this.clean_sequence_id();
 
-        // switchover
-        let switchover_time = this.keys[&this.current_key].valid_till;
+            // wait for new parameters
+            if this.next_key.is_none() {
+                let transition_start =
+                    this.keys[&this.current_key].valid_till - this.transition_period;
+                let random_offset = this
+                    .transition_period
+                    .mul_f32(rand::thread_rng().gen_range(0.0..0.75));
+                Some(transition_start + random_offset)
+            } else {
+                None
+            }
+        };
+        let await_data = if let Some(deadline) = deadline {
+            tokio::time::sleep_until(deadline.into()).await;
+            let params = fetch_data(&server_name, config.clone()).await.unwrap();
+            let now = std::time::Instant::now();
+            Some((params, now))
+        } else {
+            None
+        };
 
-        drop(this);
-        tokio::time::sleep_until(switchover_time.into()).await;
-        this = association.lock().unwrap();
-        let old_key = this.current_key;
-        this.current_key = this.next_key.take().unwrap();
+        let deadline = {
+            let mut this = association.lock().unwrap();
+            if let Some((params, now)) = await_data {
+                let next_params = params.next_parameters.unwrap();
+                this.keys.insert(
+                    next_params.security_assocation.key_id,
+                    NTSKey {
+                        key: HmacSha256_128::new(
+                            next_params
+                                .security_assocation
+                                .key
+                                .as_ref()
+                                .try_into()
+                                .unwrap(),
+                        ),
+                        valid_till: now
+                            + std::time::Duration::from_secs(
+                                next_params.validity_period.lifetime as _,
+                            ),
+                    },
+                );
+                this.next_key = Some(next_params.security_assocation.key_id);
+            }
 
-        // wait out grace period
-        let grace_end = this.keys[&old_key].valid_till + this.grace_period;
-        drop(this);
-        tokio::time::sleep_until(grace_end.into()).await;
-        this = association.lock().unwrap();
-        this.clean_keys();
-        this.clean_sequence_id();
+            this.keys[&this.current_key].valid_till
+        };
+
+        tokio::time::sleep_until(deadline.into()).await;
+        let deadline = {
+            let mut this = association.lock().unwrap();
+            let old_key = this.current_key;
+            this.current_key = this.next_key.take().unwrap();
+
+            // wait out grace period
+            this.keys[&old_key].valid_till + this.grace_period
+        };
+        tokio::time::sleep_until(deadline.into()).await;
     }
 }

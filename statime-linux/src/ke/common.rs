@@ -37,17 +37,14 @@ pub async fn load_private_key(path: impl AsRef<Path>) -> io::Result<PrivateKeyDe
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No private key data found"))
 }
 
-pub async fn load_certs_from_files(it: impl Iterator<Item = impl AsRef<Path>>) -> io::Result<Vec<CertificateDer<'static>>> {
+pub async fn load_certs_from_files(
+    it: impl Iterator<Item = impl AsRef<Path>>,
+) -> io::Result<Vec<CertificateDer<'static>>> {
     let mut certs = vec![];
     for p in it {
-        certs.push(
-            load_certs(p)
-            .await?
-            .into_iter()
-            .next()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No certificate found in file"))?
-        );
+        certs.push(load_certs(p).await?.into_iter().next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "No certificate found in file")
+        })?);
     }
     Ok(certs)
 }
-

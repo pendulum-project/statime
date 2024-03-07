@@ -36,6 +36,14 @@ pub struct Config {
     pub ports: Vec<PortConfig>,
     #[serde(default)]
     pub observability: ObservabilityConfig,
+    #[serde(default)]
+    pub nts4ptp_server: Option<String>,
+    #[serde(default)]
+    pub nts4ptp_client_cert: Option<PathBuf>,
+    #[serde(default)]
+    pub nts4ptp_client_cert_key: Option<PathBuf>,
+    #[serde(default)]
+    pub nts4ptp_server_root: Option<PathBuf>,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -293,6 +301,10 @@ interface = "enp0s31f6"
             priority2: 128,
             ports: vec![expected_port],
             observability: ObservabilityConfig::default(),
+            nts4ptp_client_cert: None,
+            nts4ptp_client_cert_key: None,
+            nts4ptp_server: None,
+            nts4ptp_server_root: None,
         };
 
         let actual = toml::from_str(MINIMAL_CONFIG).unwrap();

@@ -16,10 +16,12 @@ use tokio::{
 };
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
-
+use super::{
+    common::{load_certs, load_certs_from_files, load_private_key, Key},
+    record::*,
+    tls_utils::OnlyAllowedClients,
+};
 use crate::setup_logger;
-
-use super::{common::{load_certs, load_certs_from_files, load_private_key, Key}, record::*, tls_utils::OnlyAllowedClients};
 
 struct KeySetStore {
     current: Key,
@@ -77,7 +79,6 @@ impl KeySetStore {
     }
 }
 
-
 struct KeConfig {
     validity_period: u32,
     update_period: u32,
@@ -99,9 +100,10 @@ async fn prep_server_config(
 
     // setup tls server
     let mut config = rustls::ServerConfig::builder()
-        .with_client_cert_verifier(Arc::new(
-            OnlyAllowedClients::new(rustls::crypto::ring::default_provider(), allowed_clients),
-        ))
+        .with_client_cert_verifier(Arc::new(OnlyAllowedClients::new(
+            rustls::crypto::ring::default_provider(),
+            allowed_clients,
+        )))
         .with_single_cert(cert_chain, key_der)?;
     config.alpn_protocols.clear();
     config.alpn_protocols.push(b"ntske/1".to_vec());
@@ -116,9 +118,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let listen_addr = "0.0.0.0:4460";
         let cert_chain_path = "statime-linux/testkeys/test.chain.pem";
         let private_key_path = "statime-linux/testkeys/test.key";
-        let allowed_clients = vec![
-            "statime-linux/testkeys/test.chain.pem".into(),
-        ];
+        let allowed_clients = vec!["statime-linux/testkeys/test.chain.pem".into()];
 
         let listen_addr = listen_addr
             .to_socket_addrs()?
@@ -141,7 +141,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &ke_config.cert_chain_path,
         &ke_config.private_key_path,
         ke_config.allowed_clients.iter(),
-    ).await?;
+    )
+    .await?;
     let acceptor = TlsAcceptor::from(Arc::new(config));
     let listener = TcpListener::bind(ke_config.listen_addr).await?;
 

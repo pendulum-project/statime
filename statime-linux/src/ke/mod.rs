@@ -1,7 +1,7 @@
+pub mod client;
+pub mod common;
 mod record;
-mod tls_utils;
 mod server;
-mod client;
-mod common;
+mod tls_utils;
 
 pub use server::main;
