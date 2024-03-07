@@ -9,7 +9,6 @@ use std::{
 use log::{debug, info, warn, LevelFilter};
 use rustls::{
     pki_types::{CertificateDer, PrivateKeyDer},
-    server::NoClientAuth,
     ServerConfig,
 };
 use tokio::{
@@ -27,6 +26,7 @@ use self::record::{
 use crate::setup_logger;
 
 mod record;
+mod tls_utils;
 
 struct Key {
     id: u32,
@@ -114,6 +114,7 @@ struct KeConfig {
     listen_addr: SocketAddr,
     cert_chain_path: PathBuf,
     private_key_path: PathBuf,
+    allowed_clients: Vec<PathBuf>,
 }
 
 async fn load_certs(path: impl AsRef<Path>) -> io::Result<Vec<CertificateDer<'static>>> {
@@ -127,17 +128,33 @@ async fn load_private_key(path: impl AsRef<Path>) -> io::Result<PrivateKeyDer<'s
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No private key data found"))
 }
 
+async fn load_certs_from_files(it: impl Iterator<Item = impl AsRef<Path>>) -> io::Result<Vec<CertificateDer<'static>>> {
+    let mut certs = vec![];
+    for p in it {
+        certs.push(
+            load_certs(p)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "No certificate found in file"))?
+        );
+    }
+    Ok(certs)
+}
+
 async fn prep_server_config(
     cert_chain_path: impl AsRef<Path>,
     private_key_path: impl AsRef<Path>,
+    allowed_clients: impl Iterator<Item = impl AsRef<Path>>,
 ) -> Result<ServerConfig, Box<dyn std::error::Error>> {
     let cert_chain = load_certs(cert_chain_path).await?;
     let key_der = load_private_key(private_key_path).await?;
+    let allowed_clients = load_certs_from_files(allowed_clients).await?;
 
     // setup tls server
     let mut config = rustls::ServerConfig::builder()
         .with_client_cert_verifier(Arc::new(
-            NoClientAuth, // TODO: replace with proper client cert verification
+            tls_utils::OnlyAllowedClients::new(rustls::crypto::ring::default_provider(), allowed_clients),
         ))
         .with_single_cert(cert_chain, key_der)?;
     config.alpn_protocols.clear();
@@ -153,6 +170,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let listen_addr = "0.0.0.0:4460";
         let cert_chain_path = "statime-linux/testkeys/test.chain.pem";
         let private_key_path = "statime-linux/testkeys/test.key";
+        let allowed_clients = vec![
+            "statime-linux/testkeys/test.chain.pem".into(),
+        ];
 
         let listen_addr = listen_addr
             .to_socket_addrs()?
@@ -166,12 +186,16 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             listen_addr,
             cert_chain_path: cert_chain_path.into(),
             private_key_path: private_key_path.into(),
+            allowed_clients,
         })
     };
 
     // setup the tls server
-    let config =
-        prep_server_config(&ke_config.cert_chain_path, &ke_config.private_key_path).await?;
+    let config = prep_server_config(
+        &ke_config.cert_chain_path,
+        &ke_config.private_key_path,
+        ke_config.allowed_clients.iter(),
+    ).await?;
     let acceptor = TlsAcceptor::from(Arc::new(config));
     let listener = TcpListener::bind(ke_config.listen_addr).await?;
 
