@@ -10,7 +10,6 @@ use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
-    crypto::NoSecurityProvider,
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         is_message_buffer_compatible, InBmca, Measurement, Port, PortAction, PortActionIterator,
@@ -21,8 +20,10 @@ use statime::{
 };
 use statime_linux::{
     clock::{LinuxClock, PortTimestampToTime},
+    config::Config,
     initialize_logging_parse_config,
     observer::ObservableInstanceState,
+    securityprovider::NTSProvider,
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, PtpTargetAddress,
@@ -315,6 +316,22 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
+    let (provider, spp) = if let Config {
+        nts4ptp_server: Some(server_name),
+        nts4ptp_client_cert_key: Some(client_key),
+        nts4ptp_client_cert: Some(client_cert),
+        nts4ptp_server_root: Some(server_root),
+        ..
+    } = config
+    {
+        let (provider, spp) = NTSProvider::new(server_name, client_key, client_cert, server_root)
+            .await
+            .unwrap();
+        (provider, Some(spp))
+    } else {
+        (NTSProvider::empty(), None)
+    };
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -348,11 +365,14 @@ async fn actual_main() {
         let rng = StdRng::from_entropy();
         let bind_phc = port_config.hardware_clock;
         let port = instance.add_port(
-            port_config.into(),
+            statime::config::PortConfig {
+                spp,
+                ..port_config.into()
+            },
             KalmanConfiguration::default(),
             port_clock.clone_box(),
             rng,
-            NoSecurityProvider,
+            provider.clone(),
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -520,7 +540,7 @@ type BmcaPort = Port<
     StdRng,
     BoxedClock,
     KalmanFilter,
-    NoSecurityProvider,
+    NTSProvider,
     RwLock<PtpInstanceState>,
 >;
 

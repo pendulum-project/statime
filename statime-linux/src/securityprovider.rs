@@ -12,12 +12,19 @@ use crate::ke::{
     common::{load_certs, load_private_key},
 };
 
+#[derive(Clone)]
 pub struct NTSProvider {
     associations: Arc<HashMap<u8, Arc<std::sync::Mutex<NTSAssociationInner>>>>,
 }
 
 impl NTSProvider {
-    async fn new(
+    pub fn empty() -> Self {
+        NTSProvider {
+            associations: Arc::new(HashMap::new()),
+        }
+    }
+
+    pub async fn new(
         server_name: String,
         client_key: PathBuf,
         client_cert: PathBuf,
