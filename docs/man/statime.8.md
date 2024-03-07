@@ -1,5 +1,5 @@
 <!-- ---
-title: STATIME(8) statime 0.1.0 | statime
+title: STATIME(8) statime 0.2.0 | statime
 --- -->
 
 # NAME

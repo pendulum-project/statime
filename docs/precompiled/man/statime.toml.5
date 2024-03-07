@@ -14,7 +14,7 @@
 . ftr VB CB
 . ftr VBI CBI
 .\}
-.TH "STATIME.TOML" "5" "" "statime 0.1.0" "statime"
+.TH "STATIME.TOML" "5" "" "statime 0.2.0" "statime"
 .hy
 .SH NAME
 .PP
@@ -28,7 +28,7 @@ extensions allowing a json-like syntax.
 .PP
 The statime configuration file consists of several sections, each of
 which configures a separate part of the ptp-daemon process.
-Each of the secions is described in the rest of this document.
+Each of the sections is described in the rest of this document.
 Many settings will have defaults, which will be indicated by each
 configuration setting shown.
 .SH CONFIGURATION
@@ -45,7 +45,7 @@ All instances in domain are synchronized to the Grandmaster Clock of the
 domain, but are not necessarily synchronized to PTP clocks in another
 domain.
 .TP
-\f[V]sdo_id\f[R] = \f[I]u12\f[R] (\f[B]0\f[R])
+\f[V]sdo-id\f[R] = \f[I]u12\f[R] (\f[B]0\f[R])
 The \[lq]source domain identity\[rq] of this PTP instance.
 Together with the \f[V]domain\f[R] it identifies a domain.
 .TP
@@ -62,42 +62,47 @@ A tie breaker for the best master clock algorithm in the range
 The network interface of this PTP port.
 For instance \f[V]\[dq]lo\[dq]\f[R] or \f[V]\[dq]enp0s31f6\[dq]\f[R]
 .TP
-\f[V]announce_interval\f[R] = \f[I]interval\f[R] (\f[B]1\f[R])
+\f[V]announce-interval\f[R] = \f[I]interval\f[R] (\f[B]1\f[R])
 How often an announce message is sent by a master.
 Defined as an exponent of 2, so a value of 1 means every 2\[ha]1 = 2
 seconds.
 .TP
-\f[V]sync_interval\f[R] = \f[I]interval\f[R] (\f[B]0\f[R])
+\f[V]sync-interval\f[R] = \f[I]interval\f[R] (\f[B]0\f[R])
 How often sync message is sent by a master.
 Defined as an exponent of 2, so a value of 0 means every 2\[ha]0 = 1
 seconds.
 .TP
-\f[V]announce_receipt_timeout\f[R] = \f[I]number of announce intervals\f[R] (\f[B]3\f[R])
+\f[V]announce-receipt-timeout\f[R] = \f[I]number of announce intervals\f[R] (\f[B]3\f[R])
 Number of announce intervals to wait for announce messages from other
 masters before the port becomes master itself.
 .TP
-\f[V]delay_asymmetry\f[R] = \f[I]nanoseconds\f[R] (\f[B]0\f[R])
+\f[V]delay-asymmetry\f[R] = \f[I]nanoseconds\f[R] (\f[B]0\f[R])
 Correct for a difference between slave-to-master and master-to-slave
 propagation time.
 The value is positive when the slave-to-master propagation time is
 longer than the master-to-slave propagation time.
 .TP
-\f[V]delay_mechanism\f[R] = \f[I]interval\f[R] (\f[B]0\f[R])
+\f[V]delay-mechanism\f[R] = \f[I]mechanism\f[R] (\f[B]E2E\f[R])
+Which delay mechanism to use on the port.
+Either \f[V]\[dq]E2E\[dq]\f[R] for end-to-end delay determination, or
+\f[V]\[dq]P2P\[dq]\f[R] for the peer to peer delay mechanism.
+.TP
+\f[V]delay-interval\f[R] = \f[I]interval\f[R] (\f[B]0\f[R])
 How often delay request messages are sent by a slave in end-to-end mode.
 Currently the only supported delay mechanism is end-to-end (E2E).
 Defined as an exponent of 2, so a value of 0 means every 2\[ha]0 = 1
 seconds
 .TP
-\f[V]master_only\f[R] = \f[I]bool\f[R] (\f[B]false\f[R])
+\f[V]master-only\f[R] = \f[I]bool\f[R] (\f[B]false\f[R])
 The port is always a master instance, and will never become a slave
 instance.
 .TP
-\f[V]hardware_clock\f[R] = \f[I]path\f[R] (\f[B]unset\f[R])
+\f[V]hardware-clock\f[R] = \f[I]path\f[R] (\f[B]unset\f[R])
 Path to a hardware clock device, for instance
 \f[V]\[dq]/dev/ptp0\[dq]\f[R].
 .TP
-\f[V]acceptable_master_list\f[R] = [ \f[I]clock identity\f[R], .. ] (\f[B]unset\f[R])
+\f[V]acceptable-master-list\f[R] = [ \f[I]clock identity\f[R], .. ] (\f[B]unset\f[R])
 List of clock identities that this port will accept as its master.
 A clock identity is encoded as a 16-character hexadecimal string, for
-example \f[V]acceptable_master_list = [\[dq]00FFFFFFFFFFFFFB\[dq]]\f[R].
+example \f[V]acceptable-master-list = [\[dq]00FFFFFFFFFFFFFB\[dq]]\f[R].
 The default is to accept all clock identities.

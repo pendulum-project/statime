@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "statime"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrayvec",
  "atomic_refcell",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "statime-linux"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrayvec",
  "clap",
