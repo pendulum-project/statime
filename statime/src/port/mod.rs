@@ -333,8 +333,15 @@ pub struct InBmca {
     local_best: Option<BestAnnounceMessage>,
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P: SecurityAssociationProvider, S: PtpInstanceStateMutex>
-    Port<'a, Running, A, R, C, F, P, S>
+impl<
+        'a,
+        A: AcceptableMasterList,
+        C: Clock,
+        F: Filter,
+        R: Rng,
+        P: SecurityAssociationProvider,
+        S: PtpInstanceStateMutex,
+    > Port<'a, Running, A, R, C, F, P, S>
 {
     /// Inform the port about a transmit timestamp being available
     ///
@@ -663,7 +670,12 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS}, crypto::NoSecurityProvider, datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS}, filters::BasicFilter, time::{Duration, Interval, Time}, Clock
+        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
+        crypto::NoSecurityProvider,
+        datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS},
+        filters::BasicFilter,
+        time::{Duration, Interval, Time},
+        Clock,
     };
 
     // General test infra
@@ -694,7 +706,15 @@ mod tests {
 
     pub(super) fn setup_test_port(
         state: &RefCell<PtpInstanceState>,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter, NoSecurityProvider> {
+    ) -> Port<
+        '_,
+        Running,
+        AcceptAnyMaster,
+        rand::rngs::mock::StepRng,
+        TestClock,
+        BasicFilter,
+        NoSecurityProvider,
+    > {
         let port = Port::<_, _, _, _, BasicFilter, NoSecurityProvider>::new(
             state,
             PortConfig {
@@ -720,11 +740,18 @@ mod tests {
         port
     }
 
-
     pub(super) fn setup_test_port_custom_identity(
         state: &RefCell<PtpInstanceState>,
         port_identity: PortIdentity,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter, NoSecurityProvider> {
+    ) -> Port<
+        '_,
+        Running,
+        AcceptAnyMaster,
+        rand::rngs::mock::StepRng,
+        TestClock,
+        BasicFilter,
+        NoSecurityProvider,
+    > {
         let port = Port::<_, _, _, _, BasicFilter, NoSecurityProvider>::new(
             &state,
             PortConfig {
@@ -753,7 +780,15 @@ mod tests {
     pub(super) fn setup_test_port_custom_filter<F: Filter>(
         state: &RefCell<PtpInstanceState>,
         filter_config: F::Config,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F, NoSecurityProvider> {
+    ) -> Port<
+        '_,
+        Running,
+        AcceptAnyMaster,
+        rand::rngs::mock::StepRng,
+        TestClock,
+        F,
+        NoSecurityProvider,
+    > {
         let port = Port::<_, _, _, _, F, _>::new(
             state,
             PortConfig {

@@ -113,7 +113,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, P, S: PtpInstance
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng, P, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, P, S> {
+impl<'a, A, C: Clock, F: Filter, R: Rng, P, S: PtpInstanceStateMutex>
+    Port<'a, InBmca, A, R, C, F, P, S>
+{
     pub(crate) fn step_announce_age(&mut self, step: Duration) {
         if let Some(mut age) = self.multiport_disable.take() {
             age += step;
