@@ -32,6 +32,8 @@ pub async fn fetch_data(
     request.write(&mut stream).await?;
     stream.flush().await?;
 
+    log::trace!("Wrote message");
+
     // we expect the to receive messages to be smaller than data_buf
     let mut data_buf = vec![0; 4096];
     let mut bytes_received = 0;
@@ -51,7 +53,9 @@ pub async fn fetch_data(
         }
     };
 
-    stream.shutdown().await?;
+    log::trace!("Received response");
+
+    let _ = stream.shutdown().await;
 
     let records: Vec<_> = records.into_iter().map(|r| r.into_owned()).collect();
 
