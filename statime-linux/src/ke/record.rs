@@ -760,6 +760,8 @@ impl<'a> Record<'a> {
             *buf = &buf[(4 + record_length)..];
             Ok(res)
         } else {
+            // Not enough data, last record
+            *buf = &[];
             Ok(None)
         }
     }
