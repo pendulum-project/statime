@@ -312,11 +312,13 @@ impl<'a> Message<'a> {
 impl Message<'_> {
     #[allow(unused)]
     pub(crate) fn verify_signed(&self, provider: &impl SecurityAssociationProvider) -> bool {
+        log::trace!("Validation message");
         let mut tlv_offset = 0;
         for tlv in self.suffix.tlv() {
             if tlv.tlv_type == TlvType::Authentication {
                 // Check we have at least the SPP, params and key id
                 if tlv.value.len() < 6 {
+                    log::trace!("Rejected: Incorrect authentication tlv length");
                     return false;
                 }
 
@@ -327,19 +329,23 @@ impl Message<'_> {
                 // we dont support presence of any of the optional bits, so not valid if those
                 // are present
                 if params != 0 {
+                    log::trace!("Rejected: Unexpected optional bits");
                     return false;
                 }
 
                 // get the security association and key
                 let Some(mut association) = provider.lookup(spp) else {
+                    log::trace!("Rejected: Invalid spp");
                     return false;
                 };
                 let Some(key) = association.mac(key_id) else {
+                    log::trace!("Rejected: Invalid key id");
                     return false;
                 };
 
                 // Ensure we have a complete ICV
                 if tlv.value.len() < 6 + key.output_size() {
+                    log::trace!("Rejected: TLV too short");
                     return false;
                 }
 
@@ -348,6 +354,7 @@ impl Message<'_> {
                 // before production ready
                 let mut buffer = [0; MAX_DATA_LEN];
                 if self.serialize(&mut buffer).is_err() {
+                    log::trace!("Rejected: cannot reserialize");
                     return false;
                 }
                 if association.policy_data().ignore_correction {
@@ -359,6 +366,7 @@ impl Message<'_> {
                     &buffer[..self.header.wire_size() + self.body.wire_size() + tlv_offset + 10],
                     &tlv.value[6..6 + key.output_size()],
                 ) {
+                    log::trace!("Rejected: signature invalid");
                     return false;
                 }
 
@@ -372,6 +380,7 @@ impl Message<'_> {
                     self.header.sequence_id,
                 );
 
+                log::trace!("Accepted");
                 return true;
             }
 
@@ -379,6 +388,7 @@ impl Message<'_> {
         }
 
         // No authentication tlv found, so not signed
+        log::trace!("Rejected: no TLV present");
         false
     }
 
