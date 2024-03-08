@@ -1,7 +1,10 @@
 use std::{error::Error, io, sync::Arc};
 
 use rustls::{pki_types::ServerName, ClientConfig};
-use tokio::{io::AsyncReadExt, net::TcpStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 use tokio_rustls::TlsConnector;
 
 use super::record::{AssociationMode, NextProtocols, PtpKeyRequestMessage, PtpKeyResponseMessage};
@@ -27,6 +30,7 @@ pub async fn fetch_data(
     let mut stream = connector.connect(dnsname, stream).await?;
 
     request.write(&mut stream).await?;
+    stream.flush().await?;
 
     // we expect the to receive messages to be smaller than data_buf
     let mut data_buf = vec![0; 4096];
@@ -46,6 +50,8 @@ pub async fn fetch_data(
             .into());
         }
     };
+
+    stream.shutdown().await?;
 
     let records: Vec<_> = records.into_iter().map(|r| r.into_owned()).collect();
 

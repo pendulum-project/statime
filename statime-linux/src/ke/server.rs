@@ -10,7 +10,7 @@ use clap::Parser;
 use log::{debug, info, warn};
 use rustls::ServerConfig;
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::RwLock,
     time::Instant,
@@ -233,7 +233,8 @@ async fn handle_connection(
 
     let keyset = store.read().await;
     let resp = respond(records, &keyset, ke_config).await?;
-    resp.write(stream).await?;
+    resp.write(&mut stream).await?;
+    stream.shutdown().await?;
     Ok(())
 }
 
