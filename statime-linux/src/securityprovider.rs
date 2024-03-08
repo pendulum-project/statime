@@ -169,7 +169,7 @@ impl<'a> SecurityAssociation for NTSAssociation<'a> {
     ) -> bool {
         match self.0.sequence_ids.entry((sender, key_id)) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
-                if (*entry.get() - sequence_id) as i16 > 0 {
+                if (entry.get().wrapping_sub(sequence_id) as i16) < 0 {
                     *entry.get_mut() = sequence_id;
                     true
                 } else {
