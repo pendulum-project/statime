@@ -310,7 +310,6 @@ impl<'a> Message<'a> {
 }
 
 impl Message<'_> {
-    #[allow(unused)]
     pub(crate) fn verify_signed(&self, provider: &impl SecurityAssociationProvider) -> bool {
         log::trace!("Validation message");
         let mut tlv_offset = 0;

@@ -182,19 +182,16 @@ impl MasterState {
             }
         }
 
-        let packet_length =
-            match Message::announce(global, port_identity, self.announce_seq_ids.generate())
-                .serialize(buffer)
-            {
-                Ok(length) => length,
-                Err(error) => {
-                    log::error!(
-                        "Statime bug: Could not serialize announce message {:?}",
-                        error
-                    );
-                    return actions![];
-                }
-            };
+        let packet_length = match message.serialize(buffer) {
+            Ok(length) => length,
+            Err(error) => {
+                log::error!(
+                    "Statime bug: Could not serialize announce message {:?}",
+                    error
+                );
+                return actions![];
+            }
+        };
 
         actions![
             PortAction::ResetAnnounceTimer {
