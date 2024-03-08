@@ -21,7 +21,7 @@ pub async fn fetch_data(
     };
 
     let connector = TlsConnector::from(config);
-    let dnsname = ServerName::try_from(server_address.to_owned())?;
+    let dnsname = ServerName::try_from(server_address.split_once(':').unwrap().0.to_owned())?;
 
     let stream = TcpStream::connect(server_address).await?;
     let mut stream = connector.connect(dnsname, stream).await?;
