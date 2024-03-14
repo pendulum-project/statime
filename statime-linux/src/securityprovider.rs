@@ -78,6 +78,9 @@ impl NTSProvider {
                     valid_till: now
                         + std::time::Duration::from_secs(
                             next_parameters.validity_period.lifetime as _,
+                        )
+                        + std::time::Duration::from_secs(
+                            initial_data.current_parameters.validity_period.lifetime as _,
                         ),
                 },
             );
@@ -259,6 +262,9 @@ async fn assocation_manager(
                         valid_till: now
                             + std::time::Duration::from_secs(
                                 next_params.validity_period.lifetime as _,
+                            )
+                            + std::time::Duration::from_secs(
+                                params.current_parameters.validity_period.lifetime as _,
                             ),
                     },
                 );
