@@ -9,7 +9,6 @@ use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
-    crypto::NoSecurityProvider,
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
@@ -20,6 +19,7 @@ use statime::{
 use statime_linux::{
     clock::LinuxClock,
     config::Config,
+    securityprovider::NTSProvider,
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, timestamp_to_time, PtpTargetAddress,
@@ -273,6 +273,22 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
+    let (provider, spp) = if let Config {
+        nts4ptp_server: Some(server_name),
+        nts4ptp_client_cert_key: Some(client_key),
+        nts4ptp_client_cert: Some(client_cert),
+        nts4ptp_server_root: Some(server_root),
+        ..
+    } = config
+    {
+        let (provider, spp) = NTSProvider::new(server_name, client_key, client_cert, server_root)
+            .await
+            .unwrap();
+        (provider, Some(spp))
+    } else {
+        (NTSProvider::empty(), None)
+    };
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -296,11 +312,14 @@ async fn actual_main() {
         };
         let rng = StdRng::from_entropy();
         let port = instance.add_port(
-            port_config.into(),
+            statime::config::PortConfig {
+                spp,
+                ..port_config.into()
+            },
             KalmanConfiguration::default(),
             port_clock.clone(),
             rng,
-            NoSecurityProvider,
+            provider.clone(),
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -458,7 +477,7 @@ type BmcaPort = Port<
     StdRng,
     LinuxClock,
     KalmanFilter,
-    NoSecurityProvider,
+    NTSProvider,
 >;
 
 // the Port task

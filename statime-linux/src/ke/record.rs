@@ -461,10 +461,10 @@ impl AssociationMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityAssocation<'a> {
-    spp: u8,
-    iat: u16,
-    key_id: u32,
-    key: Cow<'a, [u8]>,
+    pub spp: u8,
+    pub iat: u16,
+    pub key_id: u32,
+    pub key: Cow<'a, [u8]>,
 }
 
 impl<'a> SecurityAssocation<'a> {
@@ -760,6 +760,8 @@ impl<'a> Record<'a> {
             *buf = &buf[(4 + record_length)..];
             Ok(res)
         } else {
+            // Not enough data, last record
+            *buf = &[];
             Ok(None)
         }
     }

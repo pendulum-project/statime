@@ -924,7 +924,7 @@ impl<'a, A, C, F: Filter, R: Rng, P> Port<InBmca<'a>, A, R, C, F, P> {
                 sync_interval: config.sync_interval,
                 master_only: config.master_only,
                 delay_asymmetry: config.delay_asymmetry,
-                spp: None,
+                spp: config.spp,
             },
             filter_config,
             clock,
