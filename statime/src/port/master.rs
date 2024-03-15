@@ -103,13 +103,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
 
             message.suffix = tlv_builder.build();
 
-            let packet_length = match Message::announce(
-                &self.lifecycle.state,
-                self.port_identity,
-                self.announce_seq_ids.generate(),
-            )
-            .serialize(&mut self.packet_buffer)
-            {
+            let packet_length = match message.serialize(&mut self.packet_buffer) {
                 Ok(length) => length,
                 Err(error) => {
                     log::error!(
