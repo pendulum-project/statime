@@ -18,7 +18,7 @@ The `statime-stm32` crate gives an example of how to use statime on an embedded 
 
 The `statime-linux` crate provides a binary for Linux implementing an ordinary or boundary clock. It will need sufficient permissions to change the system clock to use. The easiest way to start it is through sudo:
 ```
-sudo ./target/debug/statime-linux -i <network_interface>
+sudo ./target/debug/statime -c path/to/statime.toml
 ```
 
 ## Structure
