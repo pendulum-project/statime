@@ -33,10 +33,10 @@ will be indicated by each configuration setting shown.
 :   The "source domain identity" of this PTP instance. Together with the `domain` it identifies a domain.
 
 `priority1` = *priority* (**128**)
-:   A tie breaker for the best master clock algorithm in the range `0..256`.
+:   A tie breaker for the best master clock algorithm in the range `0..256`. `0` being highest priority an `255` the lowest.
 
 `priority2` = *priority* (**128**)
-:   A tie breaker for the best master clock algorithm in the range `0..256`.
+:   A tie breaker for the best master clock algorithm in the range `0..256`. `0` being highest priority an `255` the lowest.
 
 ## `[[port]]`
 
