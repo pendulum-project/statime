@@ -38,6 +38,9 @@ will be indicated by each configuration setting shown.
 `priority2` = *priority* (**128**)
 :   A tie breaker for the best master clock algorithm in the range `0..256`. `0` being the highest priority and `255` the lowest.
 
+`path-trace` = *bool*
+:   The instance uses the path trace option. This allows detecting clock loops when enabled on all instances in the network.
+
 ## `[[port]]`
 
 `interface` = *interface name*
