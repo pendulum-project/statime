@@ -30,6 +30,8 @@ pub struct Config {
     pub priority1: u8,
     #[serde(default = "default_priority2")]
     pub priority2: u8,
+    #[serde(default)]
+    pub path_trace: bool,
     #[serde(rename = "port")]
     pub ports: Vec<PortConfig>,
     #[serde(default)]
@@ -280,6 +282,7 @@ interface = "enp0s31f6"
             identity: None,
             priority1: 128,
             priority2: 128,
+            path_trace: false,
             ports: vec![expected_port],
             observability: ObservabilityConfig::default(),
         };
