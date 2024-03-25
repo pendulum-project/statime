@@ -14,7 +14,10 @@ use crate::{
     config::{InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
-        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, TimePropertiesDS},
+        datasets::{
+            InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalPathTraceDS,
+            TimePropertiesDS,
+        },
     },
     filters::Filter,
     observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS},
@@ -66,6 +69,7 @@ use crate::{
 ///     domain_number: 0,
 ///     slave_only: false,
 ///     sdo_id: Default::default(),
+///     path_trace: false,
 /// };
 /// let time_properties_ds = TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 ///
@@ -95,6 +99,7 @@ pub struct PtpInstanceState {
     pub(crate) default_ds: InternalDefaultDS,
     pub(crate) current_ds: InternalCurrentDS,
     pub(crate) parent_ds: InternalParentDS,
+    pub(crate) path_trace_ds: InternalPathTraceDS,
     pub(crate) time_properties_ds: TimePropertiesDS,
 }
 
@@ -132,6 +137,7 @@ impl PtpInstanceState {
             if let Some(recommended_state) = recommended_state {
                 port.set_recommended_state(
                     recommended_state,
+                    &mut self.path_trace_ds,
                     &mut self.time_properties_ds,
                     &mut self.current_ds,
                     &mut self.parent_ds,
@@ -158,6 +164,7 @@ impl<F, S: PtpInstanceStateMutex> PtpInstance<F, S> {
                 default_ds,
                 current_ds: Default::default(),
                 parent_ds: InternalParentDS::new(default_ds),
+                path_trace_ds: InternalPathTraceDS::new(config.path_trace),
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),
