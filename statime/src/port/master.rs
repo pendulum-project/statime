@@ -1,7 +1,9 @@
+use arrayvec::ArrayVec;
+
 use super::{state::PortState, ForwardedTLVProvider, Port, PortActionIterator, Running};
 use crate::{
     datastructures::{
-        common::{PortIdentity, TlvSetBuilder},
+        common::{PortIdentity, Tlv, TlvSetBuilder, TlvType},
         messages::{DelayReqMessage, Header, Message, MAX_DATA_LEN},
     },
     filters::Filter,
@@ -88,6 +90,35 @@ impl<'a, A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'a, Running, A, R, C
             });
             let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
 
+            let path_trace_enabled = self.instance_state.with_ref(|state| {
+                let default_ds = &state.default_ds;
+                let path_trace_ds = &state.path_trace_ds;
+                if path_trace_ds.enable {
+                    'path_trace: {
+                        let mut path = path_trace_ds.list.clone();
+                        if path.try_push(default_ds.clock_identity).is_err() {
+                            break 'path_trace;
+                        }
+
+                        let value: ArrayVec<u8, MAX_DATA_LEN> =
+                            path.into_iter().flat_map(|ci| ci.0).collect();
+                        let tlv = Tlv {
+                            tlv_type: TlvType::PathTrace,
+                            value: value.as_slice().into(),
+                        };
+
+                        let tlv_size = tlv.wire_size();
+                        if tlv_margin > tlv_size {
+                            tlv_margin -= tlv_size;
+                            // Will not fail as previous checks ensure sufficient space in buffer.
+                            tlv_builder.add(tlv).unwrap();
+                        }
+                    }
+                }
+
+                path_trace_ds.enable
+            });
+
             while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
                 assert!(tlv.size() < tlv_margin);
                 let parent_port_identity = self
@@ -95,6 +126,11 @@ impl<'a, A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'a, Running, A, R, C
                     .with_ref(|s| s.parent_ds.parent_port_identity);
                 if parent_port_identity != tlv.sender_identity {
                     // Ignore, shouldn't be forwarded
+                    continue;
+                }
+
+                // Don't forward PATH_TRACE TLVs, we processed them and added our own
+                if path_trace_enabled && tlv.tlv.tlv_type == TlvType::PathTrace {
                     continue;
                 }
 
@@ -233,6 +269,7 @@ mod tests {
         config::DelayMechanism,
         datastructures::{
             common::{PortIdentity, TimeInterval},
+            datasets::InternalPathTraceDS,
             messages::{Header, MessageBody},
         },
         port::{
@@ -391,12 +428,13 @@ mod tests {
         let msg = Message::deserialize(data).unwrap();
         let msg_header = msg.header;
 
-        let msg = match msg.body {
+        let msg_body = match msg.body {
             MessageBody::Announce(msg) => msg,
             _ => panic!("Unexpected message type"),
         };
 
-        assert_eq!(msg.grandmaster_priority_1, 15);
+        assert_eq!(msg_body.grandmaster_priority_1, 15);
+        assert_eq!(msg.suffix, Default::default());
 
         let mut actions = port.send_announce(&mut NoForwardedTLVs);
 
@@ -416,13 +454,68 @@ mod tests {
         let msg2 = Message::deserialize(data).unwrap();
         let msg2_header = msg2.header;
 
-        let msg2 = match msg2.body {
+        let msg2_body = match msg2.body {
             MessageBody::Announce(msg) => msg,
             _ => panic!("Unexpected message type"),
         };
 
-        assert_eq!(msg2.grandmaster_priority_1, 15);
+        assert_eq!(msg2_body.grandmaster_priority_1, 15);
+        assert_eq!(msg2.suffix, Default::default());
         assert_ne!(msg2_header.sequence_id, msg_header.sequence_id);
+    }
+
+    #[test]
+    fn test_announce_path_trace() {
+        let state = setup_test_state();
+
+        let mut state_ref = state.borrow_mut();
+        state_ref.default_ds.priority_1 = 15;
+        state_ref.default_ds.priority_2 = 128;
+        state_ref.parent_ds.grandmaster_priority_1 = 15;
+        state_ref.parent_ds.grandmaster_priority_2 = 128;
+        state_ref.path_trace_ds = InternalPathTraceDS::new(true);
+
+        drop(state_ref);
+
+        let mut port = setup_test_port(&state);
+
+        port.set_forced_port_state(PortState::Master);
+
+        let mut actions = port.send_announce(&mut NoForwardedTLVs);
+
+        assert!(matches!(
+            actions.next(),
+            Some(PortAction::ResetAnnounceTimer { .. })
+        ));
+        let Some(PortAction::SendGeneral {
+            data,
+            link_local: false,
+        }) = actions.next()
+        else {
+            panic!("Unexpected action");
+        };
+        assert!(actions.next().is_none());
+        drop(actions);
+
+        let msg = Message::deserialize(data).unwrap();
+
+        let msg_body = match msg.body {
+            MessageBody::Announce(msg) => msg,
+            _ => panic!("Unexpected message type"),
+        };
+
+        assert_eq!(msg_body.grandmaster_priority_1, 15);
+
+        let mut tlvs = msg.suffix.tlv();
+        let Some(Tlv {
+            tlv_type: TlvType::PathTrace,
+            value,
+        }) = tlvs.next()
+        else {
+            panic!("Unexpected or missing TLV")
+        };
+        assert_eq!(value.as_ref(), [0; 8].as_ref());
+        assert!(tlvs.next().is_none());
     }
 
     #[test]

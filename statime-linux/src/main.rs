@@ -210,6 +210,7 @@ async fn actual_main() {
         domain_number: config.domain,
         slave_only: false,
         sdo_id: SdoId::try_from(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
+        path_trace: false,
     };
 
     let time_properties_ds =
