@@ -15,6 +15,7 @@ use crate::PtpInstance;
 ///     domain_number: 0,
 ///     sdo_id: SdoId::default(),
 ///     slave_only: false,
+///     path_trace: false,
 /// };
 /// ```
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -45,4 +46,7 @@ pub struct InstanceConfig {
 
     /// Whether this node may never become a master in the network
     pub slave_only: bool,
+
+    /// Whether the path trace option is enabled
+    pub path_trace: bool,
 }

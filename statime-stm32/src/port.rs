@@ -286,6 +286,7 @@ pub fn setup_statime(
         domain_number: 0,
         slave_only: false,
         sdo_id: SdoId::default(),
+        path_trace: false,
     };
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);

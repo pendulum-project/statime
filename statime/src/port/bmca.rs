@@ -5,7 +5,8 @@ use crate::{
     bmc::bmca::{BestAnnounceMessage, RecommendedState},
     config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
     datastructures::{
-        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS},
+        common::{ClockIdentity, TlvType},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalPathTraceDS},
         messages::Message,
     },
     filters::Filter,
@@ -33,10 +34,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
                     .instance_state
                     .with_ref(|s| s.parent_ds.parent_port_identity)
         {
-            self.instance_state.with_mut(|state| {
+            let clock_loop_detected = self.instance_state.with_mut(|state| {
                 let current_ds = &mut state.current_ds;
                 let parent_ds = &mut state.parent_ds;
                 let time_properties_ds = &mut state.time_properties_ds;
+                let path_trace_ds = &mut state.path_trace_ds;
 
                 current_ds.steps_removed = announce.steps_removed + 1;
 
@@ -47,7 +49,34 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
                 parent_ds.grandmaster_priority_2 = announce.grandmaster_priority_2;
 
                 *time_properties_ds = announce.time_properties();
+
+                if path_trace_ds.enable {
+                    if let Some(tlv) = message
+                        .suffix
+                        .tlv()
+                        .find(|tlv| tlv.tlv_type == TlvType::PathTrace)
+                    {
+                        let clock_identity = state.default_ds.clock_identity;
+                        if tlv.value.chunks_exact(8).any(|ci| ci == clock_identity.0) {
+                            log::warn!("Clock loop detected");
+                            return true;
+                        }
+
+                        // Cannot panic as `list` is large enough to contain up to a whole message
+                        path_trace_ds.list = tlv
+                            .value
+                            .chunks_exact(8)
+                            .map(|ci| ClockIdentity(<[u8; 8]>::try_from(ci).unwrap()))
+                            .collect();
+                    }
+                }
+
+                false
             });
+
+            if clock_loop_detected {
+                return actions![];
+            }
         }
 
         if self
@@ -119,6 +148,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBm
     pub(crate) fn set_recommended_state(
         &mut self,
         recommended_state: RecommendedState,
+        path_trace_ds: &mut InternalPathTraceDS,
         time_properties_ds: &mut TimePropertiesDS,
         current_ds: &mut InternalCurrentDS,
         parent_ds: &mut InternalParentDS,
@@ -147,6 +177,8 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBm
                 time_properties_ds.time_traceable = false;
                 time_properties_ds.frequency_traceable = false;
                 time_properties_ds.time_source = TimeSource::InternalOscillator;
+
+                path_trace_ds.list.clear();
             }
             RecommendedState::M3(_) | RecommendedState::P1(_) | RecommendedState::P2(_) => {}
             RecommendedState::S1(announce_message) => {
@@ -263,7 +295,7 @@ mod tests {
     use crate::{
         config::{ClockIdentity, InstanceConfig, SdoId},
         datastructures::{
-            common::PortIdentity,
+            common::{PortIdentity, Tlv, TlvSetBuilder},
             messages::{AnnounceMessage, Header, Message, MessageBody, PtpVersion, MAX_DATA_LEN},
         },
         port::tests::{setup_test_port, setup_test_port_custom_identity, setup_test_state},
@@ -370,6 +402,7 @@ mod tests {
             domain_number: 0,
             sdo_id: SdoId::default(),
             slave_only: false,
+            path_trace: false,
         };
         let mut port = port.start_bmca();
         port.set_recommended_port_state(
@@ -475,5 +508,73 @@ mod tests {
         let mut port = port.start_bmca();
         port.calculate_best_local_announce_message();
         assert!(port.best_local_announce_message_for_bmca().is_some());
+    }
+
+    #[test]
+    fn test_announce_path_trace_loop() {
+        let state = setup_test_state();
+
+        let mut state_ref = state.borrow_mut();
+        state_ref.parent_ds.parent_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
+        state_ref.path_trace_ds = InternalPathTraceDS::new(true);
+        drop(state_ref);
+
+        let mut port = setup_test_port(&state);
+        port.set_forced_port_state(PortState::Slave(SlaveState::new(Default::default())));
+
+        let mut announce = default_announce_message();
+        announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
+
+        // Clock loop
+        let mut suffix = [0; MAX_DATA_LEN];
+        let mut tlv_builder = TlvSetBuilder::new(&mut suffix);
+        tlv_builder
+            .add(Tlv {
+                tlv_type: TlvType::PathTrace,
+                value: [0; 8].as_ref().into(),
+            })
+            .unwrap();
+
+        let announce_message = Message {
+            header: announce.header,
+            body: MessageBody::Announce(announce),
+            suffix: tlv_builder.build(),
+        };
+        let mut packet = [0; MAX_DATA_LEN];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+
+        let mut actions = port.handle_event_receive(packet, Time::from_micros(1));
+        assert!(actions.next().is_none());
+
+        drop(actions);
+
+        // No clock loop
+        let mut suffix = [0; MAX_DATA_LEN];
+        let mut tlv_builder = TlvSetBuilder::new(&mut suffix);
+        tlv_builder
+            .add(Tlv {
+                tlv_type: TlvType::PathTrace,
+                value: [0xff; 8].as_ref().into(),
+            })
+            .unwrap();
+
+        let announce_message = Message {
+            header: announce.header,
+            body: MessageBody::Announce(announce),
+            suffix: tlv_builder.build(),
+        };
+        let mut packet = [0; MAX_DATA_LEN];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+
+        let mut actions = port.handle_event_receive(packet, Time::from_micros(2));
+        let Some(PortAction::ResetAnnounceReceiptTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        let Some(PortAction::ForwardTLV { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        assert!(actions.next().is_none());
     }
 }
