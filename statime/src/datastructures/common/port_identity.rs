@@ -12,10 +12,6 @@ pub struct PortIdentity {
 }
 
 impl WireFormat for PortIdentity {
-    fn wire_size(&self) -> usize {
-        10
-    }
-
     fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         self.clock_identity.serialize(&mut buffer[0..8])?;
         buffer[8..10].copy_from_slice(&self.port_number.to_be_bytes());

@@ -201,8 +201,7 @@ impl<'de> serde::de::Visitor<'de> for SdoIdVisitor {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::Error;
-        use serde::Deserialize;
+        use serde::{de::Error, Deserialize};
         let v = u16::deserialize(deserializer)?;
         SdoId::try_from(v).or(Err(D::Error::custom(std::format!(
             "SdoId not in range of 0..=0xFFF: {}",
