@@ -1,3 +1,4 @@
+#[allow(unused)] // clippy will inaccurately mark this as unused on platforms with std
 pub(crate) trait FloatPolyfill {
     #[cfg(not(feature = "std"))]
     fn abs(self) -> Self;

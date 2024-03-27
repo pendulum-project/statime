@@ -26,10 +26,6 @@ impl DerefMut for TimeInterval {
 }
 
 impl WireFormat for TimeInterval {
-    fn wire_size(&self) -> usize {
-        8
-    }
-
     fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         buffer[0..8].copy_from_slice(&self.0.to_bits().to_be_bytes());
         Ok(())
