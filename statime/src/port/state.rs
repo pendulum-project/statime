@@ -7,6 +7,7 @@ use crate::{
 
 #[derive(Debug, Default)]
 #[allow(private_interfaces)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum PortState {
     #[default]
     Faulty,

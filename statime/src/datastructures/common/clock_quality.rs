@@ -38,10 +38,6 @@ impl Default for ClockQuality {
 }
 
 impl WireFormat for ClockQuality {
-    fn wire_size(&self) -> usize {
-        4
-    }
-
     fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         buffer[0] = self.clock_class;
         buffer[1] = self.clock_accuracy.to_primitive();

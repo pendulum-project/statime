@@ -36,43 +36,6 @@ use tokio::{
     time::Sleep,
 };
 
-#[derive(Clone, Copy)]
-struct SdoIdParser;
-
-impl clap::builder::TypedValueParser for SdoIdParser {
-    type Value = SdoId;
-
-    fn parse_ref(
-        &self,
-        cmd: &clap::Command,
-        arg: Option<&clap::Arg>,
-        value: &std::ffi::OsStr,
-    ) -> Result<Self::Value, clap::Error> {
-        use clap::error::{ContextKind, ContextValue, ErrorKind};
-
-        let inner = clap::value_parser!(u16);
-        let val = inner.parse_ref(cmd, arg, value)?;
-
-        match SdoId::try_from(val) {
-            Ok(v) => Ok(v),
-            Err(()) => {
-                let mut err = clap::Error::new(ErrorKind::ValueValidation).with_cmd(cmd);
-                if let Some(arg) = arg {
-                    err.insert(
-                        ContextKind::InvalidArg,
-                        ContextValue::String(arg.to_string()),
-                    );
-                }
-                err.insert(
-                    ContextKind::InvalidValue,
-                    ContextValue::String(val.to_string()),
-                );
-                Err(err)
-            }
-        }
-    }
-}
-
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {

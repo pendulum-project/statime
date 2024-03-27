@@ -14,10 +14,6 @@ pub struct WireTimestamp {
 }
 
 impl WireFormat for WireTimestamp {
-    fn wire_size(&self) -> usize {
-        10
-    }
-
     fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         buffer[0..6].copy_from_slice(&self.seconds.to_be_bytes()[2..8]);
         buffer[6..10].copy_from_slice(&self.nanos.to_be_bytes());

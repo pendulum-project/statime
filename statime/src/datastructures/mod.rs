@@ -46,9 +46,6 @@ impl From<EnumConversionError> for WireFormatError {
 }
 
 trait WireFormat: Debug + Clone + Eq {
-    /// The byte size on the wire of this object
-    fn wire_size(&self) -> usize;
-
     /// Serializes the object into the PTP wire format.
     ///
     /// Returns the used buffer size that contains the message or an error.

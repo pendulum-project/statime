@@ -84,8 +84,8 @@ impl TryFrom<u8> for MessageType {
 pub use fuzz::FuzzMessage;
 
 #[cfg(feature = "fuzz")]
+#[allow(missing_docs)] // These are only used for internal fuzzing
 mod fuzz {
-    #![allow(missing_docs)] // These are only used for internal fuzzing
     use super::*;
     use crate::datastructures::{common::Tlv, WireFormatError};
 

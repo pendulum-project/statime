@@ -7,9 +7,8 @@ use tokio::{
     net::{TcpListener, UnixStream},
 };
 
-use crate::{config::Config, observer::ObservableInstanceState};
-
 use super::format::format_response;
+use crate::{config::Config, observer::ObservableInstanceState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {

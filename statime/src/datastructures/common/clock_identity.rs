@@ -32,10 +32,6 @@ impl ClockIdentity {
 }
 
 impl WireFormat for ClockIdentity {
-    fn wire_size(&self) -> usize {
-        8
-    }
-
     fn serialize(&self, buffer: &mut [u8]) -> Result<(), WireFormatError> {
         buffer[0..8].copy_from_slice(&self.0);
         Ok(())
