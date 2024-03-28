@@ -2,15 +2,20 @@ use arrayvec::ArrayVec;
 
 use crate::datastructures::{common::ClockIdentity, messages::MAX_DATA_LEN};
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub(crate) struct InternalPathTraceDS {
-    pub(crate) list: ArrayVec<ClockIdentity, { MAX_DATA_LEN / 8 }>,
-    pub(crate) enable: bool,
+/// A concrete implementation of the PTP Path Trace dataset
+/// (IEEE1588-2019 section 16.2.2)
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PathTraceDS {
+    /// See *IEEE1588-2019 section 16.2.2.2.1*.
+    pub list: ArrayVec<ClockIdentity, { MAX_DATA_LEN / 8 }>,
+    /// See *IEEE1588-2019 section 16.2.2.3.1*.
+    pub enable: bool,
 }
 
-impl InternalPathTraceDS {
+impl PathTraceDS {
     pub(crate) fn new(enable: bool) -> Self {
-        InternalPathTraceDS {
+        PathTraceDS {
             list: Default::default(),
             enable,
         }

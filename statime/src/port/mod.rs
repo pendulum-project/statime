@@ -644,7 +644,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
-        datastructures::datasets::{InternalDefaultDS, InternalParentDS, InternalPathTraceDS},
+        datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS},
         filters::BasicFilter,
         time::{Duration, Interval, Time},
         Clock,
@@ -774,7 +774,7 @@ mod tests {
             current_ds: Default::default(),
             parent_ds,
             time_properties_ds: Default::default(),
-            path_trace_ds: InternalPathTraceDS::new(false),
+            path_trace_ds: PathTraceDS::new(false),
         });
         state
     }

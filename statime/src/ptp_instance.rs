@@ -15,8 +15,7 @@ use crate::{
     datastructures::{
         common::PortIdentity,
         datasets::{
-            InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalPathTraceDS,
-            TimePropertiesDS,
+            InternalCurrentDS, InternalDefaultDS, InternalParentDS, PathTraceDS, TimePropertiesDS,
         },
     },
     filters::Filter,
@@ -99,7 +98,7 @@ pub struct PtpInstanceState {
     pub(crate) default_ds: InternalDefaultDS,
     pub(crate) current_ds: InternalCurrentDS,
     pub(crate) parent_ds: InternalParentDS,
-    pub(crate) path_trace_ds: InternalPathTraceDS,
+    pub(crate) path_trace_ds: PathTraceDS,
     pub(crate) time_properties_ds: TimePropertiesDS,
 }
 
@@ -164,7 +163,7 @@ impl<F, S: PtpInstanceStateMutex> PtpInstance<F, S> {
                 default_ds,
                 current_ds: Default::default(),
                 parent_ds: InternalParentDS::new(default_ds),
-                path_trace_ds: InternalPathTraceDS::new(config.path_trace),
+                path_trace_ds: PathTraceDS::new(config.path_trace),
                 time_properties_ds,
             }),
             log_bmca_interval: AtomicI8::new(i8::MAX),
@@ -190,6 +189,11 @@ impl<F, S: PtpInstanceStateMutex> PtpInstance<F, S> {
     /// Return IEEE-1588 timePropertiesDS for introspection
     pub fn time_properties_ds(&self) -> TimePropertiesDS {
         self.state.with_ref(|s| s.time_properties_ds)
+    }
+
+    /// Return IEEE-1588 pathTraceDS for introspection
+    pub fn path_trace_ds(&self) -> PathTraceDS {
+        self.state.with_ref(|s| s.path_trace_ds.clone())
     }
 }
 
