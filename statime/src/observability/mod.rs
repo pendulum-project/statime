@@ -8,3 +8,5 @@ pub mod default;
 /// A concrete implementation of the PTP Parent dataset (IEEE1588-2019 section
 /// 8.2.3)
 pub mod parent;
+
+pub use crate::datastructures::datasets::PathTraceDS;
