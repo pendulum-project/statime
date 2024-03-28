@@ -269,7 +269,7 @@ mod tests {
         config::DelayMechanism,
         datastructures::{
             common::{PortIdentity, TimeInterval},
-            datasets::InternalPathTraceDS,
+            datasets::PathTraceDS,
             messages::{Header, MessageBody},
         },
         port::{
@@ -473,7 +473,7 @@ mod tests {
         state_ref.default_ds.priority_2 = 128;
         state_ref.parent_ds.grandmaster_priority_1 = 15;
         state_ref.parent_ds.grandmaster_priority_2 = 128;
-        state_ref.path_trace_ds = InternalPathTraceDS::new(true);
+        state_ref.path_trace_ds = PathTraceDS::new(true);
 
         drop(state_ref);
 

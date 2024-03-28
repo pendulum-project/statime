@@ -6,7 +6,7 @@ use crate::{
     config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
     datastructures::{
         common::{ClockIdentity, TlvType},
-        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, InternalPathTraceDS},
+        datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, PathTraceDS},
         messages::Message,
     },
     filters::Filter,
@@ -148,7 +148,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBm
     pub(crate) fn set_recommended_state(
         &mut self,
         recommended_state: RecommendedState,
-        path_trace_ds: &mut InternalPathTraceDS,
+        path_trace_ds: &mut PathTraceDS,
         time_properties_ds: &mut TimePropertiesDS,
         current_ds: &mut InternalCurrentDS,
         parent_ds: &mut InternalParentDS,
@@ -516,7 +516,7 @@ mod tests {
 
         let mut state_ref = state.borrow_mut();
         state_ref.parent_ds.parent_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
-        state_ref.path_trace_ds = InternalPathTraceDS::new(true);
+        state_ref.path_trace_ds = PathTraceDS::new(true);
         drop(state_ref);
 
         let mut port = setup_test_port(&state);
