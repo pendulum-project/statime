@@ -146,7 +146,7 @@ impl ForeignMasterList {
             // A foreign master must have at least FOREIGN_MASTER_THRESHOLD messages in the
             // last FOREIGN_MASTER_TIME_WINDOW to be qualified, so we filter out
             // any that don't have that
-            if self.foreign_masters[i].announce_messages.len() > FOREIGN_MASTER_THRESHOLD {
+            if self.foreign_masters[i].announce_messages.len() >= FOREIGN_MASTER_THRESHOLD {
                 // Only the most recent announce message is qualified, so we remove that one
                 // from the list
                 let last_index = self.foreign_masters[i].announce_messages.len() - 1;
@@ -224,13 +224,7 @@ impl ForeignMasterList {
                 let announce_sequence_id = announce_message.header.sequence_id;
                 let last_sequence_id = last_announce_message.header.sequence_id;
 
-                if last_sequence_id >= FOREIGN_MASTER_TIME_WINDOW {
-                    if announce_sequence_id < last_sequence_id {
-                        return false;
-                    }
-                } else if announce_sequence_id - last_sequence_id
-                    > u16::MAX - FOREIGN_MASTER_TIME_WINDOW
-                {
+                if announce_sequence_id.wrapping_sub(last_sequence_id) >= u16::MAX / 2 {
                     return false;
                 }
             }
