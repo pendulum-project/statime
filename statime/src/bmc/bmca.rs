@@ -379,6 +379,52 @@ mod tests {
     }
 
     #[test]
+    fn test_master_registration_rollover() {
+        let mut bmca = Bmca::new(
+            AcceptAnyMaster,
+            TimeInterval(100.into()),
+            PortIdentity::default(),
+        );
+        let mut announce = default_announce_message();
+        announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
+        announce.header.sequence_id = u16::MAX - 2;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_none());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = u16::MAX - 1;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = u16::MAX;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 0;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 1;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 2;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 3;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 4;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+        bmca.step_age(TimeInterval(100.into()).into());
+        announce.header.sequence_id = 5;
+        bmca.register_announce_message(&announce.header, &announce);
+        assert!(bmca.take_best_port_announce_message().is_some());
+    }
+
+    #[test]
     fn test_acceptable_master_filter() {
         let mut bmca = Bmca::new(
             std::vec![],
