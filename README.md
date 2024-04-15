@@ -58,9 +58,9 @@ where `<INTERFACE>` is the network interface you want ptpd to use. Here `-n` dis
 
 # Roadmap
 
-- Q2 2023: PTP master, boundary clock
-- Q3 2023: NTP/PTP clock device + development of PTP for Linux
-- Q4 2023: First release of PTP for Linux + R&D fieldtest TimeNL
+- Q2 2024: Power sector profile + experimental NTS4PTP
+- Q3 2024: Stable release Statime (pending funding)
+- Q1-Q4 2024: Adoption work & maintenance work
 
 # Support our work
 
