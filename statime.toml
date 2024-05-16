@@ -9,4 +9,4 @@ domain = 0
 #interface = "<interfacename>"
 #network-mode = "ipv4" #can also be ipv6 or ethernet
 # If the network interface has hardware clock support, you can enable it with
-#hardware-clock = "/dev/ptp<hardware clock number>"
+#hardware-clock = <hardware clock number>

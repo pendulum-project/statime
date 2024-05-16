@@ -47,7 +47,7 @@ libm = "0.2.8"
 atomic_refcell = "0.1.13"
 
 clock-steering = "0.2.0"
-timestamped-socket = "0.2.0"
+timestamped-socket = "0.2.1"
 
 
 # our own crates used as dependencies, same version as the workspace version

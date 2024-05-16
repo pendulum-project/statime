@@ -64,8 +64,9 @@ impl PtpTargetAddress for EthernetAddress {
 pub fn open_ipv4_event_socket(
     interface: InterfaceName,
     timestamping: InterfaceTimestampMode,
+    bind_phc: Option<u32>,
 ) -> std::io::Result<Socket<SocketAddrV4, Open>> {
-    let socket = open_interface_udp4(interface, EVENT_PORT, timestamping)?;
+    let socket = open_interface_udp4(interface, EVENT_PORT, timestamping, bind_phc)?;
     socket.join_multicast(SocketAddrV4::new(IPV4_PRIMARY_MULTICAST, 0), interface)?;
     socket.join_multicast(SocketAddrV4::new(IPV4_PDELAY_MULTICAST, 0), interface)?;
     Ok(socket)
@@ -74,7 +75,7 @@ pub fn open_ipv4_event_socket(
 pub fn open_ipv4_general_socket(
     interface: InterfaceName,
 ) -> std::io::Result<Socket<SocketAddrV4, Open>> {
-    let socket = open_interface_udp4(interface, GENERAL_PORT, InterfaceTimestampMode::None)?;
+    let socket = open_interface_udp4(interface, GENERAL_PORT, InterfaceTimestampMode::None, None)?;
     socket.join_multicast(SocketAddrV4::new(IPV4_PRIMARY_MULTICAST, 0), interface)?;
     socket.join_multicast(SocketAddrV4::new(IPV4_PDELAY_MULTICAST, 0), interface)?;
     Ok(socket)
@@ -83,8 +84,9 @@ pub fn open_ipv4_general_socket(
 pub fn open_ipv6_event_socket(
     interface: InterfaceName,
     timestamping: InterfaceTimestampMode,
+    bind_phc: Option<u32>,
 ) -> std::io::Result<Socket<SocketAddrV6, Open>> {
-    let socket = open_interface_udp6(interface, EVENT_PORT, timestamping)?;
+    let socket = open_interface_udp6(interface, EVENT_PORT, timestamping, bind_phc)?;
     socket.join_multicast(
         SocketAddrV6::new(IPV6_PRIMARY_MULTICAST, 0, 0, 0),
         interface,
@@ -96,7 +98,7 @@ pub fn open_ipv6_event_socket(
 pub fn open_ipv6_general_socket(
     interface: InterfaceName,
 ) -> std::io::Result<Socket<SocketAddrV6, Open>> {
-    let socket = open_interface_udp6(interface, GENERAL_PORT, InterfaceTimestampMode::None)?;
+    let socket = open_interface_udp6(interface, GENERAL_PORT, InterfaceTimestampMode::None, None)?;
     // Port, flowinfo and scope doesn't matter for join multicast
     socket.join_multicast(
         SocketAddrV6::new(IPV6_PRIMARY_MULTICAST, 0, 0, 0),
@@ -109,8 +111,9 @@ pub fn open_ipv6_general_socket(
 pub fn open_ethernet_socket(
     interface: InterfaceName,
     timestamping: InterfaceTimestampMode,
+    bind_phc: Option<u32>,
 ) -> std::io::Result<Socket<EthernetAddress, Open>> {
-    let socket = open_interface_ethernet(interface, PTP_ETHERTYPE, timestamping)?;
+    let socket = open_interface_ethernet(interface, PTP_ETHERTYPE, timestamping, bind_phc)?;
     socket.join_multicast(EthernetAddress::PRIMARY_EVENT, interface)?;
     socket.join_multicast(EthernetAddress::PDELAY_EVENT, interface)?;
     Ok(socket)

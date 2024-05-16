@@ -45,7 +45,7 @@ pub struct PortConfig {
     #[serde(default, deserialize_with = "deserialize_acceptable_master_list")]
     pub acceptable_master_list: Option<Vec<ClockIdentity>>,
     #[serde(default)]
-    pub hardware_clock: Option<PathBuf>,
+    pub hardware_clock: Option<u32>,
     #[serde(default)]
     pub network_mode: NetworkMode,
     #[serde(default = "default_announce_interval")]

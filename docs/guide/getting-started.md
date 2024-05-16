@@ -17,7 +17,7 @@ to the configuration file in `/etc/statime/statime.toml`. This will tell statime
 ### Hardware timestamping
 If the network interface supports hardware timestamping for a specific PTP hardware clock, this can be enabled by specifying the hardware clock of the network interface:
 ```toml
-hardware-clock = "/path/to/hardware/clock/device"
+hardware-clock = <hardware clock number>
 ```
 Statime will then enable hardware timestamping, and automatically synchronize the hardware clock and the system clock as needed. To determine which hardware clock belongs to an interface, `ethtool` can be used:
 ```

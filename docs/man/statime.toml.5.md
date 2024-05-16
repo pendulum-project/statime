@@ -22,8 +22,8 @@ will be indicated by each configuration setting shown.
 `identity` = *clock identity* (**unset**)
 :   The unique identity of this clock.
     A clock identity is encoded as a 16-character hexadecimal string, for example
-    `identity = "00FFFFFFFFFFFFFB"`. 
-    If unset the clock identity is derived from a MAC address. 
+    `identity = "00FFFFFFFFFFFFFB"`.
+    If unset the clock identity is derived from a MAC address.
 
 `domain` = *u8* (**0**)
 :   The PTP domain of this instance. All instances in domain are synchronized to the Grandmaster
@@ -70,8 +70,8 @@ will be indicated by each configuration setting shown.
 `master-only` = *bool* (**false**)
 :   The port is always a master instance, and will never become a slave instance.
 
-`hardware-clock` = *path* (**unset**)
-:   Path to a hardware clock device, for instance `"/dev/ptp0"`.
+`hardware-clock` = *index* (**unset**)
+:   Index of a hardware clock device, for instance `0` for `/dev/ptp0`.
 
 `acceptable-master-list` = [ *clock identity*, .. ] (**unset**)
 :   List of clock identities that this port will accept as its master.
