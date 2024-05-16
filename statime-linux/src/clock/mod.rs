@@ -30,6 +30,11 @@ impl LinuxClock {
         })
     }
 
+    pub fn open_idx(idx: u32) -> std::io::Result<Self> {
+        let path = format!("/dev/ptp{}", idx);
+        Self::open(path)
+    }
+
     /// Return three timestamps t1 t2 and t3 minted in that order.
     /// T1 and T3 are minted using the system TAI clock and T2 by the hardware
     /// clock

@@ -46,7 +46,7 @@ fixed = "1.24"
 libm = "0.2.8"
 
 clock-steering = "0.2.0"
-timestamped-socket = "0.2.0"
+timestamped-socket = "0.2.1"
 
 
 # our own crates used as dependencies, same version as the workspace version
