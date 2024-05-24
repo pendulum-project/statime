@@ -111,7 +111,8 @@ impl<A> Bmca<A> {
         best_port_announce_message: Option<BestAnnounceMessage>,
         port_state: &PortState,
     ) -> Option<RecommendedState> {
-        if best_global_announce_message.is_none() && matches!(port_state, PortState::Listening) {
+        // We stick to the 1588-2008, assuming the change in 1588-2019 is in error
+        if best_port_announce_message.is_none() && matches!(port_state, PortState::Listening) {
             None
         } else if (1..=127).contains(&own_data.clock_quality.clock_class) {
             // only consider the best message of the port
