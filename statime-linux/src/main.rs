@@ -435,7 +435,7 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<InBmca<'static>, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, KalmanFilter>;
+type BmcaPort = Port<'static, InBmca, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, KalmanFilter>;
 
 // the Port task
 //

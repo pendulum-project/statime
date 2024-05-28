@@ -269,7 +269,7 @@ pub(crate) mod state;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Port<L, A, R, C, F: Filter> {
+pub struct Port<'a, L, A, R, C, F: Filter> {
     config: PortConfig<()>,
     filter_config: F::Config,
     clock: C,
@@ -277,6 +277,7 @@ pub struct Port<L, A, R, C, F: Filter> {
     pub(crate) port_identity: PortIdentity,
     // Corresponds with PortDS port_state and enabled
     port_state: PortState,
+    instance_state: &'a AtomicRefCell<PtpInstanceState>,
     bmca: Bmca<A>,
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
@@ -313,19 +314,16 @@ enum PeerDelayState {
 
 /// Type state of [`Port`] entered by [`Port::end_bmca`]
 #[derive(Debug)]
-pub struct Running<'a> {
-    state: &'a AtomicRefCell<PtpInstanceState>,
-}
+pub struct Running;
 
 /// Type state of [`Port`] entered by [`Port::start_bmca`]
 #[derive(Debug)]
-pub struct InBmca<'a> {
+pub struct InBmca {
     pending_action: PortActionIterator<'static>,
     local_best: Option<BestAnnounceMessage>,
-    state: &'a AtomicRefCell<PtpInstanceState>,
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
     /// Inform the port about a transmit timestamp being available
     ///
     /// `context` is the handle of the packet that was send from the
@@ -401,9 +399,10 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
     /// [`PtpInstance::bmca`].
-    pub fn start_bmca(self) -> Port<InBmca<'a>, A, R, C, F> {
+    pub fn start_bmca(self) -> Port<'a, InBmca, A, R, C, F> {
         Port {
             port_state: self.port_state,
+            instance_state: self.instance_state,
             config: self.config,
             filter_config: self.filter_config,
             clock: self.clock,
@@ -414,7 +413,6 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             lifecycle: InBmca {
                 pending_action: actions![],
                 local_best: None,
-                state: self.lifecycle.state,
             },
             announce_seq_ids: self.announce_seq_ids,
             sync_seq_ids: self.sync_seq_ids,
@@ -439,7 +437,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 return ControlFlow::Break(actions![]);
             }
         };
-        let state = self.lifecycle.state.borrow();
+        let state = self.instance_state.borrow();
         if message.header().sdo_id != state.default_ds.sdo_id
             || message.header().domain_number != state.default_ds.domain_number
         {
@@ -504,13 +502,14 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
     }
 }
 
-impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C, F: Filter, R> Port<'a, InBmca, A, R, C, F> {
     /// End a BMCA cycle and make the
     /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
-    pub fn end_bmca(self) -> (Port<Running<'a>, A, R, C, F>, PortActionIterator<'static>) {
+    pub fn end_bmca(self) -> (Port<'a, Running, A, R, C, F>, PortActionIterator<'static>) {
         (
             Port {
                 port_state: self.port_state,
+                instance_state: self.instance_state,
                 config: self.config,
                 filter_config: self.filter_config,
                 clock: self.clock,
@@ -518,9 +517,7 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
                 bmca: self.bmca,
                 rng: self.rng,
                 packet_buffer: [0; MAX_DATA_LEN],
-                lifecycle: Running {
-                    state: self.lifecycle.state,
-                },
+                lifecycle: Running,
                 announce_seq_ids: self.announce_seq_ids,
                 sync_seq_ids: self.sync_seq_ids,
                 delay_seq_ids: self.delay_seq_ids,
@@ -534,7 +531,7 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
     }
 }
 
-impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
+impl<L, A, R, C: Clock, F: Filter> Port<'_, L, A, R, C, F> {
     fn set_forced_port_state(&mut self, mut state: PortState) {
         log::info!(
             "new state for port {}: {} -> {}",
@@ -553,7 +550,7 @@ impl<L, A, R, C: Clock, F: Filter> Port<L, A, R, C, F> {
     }
 }
 
-impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
+impl<L, A, R, C, F: Filter> Port<'_, L, A, R, C, F> {
     /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
@@ -573,10 +570,10 @@ impl<L, A, R, C, F: Filter> Port<L, A, R, C, F> {
     }
 }
 
-impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
     /// Create a new port from a port dataset on a given interface.
     pub(crate) fn new(
-        state_refcell: &'a AtomicRefCell<PtpInstanceState>,
+        instance_state: &'a AtomicRefCell<PtpInstanceState>,
         config: PortConfig<A>,
         filter_config: F::Config,
         clock: C,
@@ -606,13 +603,13 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
             clock,
             port_identity,
             port_state: PortState::Listening,
+            instance_state,
             bmca,
             rng,
             packet_buffer: [0; MAX_DATA_LEN],
             lifecycle: InBmca {
                 pending_action: actions![PortAction::ResetAnnounceReceiptTimer { duration }],
                 local_best: None,
-                state: state_refcell,
             },
             announce_seq_ids: SequenceIdGenerator::new(),
             sync_seq_ids: SequenceIdGenerator::new(),
@@ -666,7 +663,7 @@ mod tests {
 
     pub(super) fn setup_test_port(
         state: &AtomicRefCell<PtpInstanceState>,
-    ) -> Port<Running<'_>, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             &state,
             PortConfig {
@@ -693,7 +690,7 @@ mod tests {
     pub(super) fn setup_test_port_custom_filter<F: Filter>(
         state: &AtomicRefCell<PtpInstanceState>,
         filter_config: F::Config,
-    ) -> Port<Running<'_>, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
         let port = Port::<_, _, _, _, F>::new(
             &state,
             PortConfig {

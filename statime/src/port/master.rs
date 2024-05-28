@@ -9,14 +9,14 @@ use crate::{
     time::Time,
 };
 
-impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
+impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
 
             let seq_id = self.sync_seq_ids.generate();
             let packet_length = match Message::sync(
-                &self.lifecycle.state.borrow().default_ds,
+                &self.instance_state.borrow().default_ds,
                 self.port_identity,
                 seq_id,
             )
@@ -49,7 +49,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
     pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             let packet_length = match Message::follow_up(
-                &self.lifecycle.state.borrow().default_ds,
+                &self.instance_state.borrow().default_ds,
                 self.port_identity,
                 id,
                 timestamp,
@@ -86,7 +86,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
             let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
 
             let mut message = Message::announce(
-                &self.lifecycle.state.borrow(),
+                &self.instance_state.borrow(),
                 self.port_identity,
                 self.announce_seq_ids.generate(),
             );
@@ -94,7 +94,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
 
             while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
                 assert!(tlv.size() < tlv_margin);
-                if self.lifecycle.state.borrow().parent_ds.parent_port_identity
+                if self.instance_state.borrow().parent_ds.parent_port_identity
                     != tlv.sender_identity
                 {
                     // Ignore, shouldn't be forwarded
@@ -173,7 +173,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
     ) -> PortActionIterator {
         log::debug!("Received PDelayReq");
         let pdelay_resp_message = Message::pdelay_resp(
-            &self.lifecycle.state.borrow().default_ds,
+            &self.instance_state.borrow().default_ds,
             self.port_identity,
             header,
             timestamp,
@@ -206,7 +206,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         timestamp: Time,
     ) -> PortActionIterator {
         let pdelay_resp_follow_up_messgae = Message::pdelay_resp_follow_up(
-            &self.lifecycle.state.borrow().default_ds,
+            &self.instance_state.borrow().default_ds,
             self.port_identity,
             requestor_identity,
             id,
