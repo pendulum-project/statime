@@ -23,7 +23,7 @@ use stm32f7xx_hal::rng::Rng;
 use crate::{ethernet::NetworkStack, ptp_clock::PtpClock};
 
 type StmPort<State> =
-    statime::port::Port<State, AcceptAnyMaster, Rng, &'static PtpClock, BasicFilter>;
+    statime::port::Port<'static, State, AcceptAnyMaster, Rng, &'static PtpClock, BasicFilter>;
 
 pub struct Port {
     timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
@@ -39,7 +39,7 @@ impl Port {
         packet_id_sender: Sender<'static, (TimestampContext, PacketId), 16>,
         event_socket: SocketHandle,
         general_socket: SocketHandle,
-        state: StmPort<InBmca<'static>>,
+        state: StmPort<InBmca>,
     ) -> Self {
         Self {
             timer_sender,
@@ -96,7 +96,7 @@ impl Port {
 
     pub fn perform_bmca(
         &mut self,
-        f: impl FnOnce(&mut StmPort<InBmca<'static>>),
+        f: impl FnOnce(&mut StmPort<InBmca>),
         net: &mut impl Mutex<T = NetworkStack>,
     ) {
         let bmca_state = self.state.make_bmca_mode();
@@ -182,14 +182,14 @@ impl Port {
 #[allow(clippy::large_enum_variant)]
 enum PortState {
     None,
-    Running(StmPort<Running<'static>>),
-    InBmca(StmPort<InBmca<'static>>),
+    Running(StmPort<Running>),
+    InBmca(StmPort<InBmca>),
 }
 
 impl PortState {
     /// Change to state to the [PortState::InBmca] mode and return a reference
     /// to it.
-    fn make_bmca_mode(&mut self) -> &mut StmPort<InBmca<'static>> {
+    fn make_bmca_mode(&mut self) -> &mut StmPort<InBmca> {
         *self = match core::mem::replace(self, PortState::None) {
             PortState::Running(port) => PortState::InBmca(port.start_bmca()),
             val => val,
@@ -219,7 +219,7 @@ impl PortState {
 
     /// Get the running port and leave behind an empty port. Panics if the port
     /// is not currently in running mode.
-    fn take_running(&mut self) -> StmPort<Running<'static>> {
+    fn take_running(&mut self) -> StmPort<Running> {
         match core::mem::replace(self, PortState::None) {
             Self::Running(v) => v,
             _ => defmt::panic!("Port is not in running mode"),
@@ -227,7 +227,7 @@ impl PortState {
     }
 
     /// Set the port to running after a previous [Self::take_running].
-    fn set_running(&mut self, port: StmPort<Running<'static>>) {
+    fn set_running(&mut self, port: StmPort<Running>) {
         match self {
             PortState::None => *self = Self::Running(port),
             _ => defmt::panic!("Port not in empty state"),
@@ -266,7 +266,7 @@ pub fn setup_statime(
     ptp_peripheral: stm32_eth::ptp::EthernetPTP,
     mac_address: [u8; 6],
     rng: Rng,
-) -> (&'static PtpInstance<BasicFilter>, StmPort<InBmca<'static>>) {
+) -> (&'static PtpInstance<BasicFilter>, StmPort<InBmca>) {
     static PTP_CLOCK: StaticCell<PtpClock> = StaticCell::new();
     let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp_peripheral));
 

@@ -100,7 +100,7 @@ pub(crate) struct PtpInstanceState {
 impl PtpInstanceState {
     fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng>(
         &mut self,
-        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
+        ports: &mut [&mut Port<'_, InBmca, A, R, C, F>],
         bmca_interval: Duration,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
@@ -200,7 +200,7 @@ impl<F: Filter> PtpInstance<F> {
         filter_config: F::Config,
         clock: C,
         rng: R,
-    ) -> Port<InBmca<'_>, A, R, C, F> {
+    ) -> Port<'_, InBmca, A, R, C, F> {
         self.log_bmca_interval
             .fetch_min(config.announce_interval.as_log_2(), Ordering::Relaxed);
         let mut state = self.state.borrow_mut();
@@ -226,7 +226,7 @@ impl<F: Filter> PtpInstance<F> {
     /// the slice!
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
-        ports: &mut [&mut Port<InBmca<'_>, A, R, C, F>],
+        ports: &mut [&mut Port<'_, InBmca, A, R, C, F>],
     ) {
         self.state.borrow_mut().bmca(
             ports,

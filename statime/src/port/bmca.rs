@@ -17,7 +17,7 @@ use crate::{
     Clock,
 };
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
     pub(super) fn handle_announce<'b>(
         &'b mut self,
         message: &Message<'b>,
@@ -38,13 +38,13 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
 }
 
 // BMCA related functionality of the port
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
     pub(crate) fn calculate_best_local_announce_message(&mut self) {
         self.lifecycle.local_best = self.bmca.take_best_port_announce_message()
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
+impl<'a, A, C: Clock, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
     pub(crate) fn step_announce_age(&mut self, step: Duration) {
         self.bmca.step_age(step);
     }
