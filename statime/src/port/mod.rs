@@ -8,7 +8,7 @@ pub use actions::{
     ForwardedTLV, ForwardedTLVProvider, NoForwardedTLVs, PortAction, PortActionIterator,
     TimestampContext,
 };
-use atomic_refcell::{AtomicRef, AtomicRefCell};
+use atomic_refcell::AtomicRefCell;
 pub use measurement::Measurement;
 use rand::Rng;
 use state::PortState;
@@ -314,8 +314,7 @@ enum PeerDelayState {
 /// Type state of [`Port`] entered by [`Port::end_bmca`]
 #[derive(Debug)]
 pub struct Running<'a> {
-    state_refcell: &'a AtomicRefCell<PtpInstanceState>,
-    state: AtomicRef<'a, PtpInstanceState>,
+    state: &'a AtomicRefCell<PtpInstanceState>,
 }
 
 /// Type state of [`Port`] entered by [`Port::start_bmca`]
@@ -323,7 +322,7 @@ pub struct Running<'a> {
 pub struct InBmca<'a> {
     pending_action: PortActionIterator<'static>,
     local_best: Option<BestAnnounceMessage>,
-    state_refcell: &'a AtomicRefCell<PtpInstanceState>,
+    state: &'a AtomicRefCell<PtpInstanceState>,
 }
 
 impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
@@ -415,7 +414,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
             lifecycle: InBmca {
                 pending_action: actions![],
                 local_best: None,
-                state_refcell: self.lifecycle.state_refcell,
+                state: self.lifecycle.state,
             },
             announce_seq_ids: self.announce_seq_ids,
             sync_seq_ids: self.sync_seq_ids,
@@ -440,8 +439,9 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<Running<'a>,
                 return ControlFlow::Break(actions![]);
             }
         };
-        if message.header().sdo_id != self.lifecycle.state.default_ds.sdo_id
-            || message.header().domain_number != self.lifecycle.state.default_ds.domain_number
+        let state = self.lifecycle.state.borrow();
+        if message.header().sdo_id != state.default_ds.sdo_id
+            || message.header().domain_number != state.default_ds.domain_number
         {
             return ControlFlow::Break(actions![]);
         }
@@ -519,8 +519,7 @@ impl<'a, A, C, F: Filter, R> Port<InBmca<'a>, A, R, C, F> {
                 rng: self.rng,
                 packet_buffer: [0; MAX_DATA_LEN],
                 lifecycle: Running {
-                    state_refcell: self.lifecycle.state_refcell,
-                    state: self.lifecycle.state_refcell.borrow(),
+                    state: self.lifecycle.state,
                 },
                 announce_seq_ids: self.announce_seq_ids,
                 sync_seq_ids: self.sync_seq_ids,
@@ -613,7 +612,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<InBmca<'a>, A, R, C, F> {
             lifecycle: InBmca {
                 pending_action: actions![PortAction::ResetAnnounceReceiptTimer { duration }],
                 local_best: None,
-                state_refcell,
+                state: state_refcell,
             },
             announce_seq_ids: SequenceIdGenerator::new(),
             sync_seq_ids: SequenceIdGenerator::new(),

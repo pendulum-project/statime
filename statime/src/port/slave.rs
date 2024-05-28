@@ -462,7 +462,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
         let pdelay_id = self.pdelay_seq_ids.generate();
 
         let pdelay_req = Message::pdelay_req(
-            &self.lifecycle.state.default_ds,
+            &self.lifecycle.state.borrow().default_ds,
             self.port_identity,
             pdelay_id,
         );
@@ -511,7 +511,7 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<Running<'a>, A, R, C, F> {
 
                 let delay_id = self.delay_seq_ids.generate();
                 let delay_req = Message::delay_req(
-                    &self.lifecycle.state.default_ds,
+                    &self.lifecycle.state.borrow().default_ds,
                     self.port_identity,
                     delay_id,
                 );

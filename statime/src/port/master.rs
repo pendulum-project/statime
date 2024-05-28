@@ -15,16 +15,19 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
             log::trace!("sending sync message");
 
             let seq_id = self.sync_seq_ids.generate();
-            let packet_length =
-                match Message::sync(&self.lifecycle.state.default_ds, self.port_identity, seq_id)
-                    .serialize(&mut self.packet_buffer)
-                {
-                    Ok(message) => message,
-                    Err(error) => {
-                        log::error!("Statime bug: Could not serialize sync: {:?}", error);
-                        return actions![];
-                    }
-                };
+            let packet_length = match Message::sync(
+                &self.lifecycle.state.borrow().default_ds,
+                self.port_identity,
+                seq_id,
+            )
+            .serialize(&mut self.packet_buffer)
+            {
+                Ok(message) => message,
+                Err(error) => {
+                    log::error!("Statime bug: Could not serialize sync: {:?}", error);
+                    return actions![];
+                }
+            };
 
             actions![
                 PortAction::ResetSyncTimer {
@@ -46,7 +49,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
     pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             let packet_length = match Message::follow_up(
-                &self.lifecycle.state.default_ds,
+                &self.lifecycle.state.borrow().default_ds,
                 self.port_identity,
                 id,
                 timestamp,
@@ -83,7 +86,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
             let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
 
             let mut message = Message::announce(
-                &self.lifecycle.state,
+                &self.lifecycle.state.borrow(),
                 self.port_identity,
                 self.announce_seq_ids.generate(),
             );
@@ -91,7 +94,9 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
 
             while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
                 assert!(tlv.size() < tlv_margin);
-                if self.lifecycle.state.parent_ds.parent_port_identity != tlv.sender_identity {
+                if self.lifecycle.state.borrow().parent_ds.parent_port_identity
+                    != tlv.sender_identity
+                {
                     // Ignore, shouldn't be forwarded
                     continue;
                 }
@@ -168,7 +173,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
     ) -> PortActionIterator {
         log::debug!("Received PDelayReq");
         let pdelay_resp_message = Message::pdelay_resp(
-            &self.lifecycle.state.default_ds,
+            &self.lifecycle.state.borrow().default_ds,
             self.port_identity,
             header,
             timestamp,
@@ -201,7 +206,7 @@ impl<'a, A, C, F: Filter, R> Port<Running<'a>, A, R, C, F> {
         timestamp: Time,
     ) -> PortActionIterator {
         let pdelay_resp_follow_up_messgae = Message::pdelay_resp_follow_up(
-            &self.lifecycle.state.default_ds,
+            &self.lifecycle.state.borrow().default_ds,
             self.port_identity,
             requestor_identity,
             id,
