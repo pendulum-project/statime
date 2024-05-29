@@ -1,9 +1,9 @@
 use core::{
+    cell::RefCell,
     marker::PhantomData,
     sync::atomic::{AtomicI8, Ordering},
 };
 
-use atomic_refcell::AtomicRefCell;
 use rand::Rng;
 
 #[allow(unused_imports)]
@@ -83,14 +83,15 @@ use crate::{
 ///     system::sleep(instance.bmca_interval());
 /// }
 /// ```
-pub struct PtpInstance<F> {
-    state: AtomicRefCell<PtpInstanceState>,
+pub struct PtpInstance<F, S = RefCell<PtpInstanceState>> {
+    state: S,
     log_bmca_interval: AtomicI8,
     _filter: PhantomData<F>,
 }
 
+/// The inner state of a [`PtpInstance`]
 #[derive(Debug)]
-pub(crate) struct PtpInstanceState {
+pub struct PtpInstanceState {
     pub(crate) default_ds: InternalDefaultDS,
     pub(crate) current_ds: InternalCurrentDS,
     pub(crate) parent_ds: InternalParentDS,
@@ -98,9 +99,9 @@ pub(crate) struct PtpInstanceState {
 }
 
 impl PtpInstanceState {
-    fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng>(
+    fn bmca<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>(
         &mut self,
-        ports: &mut [&mut Port<'_, InBmca, A, R, C, F>],
+        ports: &mut [&mut Port<'_, InBmca, A, R, C, F, S>],
         bmca_interval: Duration,
     ) {
         debug_assert_eq!(self.default_ds.number_ports as usize, ports.len());
@@ -146,14 +147,14 @@ impl PtpInstanceState {
     }
 }
 
-impl<F> PtpInstance<F> {
+impl<F, S: PtpInstanceStateMutex> PtpInstance<F, S> {
     /// Construct a new [`PtpInstance`] with the given config and time
     /// properties
     pub fn new(config: InstanceConfig, time_properties_ds: TimePropertiesDS) -> Self {
         let default_ds = InternalDefaultDS::new(config);
 
         Self {
-            state: AtomicRefCell::new(PtpInstanceState {
+            state: S::new(PtpInstanceState {
                 default_ds,
                 current_ds: Default::default(),
                 parent_ds: InternalParentDS::new(default_ds),
@@ -166,26 +167,26 @@ impl<F> PtpInstance<F> {
 
     /// Return IEEE-1588 defaultDS for introspection
     pub fn default_ds(&self) -> DefaultDS {
-        (&self.state.borrow().default_ds).into()
+        self.state.with_ref(|s| (&s.default_ds).into())
     }
 
     /// Return IEEE-1588 currentDS for introspection
     pub fn current_ds(&self) -> CurrentDS {
-        (&self.state.borrow().current_ds).into()
+        self.state.with_ref(|s| (&s.current_ds).into())
     }
 
     /// Return IEEE-1588 parentDS for introspection
     pub fn parent_ds(&self) -> ParentDS {
-        (&self.state.borrow().parent_ds).into()
+        self.state.with_ref(|s| (&s.parent_ds).into())
     }
 
     /// Return IEEE-1588 timePropertiesDS for introspection
     pub fn time_properties_ds(&self) -> TimePropertiesDS {
-        self.state.borrow().time_properties_ds
+        self.state.with_ref(|s| s.time_properties_ds)
     }
 }
 
-impl<F: Filter> PtpInstance<F> {
+impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
     /// Add and initialize this port
     ///
     /// We start in the BMCA state because that is convenient
@@ -200,15 +201,16 @@ impl<F: Filter> PtpInstance<F> {
         filter_config: F::Config,
         clock: C,
         rng: R,
-    ) -> Port<'_, InBmca, A, R, C, F> {
+    ) -> Port<'_, InBmca, A, R, C, F, S> {
         self.log_bmca_interval
             .fetch_min(config.announce_interval.as_log_2(), Ordering::Relaxed);
-        let mut state = self.state.borrow_mut();
-        let port_identity = PortIdentity {
-            clock_identity: state.default_ds.clock_identity,
-            port_number: state.default_ds.number_ports,
-        };
-        state.default_ds.number_ports += 1;
+        let port_identity = self.state.with_mut(|state| {
+            state.default_ds.number_ports += 1;
+            PortIdentity {
+                clock_identity: state.default_ds.clock_identity,
+                port_number: state.default_ds.number_ports,
+            }
+        });
 
         Port::new(
             &self.state,
@@ -226,14 +228,16 @@ impl<F: Filter> PtpInstance<F> {
     /// the slice!
     pub fn bmca<A: AcceptableMasterList, C: Clock, R: Rng>(
         &self,
-        ports: &mut [&mut Port<'_, InBmca, A, R, C, F>],
+        ports: &mut [&mut Port<'_, InBmca, A, R, C, F, S>],
     ) {
-        self.state.borrow_mut().bmca(
-            ports,
-            Duration::from_seconds(
-                2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
-            ),
-        )
+        self.state.with_mut(|state| {
+            state.bmca(
+                ports,
+                Duration::from_seconds(
+                    2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
+                ),
+            );
+        });
     }
 
     /// Time to wait between calls to [`PtpInstance::bmca`]
@@ -241,5 +245,49 @@ impl<F: Filter> PtpInstance<F> {
         core::time::Duration::from_secs_f64(
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
+    }
+}
+
+/// A mutex over a [`PtpInstanceState`]
+///
+/// This provides an abstraction for locking state in various environments.
+/// Implementations are provided for [`core::cell::RefCell`] and [`std::sync::RwLock`].
+pub trait PtpInstanceStateMutex {
+    /// Creates a new instance of the mutex
+    fn new(state: PtpInstanceState) -> Self;
+
+    /// Takes a shared reference to the contained state and calls `f` with it
+    fn with_ref<R, F: FnOnce(&PtpInstanceState) -> R>(&self, f: F) -> R;
+
+    /// Takes a mutable reference to the contained state and calls `f` with it
+    fn with_mut<R, F: FnOnce(&mut PtpInstanceState) -> R>(&self, f: F) -> R;
+}
+
+impl PtpInstanceStateMutex for RefCell<PtpInstanceState> {
+    fn new(state: PtpInstanceState) -> Self {
+        RefCell::new(state)
+    }
+
+    fn with_ref<R, F: FnOnce(&PtpInstanceState) -> R>(&self, f: F) -> R {
+        f(&RefCell::borrow(self))
+    }
+
+    fn with_mut<R, F: FnOnce(&mut PtpInstanceState) -> R>(&self, f: F) -> R {
+        f(&mut RefCell::borrow_mut(self))
+    }
+}
+
+#[cfg(feature = "std")]
+impl PtpInstanceStateMutex for std::sync::RwLock<PtpInstanceState> {
+    fn new(state: PtpInstanceState) -> Self {
+        std::sync::RwLock::new(state)
+    }
+
+    fn with_ref<R, F: FnOnce(&PtpInstanceState) -> R>(&self, f: F) -> R {
+        f(&self.read().unwrap())
+    }
+
+    fn with_mut<R, F: FnOnce(&mut PtpInstanceState) -> R>(&self, f: F) -> R {
+        f(&mut self.write().unwrap())
     }
 }

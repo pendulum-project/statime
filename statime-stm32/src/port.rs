@@ -20,10 +20,19 @@ use statime::{
 use stm32_eth::dma::PacketId;
 use stm32f7xx_hal::rng::Rng;
 
-use crate::{ethernet::NetworkStack, ptp_clock::PtpClock};
+use crate::{
+    ethernet::NetworkStack, ptp_clock::PtpClock, ptp_state_mutex::PtpStateMutex, StmPtpInstance,
+};
 
-type StmPort<State> =
-    statime::port::Port<'static, State, AcceptAnyMaster, Rng, &'static PtpClock, BasicFilter>;
+type StmPort<State> = statime::port::Port<
+    'static,
+    State,
+    AcceptAnyMaster,
+    Rng,
+    &'static PtpClock,
+    BasicFilter,
+    PtpStateMutex,
+>;
 
 pub struct Port {
     timer_sender: Sender<'static, (TimerName, core::time::Duration), 4>,
@@ -266,7 +275,7 @@ pub fn setup_statime(
     ptp_peripheral: stm32_eth::ptp::EthernetPTP,
     mac_address: [u8; 6],
     rng: Rng,
-) -> (&'static PtpInstance<BasicFilter>, StmPort<InBmca>) {
+) -> (&'static StmPtpInstance, StmPort<InBmca>) {
     static PTP_CLOCK: StaticCell<PtpClock> = StaticCell::new();
     let ptp_clock = &*PTP_CLOCK.init(PtpClock::new(ptp_peripheral));
 
@@ -280,7 +289,7 @@ pub fn setup_statime(
     };
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
-    static PTP_INSTANCE: StaticCell<PtpInstance<BasicFilter>> = StaticCell::new();
+    static PTP_INSTANCE: StaticCell<StmPtpInstance> = StaticCell::new();
     let ptp_instance = &*PTP_INSTANCE.init(PtpInstance::new(instance_config, time_properties_ds));
 
     let port_config = PortConfig {

@@ -6,21 +6,20 @@ use crate::{
     },
     filters::Filter,
     port::{actions::TimestampContextInner, PortAction, TimestampContext},
+    ptp_instance::PtpInstanceStateMutex,
     time::Time,
 };
 
-impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
+impl<'a, A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'a, Running, A, R, C, F, S> {
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
 
             let seq_id = self.sync_seq_ids.generate();
-            let packet_length = match Message::sync(
-                &self.instance_state.borrow().default_ds,
-                self.port_identity,
-                seq_id,
-            )
-            .serialize(&mut self.packet_buffer)
+            let packet_length = match self
+                .instance_state
+                .with_ref(|state| Message::sync(&state.default_ds, self.port_identity, seq_id))
+                .serialize(&mut self.packet_buffer)
             {
                 Ok(message) => message,
                 Err(error) => {
@@ -48,13 +47,12 @@ impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
 
     pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
-            let packet_length = match Message::follow_up(
-                &self.instance_state.borrow().default_ds,
-                self.port_identity,
-                id,
-                timestamp,
-            )
-            .serialize(&mut self.packet_buffer)
+            let packet_length = match self
+                .instance_state
+                .with_ref(|state| {
+                    Message::follow_up(&state.default_ds, self.port_identity, id, timestamp)
+                })
+                .serialize(&mut self.packet_buffer)
             {
                 Ok(length) => length,
                 Err(error) => {
@@ -85,18 +83,17 @@ impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
             let mut tlv_buffer = [0; MAX_DATA_LEN];
             let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
 
-            let mut message = Message::announce(
-                &self.instance_state.borrow(),
-                self.port_identity,
-                self.announce_seq_ids.generate(),
-            );
+            let mut message = self.instance_state.with_ref(|state| {
+                Message::announce(state, self.port_identity, self.announce_seq_ids.generate())
+            });
             let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
 
             while let Some(tlv) = tlv_provider.next_if_smaller(tlv_margin) {
                 assert!(tlv.size() < tlv_margin);
-                if self.instance_state.borrow().parent_ds.parent_port_identity
-                    != tlv.sender_identity
-                {
+                let parent_port_identity = self
+                    .instance_state
+                    .with_ref(|s| s.parent_ds.parent_port_identity);
+                if parent_port_identity != tlv.sender_identity {
                     // Ignore, shouldn't be forwarded
                     continue;
                 }
@@ -172,12 +169,9 @@ impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
         timestamp: Time,
     ) -> PortActionIterator {
         log::debug!("Received PDelayReq");
-        let pdelay_resp_message = Message::pdelay_resp(
-            &self.instance_state.borrow().default_ds,
-            self.port_identity,
-            header,
-            timestamp,
-        );
+        let pdelay_resp_message = self.instance_state.with_ref(|state| {
+            Message::pdelay_resp(&state.default_ds, self.port_identity, header, timestamp)
+        });
 
         let packet_length = match pdelay_resp_message.serialize(&mut self.packet_buffer) {
             Ok(length) => length,
@@ -205,13 +199,15 @@ impl<'a, A, C, F: Filter, R> Port<'a, Running, A, R, C, F> {
         requestor_identity: PortIdentity,
         timestamp: Time,
     ) -> PortActionIterator {
-        let pdelay_resp_follow_up_messgae = Message::pdelay_resp_follow_up(
-            &self.instance_state.borrow().default_ds,
-            self.port_identity,
-            requestor_identity,
-            id,
-            timestamp,
-        );
+        let pdelay_resp_follow_up_messgae = self.instance_state.with_ref(|state| {
+            Message::pdelay_resp_follow_up(
+                &state.default_ds,
+                self.port_identity,
+                requestor_identity,
+                id,
+                timestamp,
+            )
+        });
 
         let packet_length = match pdelay_resp_follow_up_messgae.serialize(&mut self.packet_buffer) {
             Ok(length) => length,

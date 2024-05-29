@@ -24,7 +24,6 @@ fixed.workspace = true
 libm.workspace = true
 log = { workspace = true, default-features = false}
 rand = { workspace = true, default-features = false }
-atomic_refcell.workspace = true
 serde = { workspace = true, optional = true }
 
 [dev-dependencies]
