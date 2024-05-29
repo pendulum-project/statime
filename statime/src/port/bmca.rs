@@ -54,6 +54,17 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
             .bmca
             .register_announce_message(&message.header, &announce)
         {
+            // Doing the multiport-same network check after registering the announce message
+            // ensures that the message is acceptable wrt the acceptable master list.
+            // This ensures that an administrator can block this mechanism via the
+            // acceptable master list, making this less of an attack vector.
+            if self.port_identity.clock_identity
+                == message.header.source_port_identity.clock_identity
+                && self.port_identity.port_number > message.header.source_port_identity.port_number
+            {
+                self.multiport_disable = Some(Duration::ZERO);
+                self.set_forced_port_state(PortState::Passive);
+            }
             actions![PortAction::ResetAnnounceReceiptTimer {
                 duration: self.config.announce_duration(&mut self.rng),
             }]
@@ -75,6 +86,13 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
 
 impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, S> {
     pub(crate) fn step_announce_age(&mut self, step: Duration) {
+        if let Some(mut age) = self.multiport_disable.take() {
+            age += step;
+            if age < self.config.announce_interval.as_duration() {
+                self.multiport_disable = Some(age)
+            }
+        }
+
         self.bmca.step_age(step);
     }
 
@@ -209,6 +227,10 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBm
                             log::error!("{msg}");
                         }
                     }
+                } else if self.multiport_disable.is_some() {
+                    if !matches!(self.port_state, PortState::Passive) {
+                        self.set_forced_port_state(PortState::Passive);
+                    }
                 } else {
                     match self.port_state {
                         PortState::Listening | PortState::Slave(_) | PortState::Passive => {
@@ -239,10 +261,12 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBm
 mod tests {
     use super::*;
     use crate::{
-        datastructures::messages::{
-            AnnounceMessage, Header, Message, MessageBody, PtpVersion, MAX_DATA_LEN,
+        config::{ClockIdentity, InstanceConfig, SdoId},
+        datastructures::{
+            common::PortIdentity,
+            messages::{AnnounceMessage, Header, Message, MessageBody, PtpVersion, MAX_DATA_LEN},
         },
-        port::tests::{setup_test_port, setup_test_state},
+        port::tests::{setup_test_port, setup_test_port_custom_identity, setup_test_state},
         time::Time,
     };
 
@@ -282,6 +306,89 @@ mod tests {
             steps_removed: Default::default(),
             time_source: Default::default(),
         }
+    }
+
+    #[test]
+    fn test_multiport_disable() {
+        let state = setup_test_state();
+        let mut port = setup_test_port_custom_identity(
+            &state,
+            PortIdentity {
+                clock_identity: Default::default(),
+                port_number: 1,
+            },
+        );
+
+        port.set_forced_port_state(PortState::Master);
+
+        let mut announce = default_announce_message();
+        announce.header.source_port_identity.clock_identity = port.port_identity.clock_identity;
+        announce.header.source_port_identity.port_number = 2;
+        let announce_message = Message {
+            header: announce.header,
+            body: MessageBody::Announce(announce),
+            suffix: Default::default(),
+        };
+        let mut packet = [0; MAX_DATA_LEN];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+        let mut actions = port.handle_general_receive(packet);
+        let Some(PortAction::ResetAnnounceReceiptTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        assert!(actions.next().is_none());
+        drop(actions);
+
+        assert!(port.multiport_disable.is_none());
+        assert!(matches!(port.port_state, PortState::Master));
+
+        let mut announce = default_announce_message();
+        announce.header.source_port_identity.clock_identity = port.port_identity.clock_identity;
+        announce.header.source_port_identity.port_number = 0;
+        let announce_message = Message {
+            header: announce.header,
+            body: MessageBody::Announce(announce),
+            suffix: Default::default(),
+        };
+        let mut packet = [0; MAX_DATA_LEN];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+        let mut actions = port.handle_general_receive(packet);
+        let Some(PortAction::ResetAnnounceReceiptTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        assert!(actions.next().is_none());
+        drop(actions);
+
+        assert!(port.multiport_disable.is_some());
+        assert!(matches!(port.port_state, PortState::Passive));
+
+        let instanceconfig = InstanceConfig {
+            clock_identity: ClockIdentity::from_mac_address([1, 2, 3, 4, 5, 6]),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            sdo_id: SdoId::default(),
+            slave_only: false,
+        };
+        let mut port = port.start_bmca();
+        port.set_recommended_port_state(
+            &RecommendedState::M1(InternalDefaultDS::new(instanceconfig)),
+            &InternalDefaultDS::new(instanceconfig),
+        );
+
+        assert!(port.multiport_disable.is_some());
+        assert!(matches!(port.port_state, PortState::Passive));
+
+        port.step_announce_age(port.config.announce_interval.as_duration());
+        port.step_announce_age(port.config.announce_interval.as_duration());
+
+        assert!(port.multiport_disable.is_none());
+        port.set_recommended_port_state(
+            &RecommendedState::M1(InternalDefaultDS::new(instanceconfig)),
+            &InternalDefaultDS::new(instanceconfig),
+        );
+        assert!(matches!(port.port_state, PortState::Master));
     }
 
     #[test]

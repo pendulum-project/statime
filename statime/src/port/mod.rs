@@ -281,6 +281,11 @@ pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
     rng: R,
+    // Age of the last announce message that triggered
+    // multiport disable. Once this gets larger than the
+    // port announce interval, we can once again become
+    // master.
+    multiport_disable: Option<Duration>,
 
     announce_seq_ids: SequenceIdGenerator,
     sync_seq_ids: SequenceIdGenerator,
@@ -410,6 +415,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
             port_identity: self.port_identity,
             bmca: self.bmca,
             rng: self.rng,
+            multiport_disable: self.multiport_disable,
             packet_buffer: [0; MAX_DATA_LEN],
             lifecycle: InBmca {
                 pending_action: actions![],
@@ -523,6 +529,7 @@ impl<'a, A, C, F: Filter, R, S> Port<'a, InBmca, A, R, C, F, S> {
                 port_identity: self.port_identity,
                 bmca: self.bmca,
                 rng: self.rng,
+                multiport_disable: self.multiport_disable,
                 packet_buffer: [0; MAX_DATA_LEN],
                 lifecycle: Running,
                 announce_seq_ids: self.announce_seq_ids,
@@ -613,6 +620,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
             instance_state,
             bmca,
             rng,
+            multiport_disable: None,
             packet_buffer: [0; MAX_DATA_LEN],
             lifecycle: InBmca {
                 pending_action: actions![PortAction::ResetAnnounceReceiptTimer { duration }],
@@ -687,6 +695,33 @@ mod tests {
             0.25,
             TestClock,
             Default::default(),
+            rand::rngs::mock::StepRng::new(2, 1),
+        );
+
+        let (port, _) = port.end_bmca();
+        port
+    }
+
+    pub(super) fn setup_test_port_custom_identity(
+        state: &RefCell<PtpInstanceState>,
+        port_identity: PortIdentity,
+    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
+        let port = Port::<_, _, _, _, BasicFilter>::new(
+            &state,
+            PortConfig {
+                acceptable_master_list: AcceptAnyMaster,
+                delay_mechanism: DelayMechanism::E2E {
+                    interval: Interval::from_log_2(1),
+                },
+                announce_interval: Interval::from_log_2(1),
+                announce_receipt_timeout: 3,
+                sync_interval: Interval::from_log_2(0),
+                master_only: false,
+                delay_asymmetry: Duration::ZERO,
+            },
+            0.25,
+            TestClock,
+            port_identity,
             rand::rngs::mock::StepRng::new(2, 1),
         );
 
