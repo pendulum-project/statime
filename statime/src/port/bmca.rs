@@ -26,6 +26,30 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
         message: &Message<'b>,
         announce: crate::datastructures::messages::AnnounceMessage,
     ) -> PortActionIterator<'b> {
+        // IEEE 1588-2019 9.5.3: Update according to table 33 (decision code S1)
+        if matches!(self.port_state, PortState::Slave(_))
+            && announce.header.source_port_identity
+                == self
+                    .instance_state
+                    .with_ref(|s| s.parent_ds.parent_port_identity)
+        {
+            self.instance_state.with_mut(|state| {
+                let current_ds = &mut state.current_ds;
+                let parent_ds = &mut state.parent_ds;
+                let time_properties_ds = &mut state.time_properties_ds;
+
+                current_ds.steps_removed = announce.steps_removed + 1;
+
+                parent_ds.parent_port_identity = announce.header.source_port_identity;
+                parent_ds.grandmaster_identity = announce.grandmaster_identity;
+                parent_ds.grandmaster_clock_quality = announce.grandmaster_clock_quality;
+                parent_ds.grandmaster_priority_1 = announce.grandmaster_priority_1;
+                parent_ds.grandmaster_priority_2 = announce.grandmaster_priority_2;
+
+                *time_properties_ds = announce.time_properties();
+            });
+        }
+
         if self
             .bmca
             .register_announce_message(&message.header, &announce)
