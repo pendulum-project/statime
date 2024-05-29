@@ -51,12 +51,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_refcell"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41e67cd8309bbd06cd603a9e693a784ac2e5d1e955f11286e355089fcab3047c"
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -727,10 +721,9 @@ dependencies = [
 
 [[package]]
 name = "statime"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrayvec",
- "atomic_refcell",
  "az",
  "fixed",
  "libm",

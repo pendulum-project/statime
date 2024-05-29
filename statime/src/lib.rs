@@ -95,7 +95,7 @@ mod ptp_instance;
 pub mod time;
 
 pub use clock::Clock;
-pub use ptp_instance::PtpInstance;
+pub use ptp_instance::{PtpInstance, PtpInstanceState, PtpInstanceStateMutex};
 
 /// Helper types used for fuzzing
 ///

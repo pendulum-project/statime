@@ -13,11 +13,14 @@ use crate::{
         state::{PortState, SlaveState},
         PortAction,
     },
+    ptp_instance::PtpInstanceStateMutex,
     time::Duration,
     Clock,
 };
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>
+    Port<'a, Running, A, R, C, F, S>
+{
     pub(super) fn handle_announce<'b>(
         &'b mut self,
         message: &Message<'b>,
@@ -38,13 +41,15 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running,
 }
 
 // BMCA related functionality of the port
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>
+    Port<'a, InBmca, A, R, C, F, S>
+{
     pub(crate) fn calculate_best_local_announce_message(&mut self) {
         self.lifecycle.local_best = self.bmca.take_best_port_announce_message()
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
+impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, S> {
     pub(crate) fn step_announce_age(&mut self, step: Duration) {
         self.bmca.step_age(step);
     }

@@ -32,11 +32,15 @@ use crate::{
     ethernet::{generate_mac_address, recv_slice, UdpSocketResources},
     port::setup_statime,
     ptp_clock::stm_time_to_statime,
+    ptp_state_mutex::PtpStateMutex,
 };
 
 mod ethernet;
 mod port;
 mod ptp_clock;
+mod ptp_state_mutex;
+
+type StmPtpInstance = PtpInstance<BasicFilter, PtpStateMutex>;
 
 defmt::timestamp!("{=u64:iso8601ms}", {
     let time = stm32_eth::ptp::EthernetPTP::get_time();
@@ -235,7 +239,7 @@ mod app {
     #[task(shared = [net, ptp_port], priority = 1)]
     async fn instance_bmca(
         mut cx: instance_bmca::Context,
-        ptp_instance: &'static PtpInstance<BasicFilter>,
+        ptp_instance: &'static StmPtpInstance,
     ) {
         let net = &mut cx.shared.net;
         let ptp_port = &mut cx.shared.ptp_port;

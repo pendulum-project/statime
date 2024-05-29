@@ -12,11 +12,12 @@ use crate::{
     },
     filters::Filter,
     port::{actions::TimestampContextInner, state::SyncState, PortAction, TimestampContext},
+    ptp_instance::PtpInstanceStateMutex,
     time::{Duration, Interval, Time},
     Clock,
 };
 
-impl<'a, A, C: Clock, F: Filter, R> Port<'a, Running, A, R, C, F> {
+impl<'a, A, C: Clock, F: Filter, R, S> Port<'a, Running, A, R, C, F, S> {
     pub(super) fn handle_time_measurement<'b>(&mut self) -> PortActionIterator<'b> {
         if let Some(measurement) = self.extract_measurement() {
             // If the received message allowed the (slave) state to calculate its offset
@@ -447,7 +448,9 @@ impl<'a, A, C: Clock, F: Filter, R> Port<'a, Running, A, R, C, F> {
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
+impl<'a, A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>
+    Port<'a, Running, A, R, C, F, S>
+{
     pub(super) fn send_delay_request(&mut self) -> PortActionIterator {
         match self.config.delay_mechanism {
             DelayMechanism::E2E { interval } => self.send_e2e_delay_request(interval),
@@ -461,11 +464,9 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
     ) -> PortActionIterator {
         let pdelay_id = self.pdelay_seq_ids.generate();
 
-        let pdelay_req = Message::pdelay_req(
-            &self.instance_state.borrow().default_ds,
-            self.port_identity,
-            pdelay_id,
-        );
+        let pdelay_req = self.instance_state.with_ref(|state| {
+            Message::pdelay_req(&state.default_ds, self.port_identity, pdelay_id)
+        });
         let message_length = match pdelay_req.serialize(&mut self.packet_buffer) {
             Ok(length) => length,
             Err(error) => {
@@ -510,11 +511,9 @@ impl<'a, A, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
                 log::debug!("Starting new delay measurement");
 
                 let delay_id = self.delay_seq_ids.generate();
-                let delay_req = Message::delay_req(
-                    &self.instance_state.borrow().default_ds,
-                    self.port_identity,
-                    delay_id,
-                );
+                let delay_req = self.instance_state.with_ref(|state| {
+                    Message::delay_req(&state.default_ds, self.port_identity, delay_id)
+                });
 
                 let message_length = match delay_req.serialize(&mut self.packet_buffer) {
                     Ok(length) => length,

@@ -3,6 +3,7 @@ use std::{
     future::Future,
     path::PathBuf,
     pin::{pin, Pin},
+    sync::RwLock,
 };
 
 use clap::Parser;
@@ -14,7 +15,7 @@ use statime::{
         InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
-    PtpInstance,
+    PtpInstance, PtpInstanceState,
 };
 use statime_linux::{
     clock::LinuxClock,
@@ -364,7 +365,7 @@ async fn actual_main() {
 }
 
 async fn run(
-    instance: &'static PtpInstance<KalmanFilter>,
+    instance: &'static PtpInstance<KalmanFilter, RwLock<PtpInstanceState>>,
     bmca_notify_sender: tokio::sync::watch::Sender<bool>,
     instance_state_sender: tokio::sync::watch::Sender<ObservableInstanceState>,
     mut main_task_receivers: Vec<Receiver<BmcaPort>>,
@@ -435,7 +436,15 @@ async fn run(
     }
 }
 
-type BmcaPort = Port<'static, InBmca, Option<Vec<ClockIdentity>>, StdRng, LinuxClock, KalmanFilter>;
+type BmcaPort = Port<
+    'static,
+    InBmca,
+    Option<Vec<ClockIdentity>>,
+    StdRng,
+    LinuxClock,
+    KalmanFilter,
+    RwLock<PtpInstanceState>,
+>;
 
 // the Port task
 //

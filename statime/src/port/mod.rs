@@ -2,13 +2,12 @@
 //!
 //! See [`Port`] for a detailed description.
 
-use core::ops::ControlFlow;
+use core::{cell::RefCell, ops::ControlFlow};
 
 pub use actions::{
     ForwardedTLV, ForwardedTLVProvider, NoForwardedTLVs, PortAction, PortActionIterator,
     TimestampContext,
 };
-use atomic_refcell::AtomicRefCell;
 pub use measurement::Measurement;
 use rand::Rng;
 use state::PortState;
@@ -29,7 +28,7 @@ use crate::{
         messages::{Message, MessageBody},
     },
     filters::Filter,
-    ptp_instance::PtpInstanceState,
+    ptp_instance::{PtpInstanceState, PtpInstanceStateMutex},
     time::{Duration, Time},
 };
 
@@ -269,7 +268,7 @@ pub(crate) mod state;
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Port<'a, L, A, R, C, F: Filter> {
+pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
     config: PortConfig<()>,
     filter_config: F::Config,
     clock: C,
@@ -277,7 +276,7 @@ pub struct Port<'a, L, A, R, C, F: Filter> {
     pub(crate) port_identity: PortIdentity,
     // Corresponds with PortDS port_state and enabled
     port_state: PortState,
-    instance_state: &'a AtomicRefCell<PtpInstanceState>,
+    instance_state: &'a S,
     bmca: Bmca<A>,
     packet_buffer: [u8; MAX_DATA_LEN],
     lifecycle: L,
@@ -323,7 +322,9 @@ pub struct InBmca {
     local_best: Option<BestAnnounceMessage>,
 }
 
-impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running, A, R, C, F> {
+impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex>
+    Port<'a, Running, A, R, C, F, S>
+{
     /// Inform the port about a transmit timestamp being available
     ///
     /// `context` is the handle of the packet that was send from the
@@ -399,7 +400,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running,
 
     /// Set this [`Port`] into [`InBmca`] mode to use it with
     /// [`PtpInstance::bmca`].
-    pub fn start_bmca(self) -> Port<'a, InBmca, A, R, C, F> {
+    pub fn start_bmca(self) -> Port<'a, InBmca, A, R, C, F, S> {
         Port {
             port_state: self.port_state,
             instance_state: self.instance_state,
@@ -437,10 +438,11 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running,
                 return ControlFlow::Break(actions![]);
             }
         };
-        let state = self.instance_state.borrow();
-        if message.header().sdo_id != state.default_ds.sdo_id
-            || message.header().domain_number != state.default_ds.domain_number
-        {
+        let domain_matches = self.instance_state.with_ref(|state| {
+            message.header().sdo_id == state.default_ds.sdo_id
+                && message.header().domain_number == state.default_ds.domain_number
+        });
+        if !domain_matches {
             return ControlFlow::Break(actions![]);
         }
         ControlFlow::Continue(message)
@@ -502,10 +504,15 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng> Port<'a, Running,
     }
 }
 
-impl<'a, A, C, F: Filter, R> Port<'a, InBmca, A, R, C, F> {
+impl<'a, A, C, F: Filter, R, S> Port<'a, InBmca, A, R, C, F, S> {
     /// End a BMCA cycle and make the
     /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
-    pub fn end_bmca(self) -> (Port<'a, Running, A, R, C, F>, PortActionIterator<'static>) {
+    pub fn end_bmca(
+        self,
+    ) -> (
+        Port<'a, Running, A, R, C, F, S>,
+        PortActionIterator<'static>,
+    ) {
         (
             Port {
                 port_state: self.port_state,
@@ -531,7 +538,7 @@ impl<'a, A, C, F: Filter, R> Port<'a, InBmca, A, R, C, F> {
     }
 }
 
-impl<L, A, R, C: Clock, F: Filter> Port<'_, L, A, R, C, F> {
+impl<L, A, R, C: Clock, F: Filter, S> Port<'_, L, A, R, C, F, S> {
     fn set_forced_port_state(&mut self, mut state: PortState) {
         log::info!(
             "new state for port {}: {} -> {}",
@@ -550,7 +557,7 @@ impl<L, A, R, C: Clock, F: Filter> Port<'_, L, A, R, C, F> {
     }
 }
 
-impl<L, A, R, C, F: Filter> Port<'_, L, A, R, C, F> {
+impl<L, A, R, C, F: Filter, S> Port<'_, L, A, R, C, F, S> {
     /// Indicate whether this [`Port`] is steering its clock.
     pub fn is_steering(&self) -> bool {
         matches!(self.port_state, PortState::Slave(_))
@@ -570,10 +577,10 @@ impl<L, A, R, C, F: Filter> Port<'_, L, A, R, C, F> {
     }
 }
 
-impl<'a, A, C, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
+impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, R, C, F, S> {
     /// Create a new port from a port dataset on a given interface.
     pub(crate) fn new(
-        instance_state: &'a AtomicRefCell<PtpInstanceState>,
+        instance_state: &'a S,
         config: PortConfig<A>,
         filter_config: F::Config,
         clock: C,
@@ -624,7 +631,7 @@ impl<'a, A, C, F: Filter, R: Rng> Port<'a, InBmca, A, R, C, F> {
 
 #[cfg(test)]
 mod tests {
-    use atomic_refcell::AtomicRefCell;
+    use core::cell::RefCell;
 
     use super::*;
     use crate::{
@@ -662,10 +669,10 @@ mod tests {
     }
 
     pub(super) fn setup_test_port(
-        state: &AtomicRefCell<PtpInstanceState>,
+        state: &RefCell<PtpInstanceState>,
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
-            &state,
+            state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
@@ -688,11 +695,11 @@ mod tests {
     }
 
     pub(super) fn setup_test_port_custom_filter<F: Filter>(
-        state: &AtomicRefCell<PtpInstanceState>,
+        state: &RefCell<PtpInstanceState>,
         filter_config: F::Config,
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
         let port = Port::<_, _, _, _, F>::new(
-            &state,
+            state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
@@ -714,7 +721,7 @@ mod tests {
         port
     }
 
-    pub(super) fn setup_test_state() -> AtomicRefCell<PtpInstanceState> {
+    pub(super) fn setup_test_state() -> RefCell<PtpInstanceState> {
         let default_ds = InternalDefaultDS::new(InstanceConfig {
             clock_identity: Default::default(),
             priority_1: 255,
@@ -726,7 +733,7 @@ mod tests {
 
         let parent_ds = InternalParentDS::new(default_ds);
 
-        let state = AtomicRefCell::new(PtpInstanceState {
+        let state = RefCell::new(PtpInstanceState {
             default_ds,
             current_ds: Default::default(),
             parent_ds,
