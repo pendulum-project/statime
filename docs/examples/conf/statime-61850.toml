@@ -1,0 +1,17 @@
+# Sample configuration for the IEC/IEEE 61580 power utility profile.
+loglevel = "info" # Other values include trace, debug, warn and error
+
+sdo-id = 0
+domain = 0
+priority1 = 128
+priority2 = 128
+
+# Per network interface, include the lines below:
+# [[port]]
+# interface = "<interface name>"
+# network-mode = "ethernet"
+# delay-mechanism = "P2P"
+# delay-interval = 0
+# announce-interval = 0
+# sync-interval = 0
+# announce-receipt-timeout = 3
