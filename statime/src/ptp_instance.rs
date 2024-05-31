@@ -251,7 +251,8 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
 /// A mutex over a [`PtpInstanceState`]
 ///
 /// This provides an abstraction for locking state in various environments.
-/// Implementations are provided for [`core::cell::RefCell`] and [`std::sync::RwLock`].
+/// Implementations are provided for [`core::cell::RefCell`] and
+/// [`std::sync::RwLock`].
 pub trait PtpInstanceStateMutex {
     /// Creates a new instance of the mutex
     fn new(state: PtpInstanceState) -> Self;
