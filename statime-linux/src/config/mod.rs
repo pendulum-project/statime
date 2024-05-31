@@ -14,14 +14,13 @@ use statime::{
 };
 use timestamped_socket::interface::InterfaceName;
 
+use crate::tracing::LogLevel;
+
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
-    #[serde(
-        default = "default_loglevel",
-        deserialize_with = "deserialize_loglevel"
-    )]
-    pub loglevel: log::LevelFilter,
+    #[serde(default)]
+    pub loglevel: LogLevel,
     #[serde(default = "default_sdo_id")]
     pub sdo_id: u16,
     #[serde(default = "default_domain")]
@@ -275,7 +274,7 @@ mod tests {
 
     use timestamped_socket::interface::InterfaceName;
 
-    use crate::config::ObservabilityConfig;
+    use crate::{config::ObservabilityConfig, tracing::LogLevel};
 
     // Minimal amount of config results in default values
     #[test]
@@ -300,7 +299,7 @@ interface = "enp0s31f6"
         };
 
         let expected = crate::config::Config {
-            loglevel: log::LevelFilter::Info,
+            loglevel: LogLevel::Info,
             sdo_id: 0x000,
             domain: 0,
             identity: None,

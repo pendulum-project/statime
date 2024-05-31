@@ -8,7 +8,7 @@ use tokio::{
 };
 
 use super::format::format_response;
-use crate::{config::Config, observer::ObservableInstanceState};
+use crate::{initialize_logging_parse_config, observer::ObservableInstanceState};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObservableState {
@@ -58,15 +58,8 @@ pub(crate) struct Args {
 
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = Args::parse();
-    let config = match Config::from_file(options.config.as_path()) {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(1);
-        }
-    };
 
-    crate::setup_logger(config.loglevel)?;
+    let config = initialize_logging_parse_config(&options.config);
 
     let observation_socket_path = match config.observability.observation_path {
         Some(path) => path,

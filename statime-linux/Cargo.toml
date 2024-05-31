@@ -24,7 +24,9 @@ statime.workspace = true
 
 arrayvec.workspace = true
 clap.workspace = true
-fern.workspace = true
+tracing.workspace = true
+tracing-log.workspace = true
+tracing-subscriber.workspace = true
 hex.workspace = true
 libc.workspace = true
 log = { workspace = true, default-features = true }

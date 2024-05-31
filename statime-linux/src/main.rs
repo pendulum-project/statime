@@ -19,7 +19,7 @@ use statime::{
 };
 use statime_linux::{
     clock::LinuxClock,
-    config::Config,
+    initialize_logging_parse_config,
     observer::ObservableInstanceState,
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
@@ -191,14 +191,11 @@ async fn main() {
 async fn actual_main() {
     let args = Args::parse();
 
-    let config = Config::from_file(
+    let config = initialize_logging_parse_config(
         &args
             .config_file
             .expect("could not determine config file path"),
-    )
-    .unwrap_or_else(|e| panic!("error loading config: {e}"));
-
-    statime_linux::setup_logger(config.loglevel).expect("could not setup logging");
+    );
 
     let clock_identity = config.identity.unwrap_or(ClockIdentity(
         get_clock_id().expect("could not get clock identity"),
