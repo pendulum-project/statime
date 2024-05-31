@@ -163,5 +163,5 @@ We model the following assets:
 
 - Nodes with their clock identity not on the AML are not taken into account for the BMCA
 - Time transmission messages are only accepted from the currently selected master
-- Configuration files should not be world-writable (to implement)
+- Configuration files should not be world-writable
 - A port marked master-only will never enter the slave state
