@@ -3,7 +3,6 @@ use std::{
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use log::warn;
@@ -61,16 +60,6 @@ pub struct PortConfig {
     pub delay_mechanism: DelayType,
     #[serde(default = "default_delay_interval")]
     pub delay_interval: i8,
-}
-
-fn deserialize_loglevel<'de, D>(deserializer: D) -> Result<log::LevelFilter, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
-    let raw: String = Deserialize::deserialize(deserializer)?;
-    log::LevelFilter::from_str(&raw)
-        .map_err(|e| D::Error::custom(format!("Invalid loglevel: {}", e)))
 }
 
 fn deserialize_acceptable_master_list<'de, D>(
@@ -189,10 +178,6 @@ impl std::fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-fn default_loglevel() -> log::LevelFilter {
-    log::LevelFilter::Info
-}
-
 fn default_domain() -> u8 {
     0
 }
@@ -232,11 +217,6 @@ fn default_delay_interval() -> i8 {
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ObservabilityConfig {
-    #[serde(
-        default = "default_loglevel",
-        deserialize_with = "deserialize_loglevel"
-    )]
-    pub loglevel: log::LevelFilter,
     #[serde(default)]
     pub observation_path: Option<PathBuf>,
     #[serde(default = "default_observation_permissions")]
@@ -248,16 +228,11 @@ pub struct ObservabilityConfig {
 impl Default for ObservabilityConfig {
     fn default() -> Self {
         Self {
-            loglevel: default_observability_loglevel(),
             observation_path: Default::default(),
             observation_permissions: default_observation_permissions(),
             metrics_exporter_listen: default_metrics_exporter_listen(),
         }
     }
-}
-
-const fn default_observability_loglevel() -> log::LevelFilter {
-    log::LevelFilter::Info
 }
 
 const fn default_observation_permissions() -> u32 {
