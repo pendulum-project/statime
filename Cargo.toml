@@ -9,7 +9,7 @@ exclude = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/pendulum-project/statime"
@@ -53,7 +53,7 @@ timestamped-socket = "0.2.1"
 
 # our own crates used as dependencies, same version as the workspace version
 # NOTE: keep this part at the bottom of the file, do not change this line
-statime = { version = "0.2.0", path = "./statime" }
+statime = { version = "0.2.1", path = "./statime" }
 
 [profile.release]
 debug = 2
