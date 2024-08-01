@@ -6,7 +6,7 @@ use clock_steering::{unix::UnixClock, TimeOffset};
 use statime::{
     config::{LeapIndicator, TimePropertiesDS},
     time::{Duration, Time},
-    Clock,
+    Clock, OverlayClock, SharedClock,
 };
 
 #[derive(Debug, Clone)]
@@ -171,4 +171,32 @@ impl Clock for LinuxClock {
 
 pub fn libc_timespec_into_instant(spec: libc::timespec) -> Time {
     Time::from_fixed_nanos(spec.tv_sec as i128 * 1_000_000_000i128 + spec.tv_nsec as i128)
+}
+
+
+pub trait PortTimestampToTime {
+    fn port_timestamp_to_time(&self, ts: timestamped_socket::socket::Timestamp) -> Time;
+}
+
+impl PortTimestampToTime for LinuxClock {
+    fn port_timestamp_to_time(&self, mut ts: timestamped_socket::socket::Timestamp) -> Time {
+        // get_tai gives zero if this is a hardware clock, and the needed
+        // correction when this port uses software timestamping
+        ts.seconds += self.get_tai_offset().expect("Unable to get tai offset") as libc::time_t;
+        Time::from_fixed_nanos(ts.seconds as i128 * 1_000_000_000i128 + ts.nanos as i128)
+    }
+}
+
+impl PortTimestampToTime for OverlayClock<LinuxClock> {
+    fn port_timestamp_to_time(&self, ts: timestamped_socket::socket::Timestamp) -> Time {
+        let roclock_time = self.underlying().port_timestamp_to_time(ts);
+        //log::debug!("port_timestamp_to_time for OverlayClock called");
+        self.time_from_underlying(roclock_time)
+    }
+}
+
+impl PortTimestampToTime for SharedClock<OverlayClock<LinuxClock>> {
+    fn port_timestamp_to_time(&self, ts: timestamped_socket::socket::Timestamp) -> Time {
+        self.0.lock().unwrap().port_timestamp_to_time(ts)
+    }
 }

@@ -36,6 +36,8 @@ pub struct Config {
     pub ports: Vec<PortConfig>,
     #[serde(default)]
     pub observability: ObservabilityConfig,
+    #[serde(default)]
+    pub virtual_system_clock: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -285,6 +287,7 @@ interface = "enp0s31f6"
             path_trace: false,
             ports: vec![expected_port],
             observability: ObservabilityConfig::default(),
+            virtual_system_clock: false,
         };
 
         let actual = toml::from_str(MINIMAL_CONFIG).unwrap();
