@@ -93,13 +93,11 @@ impl<A> Bmca<A> {
     /// - `own_data`: Called 'D0' by the PTP spec. The DefaultDS data of our own
     ///   ptp instance.
     /// - `best_global_announce_message`: Called 'Ebest' by the PTP spec. This
-    ///   is the best announce message and the
-    /// identity of the port that received it of all of the best port announce
-    /// messages.
+    ///   is the best announce message and the identity of the port that
+    ///   received it of all of the best port announce messages.
     /// - `best_port_announce_message`: Called 'Erbest' by the PTP spec. This is
-    ///   the best announce message and the
-    /// identity of the port that received it of the port we are calculating the
-    /// recommended state for.
+    ///   the best announce message and the identity of the port that received
+    ///   it of the port we are calculating the recommended state for.
     /// - `port_state`: The current state of the port we are doing the
     ///   calculation for.
     ///
