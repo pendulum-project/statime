@@ -30,9 +30,6 @@ impl core::fmt::Display for WireFormatError {
 #[cfg(feature = "std")]
 impl std::error::Error for WireFormatError {}
 
-#[cfg(feature = "error_in_core")]
-impl core::error::Error for WireFormatError {}
-
 impl From<arrayvec::CapacityError> for WireFormatError {
     fn from(_: arrayvec::CapacityError) -> Self {
         WireFormatError::CapacityError
