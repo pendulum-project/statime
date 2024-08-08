@@ -2,7 +2,7 @@ use std::{fs::Permissions, os::unix::prelude::PermissionsExt, path::Path, time::
 
 use statime::{
     config::TimePropertiesDS,
-    observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS},
+    observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS, PathTraceDS},
 };
 use tokio::{io::AsyncWriteExt, net::UnixStream, task::JoinHandle};
 
@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Observable version of the InstanceState struct
-#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ObservableInstanceState {
     /// A concrete implementation of the PTP Default dataset (IEEE1588-2019
     /// section 8.2.1)
@@ -26,6 +26,9 @@ pub struct ObservableInstanceState {
     /// A concrete implementation of the PTP Time Properties dataset
     /// (IEEE1588-2019 section 8.2.4)
     pub time_properties_ds: TimePropertiesDS,
+    /// A concrete implementation of the PTP Path Trace dataset (IEEE1588-2019
+    /// section 16.2.2)
+    pub path_trace_ds: PathTraceDS,
 }
 
 pub async fn spawn(

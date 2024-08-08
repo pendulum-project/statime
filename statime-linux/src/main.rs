@@ -210,6 +210,7 @@ async fn actual_main() {
         domain_number: config.domain,
         slave_only: false,
         sdo_id: SdoId::try_from(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
+        path_trace: config.path_trace,
     };
 
     let time_properties_ds =
@@ -229,6 +230,7 @@ async fn actual_main() {
             current_ds: instance.current_ds(),
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
+            path_trace_ds: instance.path_trace_ds(),
         });
     statime_linux::observer::spawn(&config, instance_state_receiver).await;
 
@@ -412,6 +414,7 @@ async fn run(
             current_ds: instance.current_ds(),
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
+            path_trace_ds: instance.path_trace_ds(),
         });
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];

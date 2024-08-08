@@ -302,6 +302,48 @@ pub fn format_time_properties_ds(
     Ok(())
 }
 
+fn format_path_trace_ds(
+    w: &mut impl Write,
+    path_trace_ds: &statime::observability::PathTraceDS,
+    labels: Vec<(&'static str, String)>,
+) -> std::fmt::Result {
+    format_metric(
+        w,
+        "path_trace_enable",
+        "true if path trace options is enabled",
+        MetricType::Gauge,
+        None,
+        vec![Measurement {
+            labels: labels.clone(),
+            value: path_trace_ds.enable,
+        }],
+    )?;
+
+    let measurements = path_trace_ds
+        .list
+        .iter()
+        .enumerate()
+        .map(|(steps_removed, clock_identity)| {
+            let mut labels = labels.clone();
+            labels.push(("steps_removed", steps_removed.to_string()));
+            Measurement {
+                labels,
+                value: clock_identity.to_string(),
+            }
+        })
+        .collect();
+    format_metric(
+        w,
+        "path_trace_list",
+        "list of clocks from grandmaster to local clock",
+        MetricType::Gauge,
+        None,
+        measurements,
+    )?;
+
+    Ok(())
+}
+
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
     format_metric(
         w,
@@ -328,6 +370,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
     format_current_ds(w, &state.instance.current_ds, labels.clone())?;
     format_parent_ds(w, &state.instance.parent_ds, labels.clone())?;
     format_time_properties_ds(w, &state.instance.time_properties_ds, labels.clone())?;
+    format_path_trace_ds(w, &state.instance.path_trace_ds, labels.clone())?;
 
     w.write_str("# EOF\n")?;
     Ok(())

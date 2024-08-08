@@ -495,6 +495,7 @@ mod tests {
         let domain_number = 0;
         let slave_only = false;
         let sdo_id = Default::default();
+        let path_trace = false;
 
         InternalDefaultDS::new(InstanceConfig {
             clock_identity,
@@ -503,6 +504,7 @@ mod tests {
             domain_number,
             slave_only,
             sdo_id,
+            path_trace,
         })
     }
 
@@ -536,6 +538,7 @@ mod tests {
         let domain_number = 0;
         let slave_only = false;
         let sdo_id = Default::default();
+        let path_trace = false;
 
         let mut own_data = InternalDefaultDS::new(InstanceConfig {
             clock_identity,
@@ -544,6 +547,7 @@ mod tests {
             domain_number,
             slave_only,
             sdo_id,
+            path_trace,
         });
 
         own_data.clock_quality.clock_class = 1;
