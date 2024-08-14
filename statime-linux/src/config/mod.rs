@@ -38,6 +38,10 @@ pub struct Config {
     pub observability: ObservabilityConfig,
     #[serde(default)]
     pub virtual_system_clock: bool,
+    #[serde(default)]
+    pub usrvclock_export: bool,
+    #[serde(default = "default_usrvclock_path")]
+    pub usrvclock_path: PathBuf,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -210,6 +214,10 @@ fn default_priority2() -> u8 {
     128
 }
 
+fn default_usrvclock_path() -> PathBuf {
+    usrvclock::DEFAULT_SERVER_SOCKET_PATH.into()
+}
+
 fn default_delay_asymmetry() -> i64 {
     0
 }
@@ -288,6 +296,8 @@ interface = "enp0s31f6"
             ports: vec![expected_port],
             observability: ObservabilityConfig::default(),
             virtual_system_clock: false,
+            usrvclock_export: false,
+            usrvclock_path: usrvclock::DEFAULT_SERVER_SOCKET_PATH.into(),
         };
 
         let actual = toml::from_str(MINIMAL_CONFIG).unwrap();

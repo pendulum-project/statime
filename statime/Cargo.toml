@@ -19,7 +19,7 @@ serde = ["dep:serde", "arrayvec/serde"]
 
 [dependencies]
 arrayvec.workspace = true
-auto_impl = "1.2.0"
+auto_impl.workspace = true
 az.workspace = true
 fixed.workspace = true
 libm.workspace = true

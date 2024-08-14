@@ -23,6 +23,7 @@ path = "bin/statime-metrics-exporter.rs"
 statime.workspace = true
 
 arrayvec.workspace = true
+fixed.workspace = true
 clap.workspace = true
 tracing.workspace = true
 tracing-log.workspace = true
@@ -36,6 +37,8 @@ tokio = { workspace = true, features = ["net", "rt-multi-thread", "time", "macro
 rand = { workspace = true, default-features = false, features = ["std", "std_rng"] }
 serde.workspace = true
 serde_json.workspace = true
+
+usrvclock = { git = "https://gitlab.com/lumifaza/usrvclock-rs", version = "0.1.0" }
 
 clock-steering.workspace = true
 timestamped-socket.workspace = true
