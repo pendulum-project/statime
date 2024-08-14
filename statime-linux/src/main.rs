@@ -16,7 +16,7 @@ use statime::{
         TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
-    PtpInstance, Clock, OverlayClock, SharedClock, PtpInstanceState,
+    PtpInstance, Clock, overlay_clock::{OverlayClock, CallbackExporter}, SharedClock, PtpInstanceState,
 };
 use statime_linux::{
     clock::{LinuxClock, PortTimestampToTime},
@@ -41,11 +41,11 @@ use tokio::{
 trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime {}
 impl PortClock for LinuxClock {
 }
-impl PortClock for SharedClock<OverlayClock<LinuxClock>> {
+impl PortClock for SharedClock<OverlayClock<LinuxClock, CallbackExporter>> {
 }
 type BoxedClock = Box<dyn PortClock + Send + Sync>;
 //type SharedBoxedClock = SharedClock<BoxedClock>;
-type SharedOverlayClock = SharedClock<OverlayClock<LinuxClock>>;
+type SharedOverlayClock = SharedClock<OverlayClock<LinuxClock, CallbackExporter>>;
 
 
 #[derive(Parser, Debug)]
@@ -261,7 +261,25 @@ async fn actual_main() {
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 
     let system_clock = if config.virtual_system_clock {
-        SystemClock::Overlay(SharedClock::new(OverlayClock::new(LinuxClock::CLOCK_TAI)))
+        let exporter = if config.usrvclock_export {
+            let mut server = usrvclock::Server::new(config.usrvclock_path.clone()).expect("failed to create usrvclock server");
+            CallbackExporter::from(move |overlay: &statime::overlay_clock::ClockOverlay| {
+                use fixed::traits::LossyInto;
+                let last_sync: i128 = overlay.last_sync.nanos().lossy_into();
+                let shift: i128 = overlay.shift.nanos().lossy_into();
+                let to_share = usrvclock::ClockOverlay {
+                    clock_id: libc::CLOCK_TAI as i64,
+                    last_sync: last_sync as i64,
+                    shift: shift as i64,
+                    freq_scale: overlay.freq_scale
+                };
+                server.send(to_share)
+            })
+        } else {
+            CallbackExporter::from(|_: &statime::overlay_clock::ClockOverlay| {})
+        };
+        let overlay_clock = OverlayClock::new(LinuxClock::CLOCK_TAI, exporter);
+        SystemClock::Overlay(SharedClock::new(overlay_clock))
     } else {
         SystemClock::Linux(LinuxClock::CLOCK_TAI)
     };
