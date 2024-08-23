@@ -253,10 +253,11 @@ async fn actual_main() {
         let network_mode = port_config.network_mode;
         let (port_clock, timestamping) = match port_config.hardware_clock {
             Some(idx) => {
-                let clock = LinuxClock::open_idx(idx).expect("Unable to open clock");
+                let mut clock = LinuxClock::open_idx(idx).expect("Unable to open clock");
                 if let Some(id) = clock_name_map.get(&idx) {
                     clock_port_map.push(Some(*id));
                 } else {
+                    clock.init().expect("Unable to initialize clock");
                     let id = internal_sync_senders.len();
                     clock_port_map.push(Some(id));
                     clock_name_map.insert(idx, id);

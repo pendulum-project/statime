@@ -30,6 +30,22 @@ impl LinuxClock {
         })
     }
 
+    // This forces the clock to start with seconds such that the current time in
+    // nanoseconds is representable as a u64.
+    pub fn init(&mut self) -> Result<(), clock_steering::unix::Error> {
+        use clock_steering::Clock;
+
+        let ts = self.clock.now()?;
+        if ts.seconds < 0 || ts.seconds > (u64::MAX / 1000000000) as i64 {
+            self.clock.step_clock(TimeOffset {
+                seconds: -ts.seconds + 1,
+                nanos: 0,
+            })?;
+        }
+
+        Ok(())
+    }
+
     pub fn open_idx(idx: u32) -> std::io::Result<Self> {
         let path = format!("/dev/ptp{}", idx);
         Self::open(path)
