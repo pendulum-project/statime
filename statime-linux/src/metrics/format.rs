@@ -319,19 +319,27 @@ fn format_path_trace_ds(
         }],
     )?;
 
-    let measurements = path_trace_ds
+    let mut measurements: Vec<_> = path_trace_ds
         .list
         .iter()
         .enumerate()
         .map(|(steps_removed, clock_identity)| {
             let mut labels = labels.clone();
-            labels.push(("steps_removed", steps_removed.to_string()));
+            labels.push(("node", clock_identity.to_string()));
             Measurement {
                 labels,
-                value: clock_identity.to_string(),
+                value: steps_removed,
             }
         })
         .collect();
+
+    let mut last_labels = labels.clone();
+    last_labels.push(("node", "self".into()));
+    measurements.push(Measurement {
+        labels: last_labels,
+        value: path_trace_ds.list.len(),
+    });
+
     format_metric(
         w,
         "path_trace_list",
