@@ -1,5 +1,4 @@
-use crate::{time::Time, time::Duration, Clock};
-
+use crate::{time::Duration, time::Time, Clock};
 
 /// An overlay over other, read-only clock, frequency-locked to it.
 /// In other words, a virtual clock which can be tuned in software without affecting
@@ -9,7 +8,7 @@ pub struct OverlayClock<C: Clock> {
     roclock: C,
     last_sync: Time,
     shift: Duration,
-    freq_scale_ppm_diff: f64
+    freq_scale_ppm_diff: f64,
 }
 
 impl<C: Clock> OverlayClock<C> {
@@ -60,7 +59,10 @@ impl<C: Clock> Clock for OverlayClock<C> {
         self.shift += offset;
         Ok(self.time_from_underlying(self.last_sync))
     }
-    fn set_properties(&mut self, _time_properties_ds: &crate::config::TimePropertiesDS) -> Result<(), Self::Error> {
+    fn set_properties(
+        &mut self,
+        _time_properties_ds: &crate::config::TimePropertiesDS,
+    ) -> Result<(), Self::Error> {
         // we can ignore the properies - they are just metadata
         Ok(())
     }

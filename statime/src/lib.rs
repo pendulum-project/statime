@@ -85,21 +85,21 @@ extern crate std;
 
 mod bmc;
 mod clock;
-mod overlay_clock;
-#[cfg(feature = "std")]
-mod shared_clock;
 pub mod config;
 pub(crate) mod datastructures;
 pub mod filters;
 mod float_polyfill;
 pub mod observability;
+mod overlay_clock;
 pub mod port;
 mod ptp_instance;
+#[cfg(feature = "std")]
+mod shared_clock;
 pub mod time;
 
 pub use clock::Clock;
-pub use ptp_instance::{PtpInstance, PtpInstanceState, PtpInstanceStateMutex};
 pub use overlay_clock::OverlayClock;
+pub use ptp_instance::{PtpInstance, PtpInstanceState, PtpInstanceStateMutex};
 #[cfg(feature = "std")]
 pub use shared_clock::SharedClock;
 

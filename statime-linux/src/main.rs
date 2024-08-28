@@ -16,7 +16,7 @@ use statime::{
         TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
-    PtpInstance, Clock, OverlayClock, SharedClock, PtpInstanceState,
+    Clock, OverlayClock, PtpInstance, PtpInstanceState, SharedClock,
 };
 use statime_linux::{
     clock::{LinuxClock, PortTimestampToTime},
@@ -39,14 +39,11 @@ use tokio::{
 };
 
 trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime {}
-impl PortClock for LinuxClock {
-}
-impl PortClock for SharedClock<OverlayClock<LinuxClock>> {
-}
+impl PortClock for LinuxClock {}
+impl PortClock for SharedClock<OverlayClock<LinuxClock>> {}
 type BoxedClock = Box<dyn PortClock + Send + Sync>;
 //type SharedBoxedClock = SharedClock<BoxedClock>;
 type SharedOverlayClock = SharedClock<OverlayClock<LinuxClock>>;
-
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -106,13 +103,13 @@ impl Future for Timer {
 #[derive(Debug, Clone)]
 enum SystemClock {
     Linux(LinuxClock),
-    Overlay(SharedOverlayClock)
+    Overlay(SharedOverlayClock),
 }
 impl SystemClock {
     fn clone_boxed(&self) -> BoxedClock {
         match self {
             Self::Linux(clock) => Box::new(clock.clone()),
-            Self::Overlay(clock) => Box::new(clock.clone())
+            Self::Overlay(clock) => Box::new(clock.clone()),
         }
     }
 }
@@ -124,15 +121,23 @@ enum ClockSyncMode {
     ToSystem,
 }
 
-fn start_clock_task(clock: LinuxClock, system_clock: SystemClock) -> tokio::sync::watch::Sender<ClockSyncMode> {
+fn start_clock_task(
+    clock: LinuxClock,
+    system_clock: SystemClock,
+) -> tokio::sync::watch::Sender<ClockSyncMode> {
     let (mode_sender, mode_receiver) = tokio::sync::watch::channel(ClockSyncMode::FromSystem);
 
     match system_clock {
         SystemClock::Linux(system_clock) => {
             tokio::spawn(clock_task(clock, system_clock, None, mode_receiver));
-        },
+        }
         SystemClock::Overlay(overlay_clock) => {
-            tokio::spawn(clock_task(clock, overlay_clock.clone(), Some(overlay_clock), mode_receiver));
+            tokio::spawn(clock_task(
+                clock,
+                overlay_clock.clone(),
+                Some(overlay_clock),
+                mode_receiver,
+            ));
         }
     }
 
@@ -311,12 +316,13 @@ async fn actual_main() {
                     let id = internal_sync_senders.len();
                     clock_port_map.push(Some(id));
                     clock_name_map.insert(idx, id);
-                    internal_sync_senders.push(start_clock_task(clock.clone(), system_clock.clone()));
+                    internal_sync_senders
+                        .push(start_clock_task(clock.clone(), system_clock.clone()));
                 }
                 (
                     Box::new(clock.clone()) as BoxedClock,
                     Box::new(clock) as BoxedClock,
-                    InterfaceTimestampMode::HardwarePTPAll
+                    InterfaceTimestampMode::HardwarePTPAll,
                 )
             }
             None => {
@@ -324,7 +330,7 @@ async fn actual_main() {
                 (
                     system_clock.clone_boxed(),
                     system_clock.clone_boxed(),
-                    InterfaceTimestampMode::SoftwareAll
+                    InterfaceTimestampMode::SoftwareAll,
                 )
             }
         };
