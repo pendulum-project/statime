@@ -1,13 +1,15 @@
-use std::sync::Mutex;
-use std::sync::Arc;
 use crate::time::Duration;
 use crate::time::Time;
 use crate::Clock;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 /// A wrapper for stateful `statime::Clock` implementations to make them behave
 /// like e.g. `statime_linux::LinuxClock` - clones share state with each other
 #[derive(Debug)]
-pub struct SharedClock<C>(pub Arc<Mutex<C>>) where C: Clock;
+pub struct SharedClock<C>(pub Arc<Mutex<C>>)
+where
+    C: Clock;
 
 impl<C: Clock> SharedClock<C> {
     /// Take given clock and make it a `SharedClock`
@@ -34,7 +36,10 @@ impl<C: Clock> Clock for SharedClock<C> {
     fn step_clock(&mut self, offset: Duration) -> Result<Time, Self::Error> {
         self.0.lock().unwrap().step_clock(offset)
     }
-    fn set_properties(&mut self, time_properties_ds: &crate::config::TimePropertiesDS) -> Result<(), Self::Error> {
+    fn set_properties(
+        &mut self,
+        time_properties_ds: &crate::config::TimePropertiesDS,
+    ) -> Result<(), Self::Error> {
         self.0.lock().unwrap().set_properties(time_properties_ds)
     }
 }

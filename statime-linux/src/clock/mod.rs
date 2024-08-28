@@ -173,7 +173,6 @@ pub fn libc_timespec_into_instant(spec: libc::timespec) -> Time {
     Time::from_fixed_nanos(spec.tv_sec as i128 * 1_000_000_000i128 + spec.tv_nsec as i128)
 }
 
-
 pub trait PortTimestampToTime {
     fn port_timestamp_to_time(&self, ts: timestamped_socket::socket::Timestamp) -> Time;
 }
