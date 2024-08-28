@@ -1,6 +1,5 @@
 //! Definitions and implementations of the abstract clock types
 
-use auto_impl::auto_impl;
 use crate::{
     datastructures::datasets::TimePropertiesDS,
     time::{Duration, Time},
@@ -17,7 +16,6 @@ use crate::{
 /// Note that the clock implementation is responsible for handling leap seconds.
 /// On most operating systems, this will be provided for by the OS, but on some
 /// platforms this may require extra logic.
-#[auto_impl(Box)]
 pub trait Clock {
     /// Type of the error the methods of this [`Clock`] may return
     type Error: core::fmt::Debug;
@@ -50,11 +48,9 @@ pub trait Clock {
     fn set_properties(&mut self, time_properties_ds: &TimePropertiesDS) -> Result<(), Self::Error>;
 }
 
-/* #[cfg(feature = "std")]
-use std::boxed::Box;
 #[cfg(feature = "std")]
-impl<E: core::fmt::Debug> Clock for Box<dyn Clock<Error=E> + Send + Sync + '_> {
-    type Error = E;
+impl<T: Clock + ?Sized> Clock for std::boxed::Box<T> {
+    type Error = T::Error;
     fn now(&self) -> Time {
         self.as_ref().now()
     }
@@ -67,4 +63,4 @@ impl<E: core::fmt::Debug> Clock for Box<dyn Clock<Error=E> + Send + Sync + '_> {
     fn set_properties(&mut self, time_properties_ds: &TimePropertiesDS) -> Result<(), Self::Error> {
         self.as_mut().set_properties(time_properties_ds)
     }
-} */
+}

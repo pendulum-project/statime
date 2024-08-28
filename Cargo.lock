@@ -76,17 +76,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "auto_impl"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c87f3f15e7794432337fc718554eaa4dc8f04c9677a950ffe366f20a162ae42"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "az"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -514,7 +503,6 @@ name = "statime"
 version = "0.2.1"
 dependencies = [
  "arrayvec",
- "auto_impl",
  "az",
  "fixed",
  "libm",
