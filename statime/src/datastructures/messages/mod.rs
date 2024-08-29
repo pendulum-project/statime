@@ -237,6 +237,13 @@ fn base_header(
     }
 }
 
+/// Checks whether message is of PTP revision compatible with Statime
+pub fn is_compatible(buffer: &[u8]) -> bool {
+    // this ensures that versionPTP in the header is 2
+    // it will never happen in PTPv1 packets because this octet is the LSB of versionPTP there
+    (buffer.len() >= 2) && (buffer[1] & 0xF) == 2
+}
+
 impl Message<'_> {
     pub(crate) fn sync(
         default_ds: &InternalDefaultDS,
