@@ -13,6 +13,7 @@ use rand::Rng;
 use state::PortState;
 
 use self::sequence_id::SequenceIdGenerator;
+pub use crate::datastructures::messages::is_compatible as is_message_buffer_compatible;
 pub use crate::datastructures::messages::MAX_DATA_LEN;
 #[cfg(doc)]
 use crate::PtpInstance;
@@ -437,6 +438,10 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
         &mut self,
         data: &'b [u8],
     ) -> ControlFlow<PortActionIterator<'b>, Message<'b>> {
+        if !is_message_buffer_compatible(&data) {
+            // do not spam with parse error in mixed-version PTPv1+v2 networks
+            return ControlFlow::Break(actions![]);
+        }
         let message = match Message::deserialize(data) {
             Ok(message) => message,
             Err(error) => {

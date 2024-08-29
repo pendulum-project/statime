@@ -12,7 +12,8 @@ use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
-        InBmca, Measurement, Port, PortAction, PortActionIterator, TimestampContext, MAX_DATA_LEN,
+        is_message_buffer_compatible, InBmca, Measurement, Port, PortAction, PortActionIterator,
+        TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
     PtpInstance, PtpInstanceState,
@@ -506,7 +507,10 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
             let mut actions = tokio::select! {
                 result = event_socket.recv(&mut event_buffer) => match result {
                     Ok(packet) => {
-                        if let Some(mut timestamp) = packet.timestamp {
+                        if !is_message_buffer_compatible(&event_buffer[..packet.bytes_read]) {
+                            // do not spam with missing timestamp error in mixed-version PTPv1+v2 networks
+                            PortActionIterator::empty()
+                        } else if let Some(mut timestamp) = packet.timestamp {
                             // get_tai gives zero if this is a hardware clock, and the needed
                             // correction when this port uses software timestamping
                             timestamp.seconds += clock.get_tai_offset().expect("Unable to get tai offset") as i64;
