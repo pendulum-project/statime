@@ -42,7 +42,6 @@ trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTi
 impl PortClock for LinuxClock {}
 impl PortClock for SharedClock<OverlayClock<LinuxClock>> {}
 type BoxedClock = Box<dyn PortClock + Send + Sync>;
-//type SharedBoxedClock = SharedClock<BoxedClock>;
 type SharedOverlayClock = SharedClock<OverlayClock<LinuxClock>>;
 
 #[derive(Parser, Debug)]

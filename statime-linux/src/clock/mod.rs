@@ -189,7 +189,6 @@ impl PortTimestampToTime for LinuxClock {
 impl PortTimestampToTime for OverlayClock<LinuxClock> {
     fn port_timestamp_to_time(&self, ts: timestamped_socket::socket::Timestamp) -> Time {
         let roclock_time = self.underlying().port_timestamp_to_time(ts);
-        //log::debug!("port_timestamp_to_time for OverlayClock called");
         self.time_from_underlying(roclock_time)
     }
 }

@@ -4,7 +4,6 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
-use statime::time::Time;
 use timestamped_socket::{
     interface::InterfaceName,
     networkaddress::{EthernetAddress, MacAddress},
@@ -117,8 +116,4 @@ pub fn open_ethernet_socket(
     socket.join_multicast(EthernetAddress::PRIMARY_EVENT, interface)?;
     socket.join_multicast(EthernetAddress::PDELAY_EVENT, interface)?;
     Ok(socket)
-}
-
-pub fn timestamp_to_time(ts: timestamped_socket::socket::Timestamp) -> Time {
-    Time::from_fixed_nanos(ts.seconds as i128 * 1_000_000_000i128 + ts.nanos as i128)
 }
