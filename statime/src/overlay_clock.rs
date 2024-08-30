@@ -56,7 +56,9 @@ impl<C: Clock> Clock for OverlayClock<C> {
     }
     fn step_clock(&mut self, offset: Duration) -> Result<Time, Self::Error> {
         self.last_sync = self.roclock.now();
-        self.shift += offset;
+        let multiplier = 1_000_000f64 + self.freq_scale_ppm_diff;
+        let reciprocal = 1_000_000f64 / multiplier;
+        self.shift += offset * reciprocal;
         Ok(self.time_from_underlying(self.last_sync))
     }
     fn set_properties(
