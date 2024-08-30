@@ -38,10 +38,20 @@ use tokio::{
     time::Sleep,
 };
 
-trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime {}
-impl PortClock for LinuxClock {}
-impl PortClock for SharedClock<OverlayClock<LinuxClock>> {}
-type BoxedClock = Box<dyn PortClock + Send + Sync>;
+trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime + Send + Sync {
+    fn clone_box(&self) -> Box<dyn PortClock>;
+}
+impl PortClock for LinuxClock {
+    fn clone_box(&self) -> Box<dyn PortClock> {
+        Box::new(self.clone())
+    }
+}
+impl PortClock for SharedClock<OverlayClock<LinuxClock>> {
+    fn clone_box(&self) -> Box<dyn PortClock> {
+        Box::new(self.clone())
+    }
+}
+type BoxedClock = Box<dyn PortClock>;
 type SharedOverlayClock = SharedClock<OverlayClock<LinuxClock>>;
 
 #[derive(Parser, Debug)]
@@ -305,7 +315,7 @@ async fn actual_main() {
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
-        let (port_clock, port_clock2, timestamping) = match port_config.hardware_clock {
+        let (port_clock, timestamping) = match port_config.hardware_clock {
             Some(idx) => {
                 let mut clock = LinuxClock::open_idx(idx).expect("Unable to open clock");
                 if let Some(id) = clock_name_map.get(&idx) {
@@ -319,7 +329,6 @@ async fn actual_main() {
                         .push(start_clock_task(clock.clone(), system_clock.clone()));
                 }
                 (
-                    Box::new(clock.clone()) as BoxedClock,
                     Box::new(clock) as BoxedClock,
                     InterfaceTimestampMode::HardwarePTPAll,
                 )
@@ -327,7 +336,6 @@ async fn actual_main() {
             None => {
                 clock_port_map.push(None);
                 (
-                    system_clock.clone_boxed(),
                     system_clock.clone_boxed(),
                     InterfaceTimestampMode::SoftwareAll,
                 )
@@ -339,7 +347,7 @@ async fn actual_main() {
         let port = instance.add_port(
             port_config.into(),
             KalmanConfiguration::default(),
-            port_clock2,
+            port_clock.clone_box(),
             rng,
         );
 
