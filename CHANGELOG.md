@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.2] - 2024-20-09
+
+### Added
+- Added support for the path trace option
+- Added support for disabling synchronization of the system clock, touching only the ptp hardware clocks.
+
+### Changed
+- Updated dependencies
+- Be less chatty about unexpected PTPv1 messages
+
+### Fixed
+- Correctly ignore rogue masters in the PTP network
+
 ## [0.2.1] - 2024-06-07
 
 ### Added
@@ -32,6 +45,7 @@
 ### Fixed
 - Fixed race condition during startup
 
+[0.2.2]: https://github.com/pendulum-project/statime/compare/v0.2.2...v0.2.1
 [0.2.1]: https://github.com/pendulum-project/statime/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/pendulum-project/statime/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pendulum-project/statime/releases/tag/v0.1.0

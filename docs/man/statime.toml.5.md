@@ -1,5 +1,5 @@
 <!-- ---
-title: STATIME.TOML(5) statime 0.2.1 | statime
+title: STATIME.TOML(5) statime 0.2.2 | statime
 --- -->
 
 # NAME

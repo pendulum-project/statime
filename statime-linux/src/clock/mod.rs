@@ -36,7 +36,8 @@ impl LinuxClock {
         use clock_steering::Clock;
 
         let ts = self.clock.now()?;
-        if ts.seconds < 0 || ts.seconds > (u64::MAX / 1000000000) as i64 {
+        #[allow(clippy::unnecessary_cast)]
+        if ts.seconds < 0 || ts.seconds as i64 > (u64::MAX / 1000000000) as i64 {
             self.clock.step_clock(TimeOffset {
                 seconds: -ts.seconds + 1,
                 nanos: 0,
@@ -181,7 +182,7 @@ impl PortTimestampToTime for LinuxClock {
     fn port_timestamp_to_time(&self, mut ts: timestamped_socket::socket::Timestamp) -> Time {
         // get_tai gives zero if this is a hardware clock, and the needed
         // correction when this port uses software timestamping
-        ts.seconds += self.get_tai_offset().expect("Unable to get tai offset") as libc::time_t;
+        ts.seconds += self.get_tai_offset().expect("Unable to get tai offset") as i64;
         Time::from_fixed_nanos(ts.seconds as i128 * 1_000_000_000i128 + ts.nanos as i128)
     }
 }
