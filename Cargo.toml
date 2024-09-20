@@ -31,7 +31,7 @@ rust-version = "1.67" # MSRV
 arrayvec = { version = "0.7.4", default-features = false }
 clap = { version = "4.4.7", features = ["derive"] }
 tracing = "0.1.21"
-tracing-log = "0.1.0"
+tracing-log = ">=0.1.0, <0.3.0"
 tracing-subscriber = { version = "0.3.0", default-features = false, features = ["std", "fmt", "ansi"] }
 hex = "0.4.3"
 libc = { version = "0.2.150", features = ["extra_traits"] }
