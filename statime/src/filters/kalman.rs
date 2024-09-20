@@ -292,6 +292,7 @@ impl InnerFilter {
         if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
             < (measurement_vec - prediction).ventry(0).abs()
         {
+            log::info!("SPECIAL HANDLING");
             self.state = self.state
                 + Vector::new_vector([(measurement_vec - prediction).ventry(0), 0.0, 0.0]);
         } else {
@@ -306,6 +307,7 @@ impl InnerFilter {
         if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
             < (measurement_vec - prediction).ventry(0).abs()
         {
+            log::info!("SPECIAL HANDLING");
             self.state = self.state
                 + Vector::new_vector([(measurement_vec - prediction).ventry(0), 0.0, 0.0]);
         } else {
@@ -696,7 +698,14 @@ impl KalmanFilter {
 
     fn steer<C: crate::Clock>(&mut self, clock: &mut C) -> super::FilterUpdate {
         let error = self.running_filter.offset();
-        if error.abs() < self.config.step_threshold.seconds() {
+        if error.abs() < self.running_filter.offset_uncertainty(&self.config) * 10.0 {
+            log::info!("Step detected, correcting");
+            self.step(clock, error);
+            super::FilterUpdate {
+                next_update: None,
+                mean_delay: Some(Duration::from_seconds(self.running_filter.mean_delay())),
+            }
+        } else if error.abs() < self.config.step_threshold.seconds() {
             let desired_adjust = error.signum()
                 * (error.abs()
                     - self.running_filter.offset_uncertainty(&self.config) * self.config.deadzone)
