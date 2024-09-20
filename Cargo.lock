@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "statime"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "arrayvec",
  "az",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "statime-linux"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "arrayvec",
  "clap",
