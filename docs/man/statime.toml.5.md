@@ -41,6 +41,9 @@ will be indicated by each configuration setting shown.
 `path-trace` = *bool*
 :   The instance uses the path trace option. This allows detecting clock loops when enabled on all instances in the network.
 
+`virtual-system-clock` = *bool* (**false**)
+:   Use a virtual overlay clock instead of adjusting the system clock.
+
 ## `[[port]]`
 
 `interface` = *interface name*
