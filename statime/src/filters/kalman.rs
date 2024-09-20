@@ -289,7 +289,7 @@ impl InnerFilter {
         let measurement_noise = Matrix::new([[variance]]);
 
         let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_SYNC);
-        if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
+        if 10.0 * (measurement_noise + uncertainty).entry(0, 0).sqrt()
             < (measurement_vec - prediction).ventry(0).abs()
         {
             log::info!("SPECIAL HANDLING");
@@ -304,7 +304,7 @@ impl InnerFilter {
         let measurement_vec = Vector::new_vector([delay_offset]);
         let measurement_noise = Matrix::new([[variance]]);
         let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_DELAY);
-        if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
+        if 10.0 * (measurement_noise + uncertainty).entry(0, 0).sqrt()
             < (measurement_vec - prediction).ventry(0).abs()
         {
             log::info!("SPECIAL HANDLING");
@@ -698,8 +698,8 @@ impl KalmanFilter {
 
     fn steer<C: crate::Clock>(&mut self, clock: &mut C) -> super::FilterUpdate {
         let error = self.running_filter.offset();
-        if error.abs() < self.running_filter.offset_uncertainty(&self.config) * 10.0 {
-            log::info!("Step detected, correcting");
+        if error.abs() > self.running_filter.offset_uncertainty(&self.config) * 10.0 {
+            log::info!("Step detected, correcting {} {}", error.abs(), self.running_filter.offset_uncertainty(&self.config) * 10.0);
             self.step(clock, error);
             super::FilterUpdate {
                 next_update: None,
