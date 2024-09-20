@@ -38,7 +38,9 @@ use tokio::{
     time::Sleep,
 };
 
-trait PortClock: Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime + Send + Sync {
+trait PortClock:
+    Clock<Error = <LinuxClock as Clock>::Error> + PortTimestampToTime + Send + Sync
+{
     fn clone_box(&self) -> Box<dyn PortClock>;
 }
 impl PortClock for LinuxClock {
