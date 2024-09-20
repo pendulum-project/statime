@@ -287,13 +287,30 @@ impl InnerFilter {
     fn absorb_sync_offset(&mut self, sync_offset: f64, variance: f64) {
         let measurement_vec = Vector::new_vector([sync_offset]);
         let measurement_noise = Matrix::new([[variance]]);
-        self.absorb_measurement(measurement_vec, Self::MEASUREMENT_SYNC, measurement_noise);
+
+        let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_SYNC);
+        if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
+            < (measurement_vec - prediction).ventry(0).abs()
+        {
+            self.state = self.state
+                + Vector::new_vector([(measurement_vec - prediction).ventry(0), 0.0, 0.0]);
+        } else {
+            self.absorb_measurement(measurement_vec, Self::MEASUREMENT_SYNC, measurement_noise);
+        }
     }
 
     fn absorb_delay_offset(&mut self, delay_offset: f64, variance: f64) {
         let measurement_vec = Vector::new_vector([delay_offset]);
         let measurement_noise = Matrix::new([[variance]]);
-        self.absorb_measurement(measurement_vec, Self::MEASUREMENT_DELAY, measurement_noise);
+        let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_DELAY);
+        if 10.0 * (measurement_noise + uncertainty).entry(0, 0)
+            < (measurement_vec - prediction).ventry(0).abs()
+        {
+            self.state = self.state
+                + Vector::new_vector([(measurement_vec - prediction).ventry(0), 0.0, 0.0]);
+        } else {
+            self.absorb_measurement(measurement_vec, Self::MEASUREMENT_DELAY, measurement_noise);
+        }
     }
 
     fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {

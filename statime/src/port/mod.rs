@@ -554,13 +554,13 @@ impl<L, A, R, C: Clock, F: Filter, S> Port<'_, L, A, R, C, F, S> {
             state
         );
         core::mem::swap(&mut self.port_state, &mut state);
-        if matches!(state, PortState::Slave(_) | PortState::Faulty)
-            || matches!(self.port_state, PortState::Faulty)
-        {
-            let mut filter = F::new(self.filter_config.clone());
-            core::mem::swap(&mut filter, &mut self.filter);
-            filter.demobilize(&mut self.clock);
-        }
+        // if matches!(state, PortState::Slave(_) | PortState::Faulty)
+        // || matches!(self.port_state, PortState::Faulty)
+        // {
+        // let mut filter = F::new(self.filter_config.clone());
+        // core::mem::swap(&mut filter, &mut self.filter);
+        // filter.demobilize(&mut self.clock);
+        // }
     }
 }
 
