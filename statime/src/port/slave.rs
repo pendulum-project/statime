@@ -215,7 +215,9 @@ impl<'a, A, C: Clock, F: Filter, R, S> Port<'a, Running, A, R, C, F, S> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received DelayResp");
-                if self.port_identity != message.requesting_port_identity || state.remote_master != header.source_port_identity {
+                if self.port_identity != message.requesting_port_identity
+                    || state.remote_master != header.source_port_identity
+                {
                     return actions![];
                 }
 

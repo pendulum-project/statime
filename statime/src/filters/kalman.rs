@@ -160,10 +160,14 @@ impl MeasurementErrorEstimator {
     }
 
     fn insert_entry(&mut self, entry: f64) {
-        log::info!("New entry {}", entry * 1e9);
-        self.data[self.next_idx] = entry;
-        self.next_idx = (self.next_idx + 1) % self.data.len();
-        self.fill = (self.fill + 1).min(self.data.len())
+        if self.fill < self.data.len()
+            || (entry - self.mean()).abs() < 10.0 * self.variance().sqrt()
+        {
+            log::info!("New entry {}", entry * 1e9);
+            self.data[self.next_idx] = entry;
+            self.next_idx = (self.next_idx + 1) % self.data.len();
+            self.fill = (self.fill + 1).min(self.data.len())
+        }
     }
 
     fn absorb_measurement(
@@ -699,7 +703,11 @@ impl KalmanFilter {
     fn steer<C: crate::Clock>(&mut self, clock: &mut C) -> super::FilterUpdate {
         let error = self.running_filter.offset();
         if error.abs() > self.running_filter.offset_uncertainty(&self.config) * 10.0 {
-            log::info!("Step detected, correcting {} {}", error.abs(), self.running_filter.offset_uncertainty(&self.config) * 10.0);
+            log::info!(
+                "Step detected, correcting {} {}",
+                error.abs(),
+                self.running_filter.offset_uncertainty(&self.config) * 10.0
+            );
             self.step(clock, error);
             super::FilterUpdate {
                 next_update: None,
