@@ -102,6 +102,9 @@ impl<'a, A, C: Clock, F: Filter, R, S> Port<'a, Running, A, R, C, F, S> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received sync {:?}", header.sequence_id);
+                if state.remote_master != header.source_port_identity {
+                    return actions![];
+                }
 
                 // substracting correction from recv time is equivalent to adding it to send
                 // time
@@ -165,6 +168,9 @@ impl<'a, A, C: Clock, F: Filter, R, S> Port<'a, Running, A, R, C, F, S> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received FollowUp {:?}", header.sequence_id);
+                if state.remote_master != header.source_port_identity {
+                    return actions![];
+                }
 
                 let packet_send_time = Time::from(message.precise_origin_timestamp)
                     + Duration::from(header.correction_field);
@@ -209,7 +215,7 @@ impl<'a, A, C: Clock, F: Filter, R, S> Port<'a, Running, A, R, C, F, S> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received DelayResp");
-                if self.port_identity != message.requesting_port_identity {
+                if self.port_identity != message.requesting_port_identity || state.remote_master != header.source_port_identity {
                     return actions![];
                 }
 
