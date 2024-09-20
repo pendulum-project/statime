@@ -438,7 +438,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
         &mut self,
         data: &'b [u8],
     ) -> ControlFlow<PortActionIterator<'b>, Message<'b>> {
-        if !is_message_buffer_compatible(&data) {
+        if !is_message_buffer_compatible(data) {
             // do not spam with parse error in mixed-version PTPv1+v2 networks
             return ControlFlow::Break(actions![]);
         }
