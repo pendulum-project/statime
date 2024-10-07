@@ -84,3 +84,6 @@ will be indicated by each configuration setting shown.
     A clock identity is encoded as a 16-character hexadecimal string, for example
     `acceptable-master-list = ["00FFFFFFFFFFFFFB"]`.
     The default is to accept all clock identities.
+
+`minor-ptp-version` = *version number* (**1**)
+:   Set a different minor ptp version. Should be either 1 or 0, intended to work around misbehaving ptp 2.0 hardware

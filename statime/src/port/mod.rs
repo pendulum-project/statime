@@ -13,8 +13,9 @@ use rand::Rng;
 use state::PortState;
 
 use self::sequence_id::SequenceIdGenerator;
-pub use crate::datastructures::messages::is_compatible as is_message_buffer_compatible;
-pub use crate::datastructures::messages::MAX_DATA_LEN;
+pub use crate::datastructures::messages::{
+    is_compatible as is_message_buffer_compatible, MAX_DATA_LEN,
+};
 #[cfg(doc)]
 use crate::PtpInstance;
 use crate::{
@@ -134,6 +135,7 @@ pub(crate) mod state;
 ///     sync_interval: interval,
 ///     master_only: false,
 ///     delay_asymmetry: Default::default(),
+///     minor_ptp_version: 1,
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
@@ -617,6 +619,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
                 sync_interval: config.sync_interval,
                 master_only: config.master_only,
                 delay_asymmetry: config.delay_asymmetry,
+                minor_ptp_version: config.minor_ptp_version,
             },
             filter_config,
             clock,
@@ -648,7 +651,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::{AcceptAnyMaster, DelayMechanism, InstanceConfig, TimePropertiesDS},
+        config::{
+            AcceptAnyMaster, DelayMechanism, InstanceConfig, PtpMinorVersion, TimePropertiesDS,
+        },
         datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS},
         filters::BasicFilter,
         time::{Duration, Interval, Time},
@@ -696,6 +701,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                minor_ptp_version: PtpMinorVersion::One,
             },
             0.25,
             TestClock,
@@ -723,6 +729,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                minor_ptp_version: PtpMinorVersion::One,
             },
             0.25,
             TestClock,
@@ -750,6 +757,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                minor_ptp_version: PtpMinorVersion::One,
             },
             filter_config,
             TestClock,

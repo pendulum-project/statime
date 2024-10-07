@@ -101,7 +101,7 @@ mod tests {
                 0x80, 0x80,
             ],
             AnnounceMessage {
-                header: Header::default(),
+                header: Header::new(1),
                 origin_timestamp: WireTimestamp {
                     seconds: 1169232218,
                     nanos: 175326816,
@@ -132,8 +132,7 @@ mod tests {
 
             // Test the deserialization output
             let deserialized_data =
-                AnnounceMessage::deserialize_content(Header::default(), &byte_representation)
-                    .unwrap();
+                AnnounceMessage::deserialize_content(Header::new(1), &byte_representation).unwrap();
             assert_eq!(deserialized_data, object_representation);
         }
     }

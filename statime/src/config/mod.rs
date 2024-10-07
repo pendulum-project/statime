@@ -13,7 +13,7 @@ mod instance;
 mod port;
 
 pub use instance::InstanceConfig;
-pub use port::{DelayMechanism, PortConfig};
+pub use port::{DelayMechanism, PortConfig, PtpMinorVersion};
 
 pub use crate::{
     bmc::acceptable_master::{AcceptAnyMaster, AcceptableMasterList},

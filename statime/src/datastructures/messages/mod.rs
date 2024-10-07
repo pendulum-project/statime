@@ -227,21 +227,23 @@ fn base_header(
     default_ds: &InternalDefaultDS,
     port_identity: PortIdentity,
     sequence_id: u16,
+    minor_ptp_version: u8,
 ) -> Header {
     Header {
         sdo_id: default_ds.sdo_id,
         domain_number: default_ds.domain_number,
         source_port_identity: port_identity,
         sequence_id,
-        ..Default::default()
+        ..Header::new(minor_ptp_version)
     }
 }
 
 /// Checks whether message is of PTP revision compatible with Statime
 pub fn is_compatible(buffer: &[u8]) -> bool {
     // this ensures that versionPTP in the header is 2
-    // it will never happen in PTPv1 packets because this octet is the LSB of versionPTP there
-    (buffer.len() >= 2) && (buffer[1] & 0xF) == 2
+    // it will never happen in PTPv1 packets because this octet is the LSB of
+    // versionPTP there
+    (buffer.len() >= 2) && (buffer[1] & 0xf) == 2
 }
 
 impl Message<'_> {
@@ -249,10 +251,11 @@ impl Message<'_> {
         default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
+        minor_ptp_version: u8,
     ) -> Self {
         let header = Header {
             two_step_flag: true,
-            ..base_header(default_ds, port_identity, sequence_id)
+            ..base_header(default_ds, port_identity, sequence_id, minor_ptp_version)
         };
 
         Message {
@@ -269,10 +272,11 @@ impl Message<'_> {
         port_identity: PortIdentity,
         sequence_id: u16,
         timestamp: Time,
+        minor_ptp_version: u8,
     ) -> Self {
         let header = Header {
             correction_field: timestamp.subnano(),
-            ..base_header(default_ds, port_identity, sequence_id)
+            ..base_header(default_ds, port_identity, sequence_id, minor_ptp_version)
         };
 
         Message {
@@ -288,6 +292,7 @@ impl Message<'_> {
         global: &PtpInstanceState,
         port_identity: PortIdentity,
         sequence_id: u16,
+        minor_ptp_version: u8,
     ) -> Self {
         let time_properties_ds = &global.time_properties_ds;
 
@@ -298,7 +303,12 @@ impl Message<'_> {
             ptp_timescale: time_properties_ds.ptp_timescale,
             time_tracable: time_properties_ds.time_traceable,
             frequency_tracable: time_properties_ds.frequency_traceable,
-            ..base_header(&global.default_ds, port_identity, sequence_id)
+            ..base_header(
+                &global.default_ds,
+                port_identity,
+                sequence_id,
+                minor_ptp_version,
+            )
         };
 
         let body = MessageBody::Announce(AnnounceMessage {
@@ -324,10 +334,11 @@ impl Message<'_> {
         default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
+        minor_ptp_version: u8,
     ) -> Self {
         let header = Header {
             log_message_interval: 0x7f,
-            ..base_header(default_ds, port_identity, sequence_id)
+            ..base_header(default_ds, port_identity, sequence_id, minor_ptp_version)
         };
 
         Message {
@@ -375,9 +386,10 @@ impl Message<'_> {
         default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
         sequence_id: u16,
+        minor_ptp_version: u8,
     ) -> Self {
         Message {
-            header: base_header(default_ds, port_identity, sequence_id),
+            header: base_header(default_ds, port_identity, sequence_id, minor_ptp_version),
             body: MessageBody::PDelayReq(PDelayReqMessage {
                 origin_timestamp: WireTimestamp::default(),
             }),
@@ -390,13 +402,19 @@ impl Message<'_> {
         port_identity: PortIdentity,
         request_header: Header,
         timestamp: Time,
+        minor_ptp_version: u8,
     ) -> Self {
         // We implement Option B from IEEE 1588-2019 page 202
         Message {
             header: Header {
                 two_step_flag: true,
                 correction_field: request_header.correction_field,
-                ..base_header(default_ds, port_identity, request_header.sequence_id)
+                ..base_header(
+                    default_ds,
+                    port_identity,
+                    request_header.sequence_id,
+                    minor_ptp_version,
+                )
             },
             body: MessageBody::PDelayResp(PDelayRespMessage {
                 request_receive_timestamp: timestamp.into(),
@@ -412,9 +430,10 @@ impl Message<'_> {
         requestor_identity: PortIdentity,
         sequence_id: u16,
         timestamp: Time,
+        minor_ptp_version: u8,
     ) -> Self {
         Message {
-            header: base_header(default_ds, port_identity, sequence_id),
+            header: base_header(default_ds, port_identity, sequence_id, minor_ptp_version),
             body: MessageBody::PDelayRespFollowUp(PDelayRespFollowUpMessage {
                 response_origin_timestamp: timestamp.into(),
                 requesting_port_identity: requestor_identity,

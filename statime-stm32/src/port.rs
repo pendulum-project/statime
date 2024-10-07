@@ -9,8 +9,8 @@ use smoltcp::{
 use static_cell::StaticCell;
 use statime::{
     config::{
-        AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig, SdoId,
-        TimePropertiesDS, TimeSource,
+        AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig,
+        PtpMinorVersion, SdoId, TimePropertiesDS, TimeSource,
     },
     filters::BasicFilter,
     port::{InBmca, NoForwardedTLVs, PortAction, PortActionIterator, Running, TimestampContext},
@@ -303,6 +303,7 @@ pub fn setup_statime(
         sync_interval: Interval::from_log_2(-6),
         master_only: false,
         delay_asymmetry: Duration::ZERO,
+        minor_ptp_version: PtpMinorVersion::One,
     };
     let filter_config = 0.1;
 
