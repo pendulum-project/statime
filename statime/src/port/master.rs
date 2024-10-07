@@ -2,6 +2,7 @@ use arrayvec::ArrayVec;
 
 use super::{state::PortState, ForwardedTLVProvider, Port, PortActionIterator, Running};
 use crate::{
+    crypto::SecurityAssociationProvider,
     datastructures::{
         common::{PortIdentity, Tlv, TlvSetBuilder, TlvType},
         messages::{DelayReqMessage, Header, Message, MAX_DATA_LEN},
@@ -12,17 +13,28 @@ use crate::{
     time::Time,
 };
 
-impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R, C, F, P, S> {
+impl<'a, A, C, F: Filter, R, P: SecurityAssociationProvider, S: PtpInstanceStateMutex>
+    Port<'a, Running, A, R, C, F, P, S>
+{
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
 
             let seq_id = self.sync_seq_ids.generate();
-            let packet_length = match self
+            let mut message = self
                 .instance_state
-                .with_ref(|state| Message::sync(&state.default_ds, self.port_identity, seq_id))
-                .serialize(&mut self.packet_buffer)
-            {
+                .with_ref(|state| Message::sync(&state.default_ds, self.port_identity, seq_id));
+            let mut temp_buffer = [0; MAX_DATA_LEN];
+            if let Some(spp) = self.config.spp {
+                if message
+                    .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                    .is_err()
+                {
+                    log::error!("Could not add signature to sync, sending without")
+                }
+            }
+
+            let packet_length = match message.serialize(&mut self.packet_buffer) {
                 Ok(message) => message,
                 Err(error) => {
                     log::error!("Statime bug: Could not serialize sync: {:?}", error);
@@ -49,6 +61,19 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
 
     pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
+            let mut message = self.instance_state.with_ref(|state| {
+                Message::follow_up(&state.default_ds, self.port_identity, id, timestamp)
+            });
+            let mut temp_buffer = [0; MAX_DATA_LEN];
+            if let Some(spp) = self.config.spp {
+                if message
+                    .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                    .is_err()
+                {
+                    log::error!("Could not sign follow up message, sending unsigned");
+                }
+            }
+
             let packet_length = match self
                 .instance_state
                 .with_ref(|state| {
@@ -141,6 +166,16 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
 
             message.suffix = tlv_builder.build();
 
+            let mut temp_buffer = [0; MAX_DATA_LEN];
+            if let Some(spp) = self.config.spp {
+                if message
+                    .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                    .is_err()
+                {
+                    log::error!("Could not sign announce message, sending unsigned");
+                }
+            }
+
             let packet_length = match message.serialize(&mut self.packet_buffer) {
                 Ok(length) => length,
                 Err(error) => {
@@ -174,13 +209,23 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
     ) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             log::debug!("Received DelayReq");
-            let delay_resp_message = Message::delay_resp(
+            let mut delay_resp_message = Message::delay_resp(
                 header,
                 message,
                 self.port_identity,
                 self.config.min_delay_req_interval(),
                 timestamp,
             );
+
+            let mut temp_buffer = [0; MAX_DATA_LEN];
+            if let Some(spp) = self.config.spp {
+                if delay_resp_message
+                    .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                    .is_err()
+                {
+                    log::error!("Could not sign delay response message, sending unsigned");
+                }
+            }
 
             let packet_length = match delay_resp_message.serialize(&mut self.packet_buffer) {
                 Ok(length) => length,
@@ -205,9 +250,19 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
         timestamp: Time,
     ) -> PortActionIterator {
         log::debug!("Received PDelayReq");
-        let pdelay_resp_message = self.instance_state.with_ref(|state| {
+        let mut pdelay_resp_message = self.instance_state.with_ref(|state| {
             Message::pdelay_resp(&state.default_ds, self.port_identity, header, timestamp)
         });
+
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = self.config.spp {
+            if pdelay_resp_message
+                .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign pdelay response message, sending unsigned");
+            }
+        }
 
         let packet_length = match pdelay_resp_message.serialize(&mut self.packet_buffer) {
             Ok(length) => length,
@@ -235,7 +290,7 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
         requestor_identity: PortIdentity,
         timestamp: Time,
     ) -> PortActionIterator {
-        let pdelay_resp_follow_up_messgae = self.instance_state.with_ref(|state| {
+        let mut pdelay_resp_follow_up_messgae = self.instance_state.with_ref(|state| {
             Message::pdelay_resp_follow_up(
                 &state.default_ds,
                 self.port_identity,
@@ -244,6 +299,16 @@ impl<'a, A, C, F: Filter, R, P, S: PtpInstanceStateMutex> Port<'a, Running, A, R
                 timestamp,
             )
         });
+
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = self.config.spp {
+            if pdelay_resp_follow_up_messgae
+                .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign pdelay response follow up message, sending unsigned");
+            }
+        }
 
         let packet_length = match pdelay_resp_follow_up_messgae.serialize(&mut self.packet_buffer) {
             Ok(length) => length,

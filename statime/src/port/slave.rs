@@ -6,12 +6,16 @@ use super::{
 };
 use crate::{
     config::DelayMechanism,
+    crypto::SecurityAssociationProvider,
     datastructures::messages::{
         DelayRespMessage, FollowUpMessage, Header, Message, PDelayRespFollowUpMessage,
         PDelayRespMessage, SyncMessage,
     },
     filters::Filter,
-    port::{actions::TimestampContextInner, state::SyncState, PortAction, TimestampContext},
+    port::{
+        actions::TimestampContextInner, state::SyncState, PortAction, TimestampContext,
+        MAX_DATA_LEN,
+    },
     ptp_instance::PtpInstanceStateMutex,
     time::{Duration, Interval, Time},
     Clock,
@@ -456,8 +460,15 @@ impl<'a, A, C: Clock, F: Filter, R, P, S> Port<'a, Running, A, R, C, F, P, S> {
     }
 }
 
-impl<'a, A, C: Clock, F: Filter, R: Rng, P, S: PtpInstanceStateMutex>
-    Port<'a, Running, A, R, C, F, P, S>
+impl<
+        'a,
+        A,
+        C: Clock,
+        F: Filter,
+        R: Rng,
+        P: SecurityAssociationProvider,
+        S: PtpInstanceStateMutex,
+    > Port<'a, Running, A, R, C, F, P, S>
 {
     pub(super) fn send_delay_request(&mut self) -> PortActionIterator {
         match self.config.delay_mechanism {
@@ -472,9 +483,18 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, P, S: PtpInstanceStateMutex>
     ) -> PortActionIterator {
         let pdelay_id = self.pdelay_seq_ids.generate();
 
-        let pdelay_req = self.instance_state.with_ref(|state| {
+        let mut pdelay_req = self.instance_state.with_ref(|state| {
             Message::pdelay_req(&state.default_ds, self.port_identity, pdelay_id)
         });
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        if let Some(spp) = self.config.spp {
+            if pdelay_req
+                .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                .is_err()
+            {
+                log::error!("Could not sign delay request, sending without signature");
+            }
+        }
         let message_length = match pdelay_req.serialize(&mut self.packet_buffer) {
             Ok(length) => length,
             Err(error) => {
@@ -519,9 +539,18 @@ impl<'a, A, C: Clock, F: Filter, R: Rng, P, S: PtpInstanceStateMutex>
                 log::debug!("Starting new delay measurement");
 
                 let delay_id = self.delay_seq_ids.generate();
-                let delay_req = self.instance_state.with_ref(|state| {
+                let mut delay_req = self.instance_state.with_ref(|state| {
                     Message::delay_req(&state.default_ds, self.port_identity, delay_id)
                 });
+                let mut temp_buffer = [0; MAX_DATA_LEN];
+                if let Some(spp) = self.config.spp {
+                    if delay_req
+                        .add_signature(spp, &self.security_provider, &mut temp_buffer)
+                        .is_err()
+                    {
+                        log::error!("Could not sign delay request, sending without signature");
+                    }
+                }
 
                 let message_length = match delay_req.serialize(&mut self.packet_buffer) {
                     Ok(length) => length,

@@ -533,6 +533,7 @@ impl<
     }
 }
 
+#[allow(clippy::type_complexity)]
 impl<'a, A, C, F: Filter, R, P, S> Port<'a, InBmca, A, R, C, F, P, S> {
     /// End a BMCA cycle and make the
     /// [`handle_*`](`Port::handle_send_timestamp`) methods available again
