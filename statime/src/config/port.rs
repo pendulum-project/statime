@@ -52,9 +52,12 @@ pub struct PortConfig<A> {
 
     /// The estimated asymmetry in the link connected to this [`Port`]
     pub delay_asymmetry: Duration,
+
+    /// Minor version number to use.
+    pub minor_ptp_version: u8,
     // Notes:
     // Fields specific for delay mechanism are kept as part of [DelayMechanism].
-    // Version is always 2.1, so not stored (versionNumber, minorVersionNumber)
+    // Major version is always 2.1, so not stored (versionNumber)
 }
 
 impl<A> PortConfig<A> {
