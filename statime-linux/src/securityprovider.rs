@@ -1,10 +1,9 @@
 use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc};
 
 use rand::Rng;
-use rustls::{crypto::hash::Hash, ClientConfig, RootCertStore};
+use rustls::{ClientConfig, RootCertStore};
 use statime::crypto::{
-    HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy,
-    SenderIdentificaton,
+    HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy, SenderIdentificaton
 };
 
 use crate::ke::{
@@ -371,6 +370,75 @@ impl PresharedSecurityProvider {
 
         PresharedSecurityProvider {
             associations: Arc::new(data),
+        }
+    }
+}
+
+pub enum DynamicSecurityAssociation<'a> {
+    NTS(NTSAssociation<'a>),
+    Preshared(PresharedSecurityAssociation<'a>),
+}
+
+impl<'a> SecurityAssociation for DynamicSecurityAssociation<'a> {
+    fn policy_data(&self) -> SecurityPolicy {
+        use DynamicSecurityAssociation::*;
+        match self {
+            NTS(association) => association.policy_data(),
+            Preshared(association) => association.policy_data(),
+        }
+    }
+
+    fn mac(&self, key_id: u32) -> Option<&dyn statime::crypto::Mac> {
+        use DynamicSecurityAssociation::*;
+        match self {
+            NTS(association) => association.mac(key_id),
+            Preshared(association) => association.mac(key_id),
+        }
+    }
+
+    fn register_sequence_id(
+        &mut self,
+        key_id: u32,
+        sender: SenderIdentificaton,
+        sequence_id: u16,
+    ) -> bool {
+        use DynamicSecurityAssociation::*;
+        match self {
+            NTS(association) => {
+                association.register_sequence_id(key_id, sender, sequence_id)
+            }
+            Preshared(association) => {
+                association.register_sequence_id(key_id, sender, sequence_id)
+            }
+        }
+    }
+
+    fn signing_mac(&self) -> (u32, &dyn statime::crypto::Mac) {
+        use DynamicSecurityAssociation::*;
+
+        match self {
+            NTS(association) => association.signing_mac(),
+            Preshared(association) => association.signing_mac(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum DynamicSecurityProvider {
+    NoSecurity,
+    NTS(NTSProvider),
+    Preshared(PresharedSecurityProvider),
+}
+
+impl SecurityAssociationProvider for DynamicSecurityProvider {
+    type Association<'a> = DynamicSecurityAssociation<'a>;
+
+    fn lookup(&self, spp: u8) -> Option<Self::Association<'_>> {
+        use DynamicSecurityProvider::*;
+        match self {
+            NoSecurity => None,
+            NTS(provider) => provider.lookup(spp).map(DynamicSecurityAssociation::NTS),
+            Preshared(provider) => provider.lookup(spp).map(DynamicSecurityAssociation::Preshared),
         }
     }
 }

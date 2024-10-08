@@ -38,13 +38,64 @@ pub struct Config {
     pub observability: ObservabilityConfig,
     #[serde(default)]
     pub virtual_system_clock: bool,
-    pub nts4ptp_server: Option<String>,
     #[serde(default)]
-    pub nts4ptp_client_cert: Option<PathBuf>,
-    #[serde(default)]
-    pub nts4ptp_client_cert_key: Option<PathBuf>,
-    #[serde(default)]
-    pub nts4ptp_server_root: Option<PathBuf>,
+    pub security: SecurityConfig,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields, tag = "type")]
+pub enum SecurityConfig {
+    #[default]
+    None,
+    #[serde(rename = "nts")]
+    NTS(NTSConfig),
+    #[serde(rename = "psk")]
+    Preshared(PresharedConfig),
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct NTSConfig {
+    pub server: String,
+    pub client_cert: PathBuf,
+    pub client_cert_key: PathBuf,
+    pub server_root: PathBuf,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct PresharedConfig {
+    pub key: KeyDataConfig,
+    pub key_id: u32,
+    pub spp: u8,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields, tag = "type", content = "data")]
+pub enum KeyDataConfig {
+    Raw(Vec<u8>),
+    Bytes(String),
+    Base64(String),
+    Hex(String),
+}
+
+impl KeyDataConfig {
+    pub fn as_vec(&self) -> Vec<u8> {
+        use base64::Engine;
+
+        match self {
+            KeyDataConfig::Raw(data) => data.clone(),
+            KeyDataConfig::Bytes(data) => data.as_bytes().to_vec(),
+            KeyDataConfig::Base64(data) => base64::engine::general_purpose::STANDARD.decode(data).unwrap(),
+            KeyDataConfig::Hex(data) => hex::decode(data).unwrap(),
+        }
+    }
+
+    pub fn as_bytes(&self) -> [u8; 32] {
+        let mut result = [0; 32];
+        result.copy_from_slice(&self.as_vec());
+        result
+    }
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -296,10 +347,7 @@ interface = "enp0s31f6"
             ports: vec![expected_port],
             observability: ObservabilityConfig::default(),
             virtual_system_clock: false,
-            nts4ptp_client_cert: None,
-            nts4ptp_client_cert_key: None,
-            nts4ptp_server: None,
-            nts4ptp_server_root: None,
+            security: crate::config::SecurityConfig::None,
         };
 
         let actual = toml::from_str(MINIMAL_CONFIG).unwrap();

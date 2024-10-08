@@ -53,6 +53,7 @@ tokio-rustls = "0.25.0"
 tokio-util = { version = "0.7.10", features = ["codec"] }
 clock-steering = "0.2.0"
 timestamped-socket = "0.2.4"
+base64 = "0.22.1"
 
 
 # our own crates used as dependencies, same version as the workspace version
