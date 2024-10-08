@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc};
 
 use rand::Rng;
-use rustls::{ClientConfig, RootCertStore};
+use rustls::{crypto::hash::Hash, ClientConfig, RootCertStore};
 use statime::crypto::{
     HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy,
     SenderIdentificaton,
@@ -284,5 +284,93 @@ async fn assocation_manager(
             this.keys[&old_key].valid_till + this.grace_period
         };
         tokio::time::sleep_until(deadline.into()).await;
+    }
+}
+
+pub struct PresharedSecurityAssociationInner {
+    key: (u32, statime::crypto::HmacSha256_128),
+    ignore_correction: bool,
+    sequence_ids: HashMap<(SenderIdentificaton, u32), u16>,
+}
+
+pub struct PresharedSecurityAssociation<'a>(std::sync::MutexGuard<'a, PresharedSecurityAssociationInner>);
+
+impl<'a> SecurityAssociation for PresharedSecurityAssociation<'a> {
+    fn policy_data(&self) -> SecurityPolicy {
+        SecurityPolicy {
+            ignore_correction: self.0.ignore_correction,
+        }
+    }
+
+    fn mac(&self, key_id: u32) -> Option<&dyn statime::crypto::Mac> {
+        if self.0.key.0 == key_id {
+            Some(&self.0.key.1 as &dyn statime::crypto::Mac)
+        } else {
+            None
+        }
+    }
+
+    fn register_sequence_id(
+        &mut self,
+        key_id: u32,
+        sender: SenderIdentificaton,
+        sequence_id: u16,
+    ) -> bool {
+        match self.0.sequence_ids.entry((sender, key_id)) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                if (entry.get().wrapping_sub(sequence_id) as i16) < 0 {
+                    *entry.get_mut() = sequence_id;
+                    true
+                } else {
+                    false
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(sequence_id);
+                true
+            }
+        }
+    }
+
+    fn signing_mac(&self) -> (u32, &dyn statime::crypto::Mac) {
+        (
+            self.0.key.0,
+            &self.0
+                .key
+                .1 as &dyn statime::crypto::Mac
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct PresharedSecurityProvider {
+    associations: Arc<HashMap<u8, Arc<std::sync::Mutex<PresharedSecurityAssociationInner>>>>,
+}
+
+impl SecurityAssociationProvider for PresharedSecurityProvider {
+    type Association<'a> = PresharedSecurityAssociation<'a>;
+
+    fn lookup(&self, spp: u8) -> Option<Self::Association<'_>> {
+        self.associations
+            .get(&spp)
+            .map(|a| PresharedSecurityAssociation(a.lock().unwrap()))
+    }
+}
+
+impl PresharedSecurityProvider {
+    pub fn new(spp: u8, key_id: u32, key_data: [u8; 32]) -> PresharedSecurityProvider {
+        let mut data = HashMap::new();
+        data.insert(spp, Arc::new(std::sync::Mutex::new(PresharedSecurityAssociationInner {
+            key: (
+                key_id,
+                statime::crypto::HmacSha256_128::new(key_data),
+            ),
+            ignore_correction: false,
+            sequence_ids: Default::default(),
+        })));
+
+        PresharedSecurityProvider {
+            associations: Arc::new(data),
+        }
     }
 }

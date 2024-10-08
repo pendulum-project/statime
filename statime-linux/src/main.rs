@@ -23,7 +23,7 @@ use statime_linux::{
     config::Config,
     initialize_logging_parse_config,
     observer::ObservableInstanceState,
-    securityprovider::NTSProvider,
+    securityprovider::{NTSProvider, PresharedSecurityProvider},
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, PtpTargetAddress,
@@ -316,21 +316,28 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
-    let (provider, spp) = if let Config {
-        nts4ptp_server: Some(server_name),
-        nts4ptp_client_cert_key: Some(client_key),
-        nts4ptp_client_cert: Some(client_cert),
-        nts4ptp_server_root: Some(server_root),
-        ..
-    } = config
-    {
-        let (provider, spp) = NTSProvider::new(server_name, client_key, client_cert, server_root)
-            .await
-            .unwrap();
-        (provider, Some(spp))
-    } else {
-        (NTSProvider::empty(), None)
-    };
+    // NTS Key provider
+    // let (provider, spp) = if let Config {
+    //     nts4ptp_server: Some(server_name),
+    //     nts4ptp_client_cert_key: Some(client_key),
+    //     nts4ptp_client_cert: Some(client_cert),
+    //     nts4ptp_server_root: Some(server_root),
+    //     ..
+    // } = config
+    // {
+    //     let (provider, spp) = NTSProvider::new(server_name, client_key, client_cert, server_root)
+    //         .await
+    //         .unwrap();
+    //     (provider, Some(spp))
+    // } else {
+    //     (NTSProvider::empty(), None)
+    // };
+
+    // Preshared key provider
+    let spp = Some(10);
+    let key_id = 1234;
+    let key_data = b"abcdefghijklmnopqrstuvwxyz123456";
+    let provider = PresharedSecurityProvider::new(spp.unwrap(), key_id, *key_data);
 
     for port_config in config.ports {
         let interface = port_config.interface;
@@ -540,7 +547,7 @@ type BmcaPort = Port<
     StdRng,
     BoxedClock,
     KalmanFilter,
-    NTSProvider,
+    PresharedSecurityProvider,
     RwLock<PtpInstanceState>,
 >;
 
