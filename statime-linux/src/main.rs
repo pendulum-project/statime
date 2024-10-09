@@ -319,13 +319,17 @@ async fn actual_main() {
     let (provider, spp) = match config.security {
         SecurityConfig::None => (DynamicSecurityProvider::NoSecurity, None),
         SecurityConfig::NTS(nts) => {
-            let (provider, spp) = NTSProvider::new(nts.server, nts.client_cert_key, nts.client_cert, nts.server_root)
-                .await
-                .unwrap();
+            let (provider, spp) = NTSProvider::new(
+                nts.server,
+                nts.client_cert_key,
+                nts.client_cert,
+                nts.server_root,
+            )
+            .await
+            .unwrap();
             (DynamicSecurityProvider::NTS(provider), Some(spp))
-        },
+        }
         SecurityConfig::Preshared(psk) => {
-
             let provider = PresharedSecurityProvider::new(psk.spp, psk.key_id, psk.key.as_bytes());
             (DynamicSecurityProvider::Preshared(provider), Some(psk.spp))
         }

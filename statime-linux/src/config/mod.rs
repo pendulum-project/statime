@@ -71,7 +71,12 @@ pub struct PresharedConfig {
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields, tag = "type", content = "data")]
+#[serde(
+    rename_all = "kebab-case",
+    deny_unknown_fields,
+    tag = "type",
+    content = "data"
+)]
 pub enum KeyDataConfig {
     Raw(Vec<u8>),
     Bytes(String),
@@ -86,7 +91,9 @@ impl KeyDataConfig {
         match self {
             KeyDataConfig::Raw(data) => data.clone(),
             KeyDataConfig::Bytes(data) => data.as_bytes().to_vec(),
-            KeyDataConfig::Base64(data) => base64::engine::general_purpose::STANDARD.decode(data).unwrap(),
+            KeyDataConfig::Base64(data) => base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .unwrap(),
             KeyDataConfig::Hex(data) => hex::decode(data).unwrap(),
         }
     }

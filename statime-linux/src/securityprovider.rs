@@ -3,7 +3,8 @@ use std::{collections::HashMap, error::Error, path::PathBuf, sync::Arc};
 use rand::Rng;
 use rustls::{ClientConfig, RootCertStore};
 use statime::crypto::{
-    HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy, SenderIdentificaton
+    HmacSha256_128, SecurityAssociation, SecurityAssociationProvider, SecurityPolicy,
+    SenderIdentificaton,
 };
 
 use crate::ke::{
@@ -292,7 +293,9 @@ pub struct PresharedSecurityAssociationInner {
     sequence_ids: HashMap<(SenderIdentificaton, u32), u16>,
 }
 
-pub struct PresharedSecurityAssociation<'a>(std::sync::MutexGuard<'a, PresharedSecurityAssociationInner>);
+pub struct PresharedSecurityAssociation<'a>(
+    std::sync::MutexGuard<'a, PresharedSecurityAssociationInner>,
+);
 
 impl<'a> SecurityAssociation for PresharedSecurityAssociation<'a> {
     fn policy_data(&self) -> SecurityPolicy {
@@ -332,12 +335,7 @@ impl<'a> SecurityAssociation for PresharedSecurityAssociation<'a> {
     }
 
     fn signing_mac(&self) -> (u32, &dyn statime::crypto::Mac) {
-        (
-            self.0.key.0,
-            &self.0
-                .key
-                .1 as &dyn statime::crypto::Mac
-        )
+        (self.0.key.0, &self.0.key.1 as &dyn statime::crypto::Mac)
     }
 }
 
@@ -359,14 +357,14 @@ impl SecurityAssociationProvider for PresharedSecurityProvider {
 impl PresharedSecurityProvider {
     pub fn new(spp: u8, key_id: u32, key_data: [u8; 32]) -> PresharedSecurityProvider {
         let mut data = HashMap::new();
-        data.insert(spp, Arc::new(std::sync::Mutex::new(PresharedSecurityAssociationInner {
-            key: (
-                key_id,
-                statime::crypto::HmacSha256_128::new(key_data),
-            ),
-            ignore_correction: false,
-            sequence_ids: Default::default(),
-        })));
+        data.insert(
+            spp,
+            Arc::new(std::sync::Mutex::new(PresharedSecurityAssociationInner {
+                key: (key_id, statime::crypto::HmacSha256_128::new(key_data)),
+                ignore_correction: false,
+                sequence_ids: Default::default(),
+            })),
+        );
 
         PresharedSecurityProvider {
             associations: Arc::new(data),
@@ -404,12 +402,8 @@ impl<'a> SecurityAssociation for DynamicSecurityAssociation<'a> {
     ) -> bool {
         use DynamicSecurityAssociation::*;
         match self {
-            NTS(association) => {
-                association.register_sequence_id(key_id, sender, sequence_id)
-            }
-            Preshared(association) => {
-                association.register_sequence_id(key_id, sender, sequence_id)
-            }
+            NTS(association) => association.register_sequence_id(key_id, sender, sequence_id),
+            Preshared(association) => association.register_sequence_id(key_id, sender, sequence_id),
         }
     }
 
@@ -438,7 +432,9 @@ impl SecurityAssociationProvider for DynamicSecurityProvider {
         match self {
             NoSecurity => None,
             NTS(provider) => provider.lookup(spp).map(DynamicSecurityAssociation::NTS),
-            Preshared(provider) => provider.lookup(spp).map(DynamicSecurityAssociation::Preshared),
+            Preshared(provider) => provider
+                .lookup(spp)
+                .map(DynamicSecurityAssociation::Preshared),
         }
     }
 }

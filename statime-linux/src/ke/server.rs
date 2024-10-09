@@ -17,13 +17,12 @@ use tokio::{
 };
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
-use crate::initialize_logging_parse_config;
-
 use super::{
     common::{load_certs, load_certs_from_files, load_private_key, Key},
     record::*,
     tls_utils::OnlyAllowedClients,
 };
+use crate::initialize_logging_parse_config;
 
 struct KeySetStore {
     current: Key,

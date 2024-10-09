@@ -13,8 +13,9 @@ use rand::Rng;
 use state::PortState;
 
 use self::sequence_id::SequenceIdGenerator;
-pub use crate::datastructures::messages::is_compatible as is_message_buffer_compatible;
-pub use crate::datastructures::messages::MAX_DATA_LEN;
+pub use crate::datastructures::messages::{
+    is_compatible as is_message_buffer_compatible, MAX_DATA_LEN,
+};
 #[cfg(doc)]
 use crate::PtpInstance;
 use crate::{

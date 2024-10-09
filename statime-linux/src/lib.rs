@@ -13,7 +13,6 @@ pub mod tracing;
 use std::path::Path;
 
 use config::Config;
-
 pub use ke::main as ke_main;
 pub use metrics::exporter::main as metrics_exporter_main;
 use tracing::LogLevel;
