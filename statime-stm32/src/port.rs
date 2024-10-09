@@ -26,20 +26,14 @@ use crate::{
 };
 
 type StmPort<State> = statime::port::Port<
-<<<<<<< HEAD
     'static,
-=======
->>>>>>> f5dee44 (Added support for the authentication tlv to the library.)
     State,
     AcceptAnyMaster,
     Rng,
     &'static PtpClock,
     BasicFilter,
-<<<<<<< HEAD
-    PtpStateMutex,
-=======
     NoSecurityProvider,
->>>>>>> f5dee44 (Added support for the authentication tlv to the library.)
+    PtpStateMutex,
 >;
 
 pub struct Port {
