@@ -76,8 +76,11 @@ will be indicated by each configuration setting shown.
 `master-only` = *bool* (**false**)
 :   The port is always a master instance, and will never become a slave instance.
 
-`hardware-clock` = *index* (**unset**)
-:   Index of a hardware clock device, for instance `0` for `/dev/ptp0`.
+`hardware-clock` = `auto` | `required` | `none` | *index* (**auto**)
+:   Index of a hardware clock device, for instance `0` for `/dev/ptp0`. Set to
+    auto to automatically configure the hardware clock if one is available. Set
+    to required if you need a hardware clock and want the configuration to fail
+    if one is not available. Set to none to disable using a hardware clock.
 
 `acceptable-master-list` = [ *clock identity*, .. ] (**unset**)
 :   List of clock identities that this port will accept as its master.
