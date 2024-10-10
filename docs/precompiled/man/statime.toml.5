@@ -95,9 +95,14 @@ seconds
 The port is always a master instance, and will never become a slave
 instance.
 .TP
-\f[CR]hardware\-clock\f[R] = \f[I]index\f[R] (\f[B]unset\f[R])
+\f[CR]hardware\-clock\f[R] = \f[CR]auto\f[R] | \f[CR]required\f[R] | \f[CR]none\f[R] | \f[I]index\f[R] (\f[B]auto\f[R])
 Index of a hardware clock device, for instance \f[CR]0\f[R] for
 \f[CR]/dev/ptp0\f[R].
+Set to auto to automatically configure the hardware clock if one is
+available.
+Set to required if you need a hardware clock and want the configuration
+to fail if one is not available.
+Set to none to disable using a hardware clock.
 .TP
 \f[CR]acceptable\-master\-list\f[R] = [ \f[I]clock identity\f[R], .. ] (\f[B]unset\f[R])
 List of clock identities that this port will accept as its master.

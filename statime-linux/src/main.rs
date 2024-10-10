@@ -20,6 +20,7 @@ use statime::{
 };
 use statime_linux::{
     clock::{LinuxClock, PortTimestampToTime},
+    config::HardwareClock,
     initialize_logging_parse_config,
     observer::ObservableInstanceState,
     socket::{
@@ -314,38 +315,53 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
+    let mut add_hw_clock = |idx: u32, clock_port_map: &mut Vec<Option<usize>>| {
+        let mut clock = LinuxClock::open_idx(idx).expect("Unable to open clock");
+        if let Some(id) = clock_name_map.get(&idx) {
+            clock_port_map.push(Some(*id));
+        } else {
+            clock.init().expect("Unable to initialize clock");
+            let id = internal_sync_senders.len();
+            clock_port_map.push(Some(id));
+            clock_name_map.insert(idx, id);
+            internal_sync_senders.push(start_clock_task(clock.clone(), system_clock.clone()));
+        }
+        (
+            Some(idx),
+            Box::new(clock) as BoxedClock,
+            InterfaceTimestampMode::HardwarePTPAll,
+        )
+    };
+
+    let add_sw_clock = |clock_port_map: &mut Vec<Option<usize>>| {
+        clock_port_map.push(None);
+        (
+            None,
+            system_clock.clone_boxed(),
+            InterfaceTimestampMode::SoftwareAll,
+        )
+    };
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
-        let (port_clock, timestamping) = match port_config.hardware_clock {
-            Some(idx) => {
-                let mut clock = LinuxClock::open_idx(idx).expect("Unable to open clock");
-                if let Some(id) = clock_name_map.get(&idx) {
-                    clock_port_map.push(Some(*id));
-                } else {
-                    clock.init().expect("Unable to initialize clock");
-                    let id = internal_sync_senders.len();
-                    clock_port_map.push(Some(id));
-                    clock_name_map.insert(idx, id);
-                    internal_sync_senders
-                        .push(start_clock_task(clock.clone(), system_clock.clone()));
+        let (bind_phc, port_clock, timestamping) = match port_config.hardware_clock {
+            HardwareClock::Auto => match interface.lookup_phc() {
+                Some(idx) => add_hw_clock(idx, &mut clock_port_map),
+                None => {
+                    log::info!("No hardware clock found, falling back to software timestamping");
+                    add_sw_clock(&mut clock_port_map)
                 }
-                (
-                    Box::new(clock) as BoxedClock,
-                    InterfaceTimestampMode::HardwarePTPAll,
-                )
+            },
+            HardwareClock::Required => {
+                let idx = interface.lookup_phc().expect("No hardware clock found");
+                add_hw_clock(idx, &mut clock_port_map)
             }
-            None => {
-                clock_port_map.push(None);
-                (
-                    system_clock.clone_boxed(),
-                    InterfaceTimestampMode::SoftwareAll,
-                )
-            }
+            HardwareClock::Specific(idx) => add_hw_clock(idx, &mut clock_port_map),
+            HardwareClock::None => add_sw_clock(&mut clock_port_map),
         };
 
         let rng = StdRng::from_entropy();
-        let bind_phc = port_config.hardware_clock;
         let port = instance.add_port(
             port_config.into(),
             KalmanConfiguration::default(),
