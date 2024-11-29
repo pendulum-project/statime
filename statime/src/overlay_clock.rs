@@ -1,8 +1,11 @@
-use crate::{time::Duration, time::Time, Clock};
+use crate::{
+    time::{Duration, Time},
+    Clock,
+};
 
 /// An overlay over other, read-only clock, frequency-locked to it.
-/// In other words, a virtual clock which can be tuned in software without affecting
-/// the underlying system or hardware clock.
+/// In other words, a virtual clock which can be tuned in software without
+/// affecting the underlying system or hardware clock.
 #[derive(Debug)]
 pub struct OverlayClock<C: Clock> {
     roclock: C,
@@ -23,7 +26,8 @@ impl<C: Clock> OverlayClock<C> {
         }
     }
 
-    /// Converts (shifts and scales) `Time` in underlying clock's timescale to overlay clock timescale
+    /// Converts (shifts and scales) `Time` in underlying clock's timescale to
+    /// overlay clock timescale
     pub fn time_from_underlying(&self, roclock_time: Time) -> Time {
         let elapsed = roclock_time - self.last_sync;
         let corr = elapsed * self.freq_scale_ppm_diff / 1_000_000;
