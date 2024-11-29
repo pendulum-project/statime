@@ -12,6 +12,7 @@ use statime::{
         AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig, SdoId,
         TimePropertiesDS, TimeSource,
     },
+    crypto::NoSecurityProvider,
     filters::BasicFilter,
     port::{InBmca, NoForwardedTLVs, PortAction, PortActionIterator, Running, TimestampContext},
     time::{Duration, Interval, Time},
@@ -31,6 +32,7 @@ type StmPort<State> = statime::port::Port<
     Rng,
     &'static PtpClock,
     BasicFilter,
+    NoSecurityProvider,
     PtpStateMutex,
 >;
 
@@ -303,10 +305,17 @@ pub fn setup_statime(
         sync_interval: Interval::from_log_2(-6),
         master_only: false,
         delay_asymmetry: Duration::ZERO,
+        spp: None,
     };
     let filter_config = 0.1;
 
-    let ptp_port = ptp_instance.add_port(port_config, filter_config, ptp_clock, rng);
+    let ptp_port = ptp_instance.add_port(
+        port_config,
+        filter_config,
+        ptp_clock,
+        rng,
+        NoSecurityProvider,
+    );
 
     (ptp_instance, ptp_port)
 }

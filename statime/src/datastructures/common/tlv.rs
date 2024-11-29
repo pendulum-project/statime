@@ -95,6 +95,18 @@ impl<'a> TlvSet<'a> {
     pub(crate) fn tlv(&self) -> TlvSetIterator<'a> {
         TlvSetIterator { buffer: self.bytes }
     }
+
+    pub(crate) fn extend_with<'b>(
+        &self,
+        tlv: Tlv,
+        backing_buffer: &'b mut [u8],
+    ) -> Option<TlvSet<'b>> {
+        let used = self.serialize(backing_buffer).ok()?;
+        tlv.serialize(&mut backing_buffer[used..]).ok()?;
+        Some(TlvSet {
+            bytes: &backing_buffer[..used + tlv.wire_size()],
+        })
+    }
 }
 
 #[derive(Debug)]

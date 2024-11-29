@@ -20,8 +20,10 @@ use statime::{
 };
 use statime_linux::{
     clock::{LinuxClock, PortTimestampToTime},
+    config::SecurityConfig,
     initialize_logging_parse_config,
     observer::ObservableInstanceState,
+    securityprovider::{DynamicSecurityProvider, NTSProvider, PresharedSecurityProvider},
     socket::{
         open_ethernet_socket, open_ipv4_event_socket, open_ipv4_general_socket,
         open_ipv6_event_socket, open_ipv6_general_socket, PtpTargetAddress,
@@ -314,6 +316,25 @@ async fn actual_main() {
 
     let tlv_forwarder = TlvForwarder::new();
 
+    let (provider, spp) = match config.security {
+        SecurityConfig::None => (DynamicSecurityProvider::NoSecurity, None),
+        SecurityConfig::NTS(nts) => {
+            let (provider, spp) = NTSProvider::new(
+                nts.server,
+                nts.client_cert_key,
+                nts.client_cert,
+                nts.server_root,
+            )
+            .await
+            .unwrap();
+            (DynamicSecurityProvider::NTS(provider), Some(spp))
+        }
+        SecurityConfig::Preshared(psk) => {
+            let provider = PresharedSecurityProvider::new(psk.spp, psk.key_id, psk.key.as_bytes());
+            (DynamicSecurityProvider::Preshared(provider), Some(psk.spp))
+        }
+    };
+
     for port_config in config.ports {
         let interface = port_config.interface;
         let network_mode = port_config.network_mode;
@@ -347,10 +368,14 @@ async fn actual_main() {
         let rng = StdRng::from_entropy();
         let bind_phc = port_config.hardware_clock;
         let port = instance.add_port(
-            port_config.into(),
+            statime::config::PortConfig {
+                spp,
+                ..port_config.into()
+            },
             KalmanConfiguration::default(),
             port_clock.clone_box(),
             rng,
+            provider.clone(),
         );
 
         let (main_task_sender, port_task_receiver) = tokio::sync::mpsc::channel(1);
@@ -518,6 +543,7 @@ type BmcaPort = Port<
     StdRng,
     BoxedClock,
     KalmanFilter,
+    DynamicSecurityProvider,
     RwLock<PtpInstanceState>,
 >;
 

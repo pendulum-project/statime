@@ -12,12 +12,13 @@ pub(crate) use sync::*;
 
 use self::{management::ManagementMessage, signalling::SignalingMessage};
 use super::{
-    common::{PortIdentity, TimeInterval, TlvSet, WireTimestamp},
+    common::{PortIdentity, TimeInterval, Tlv, TlvSet, TlvType, WireTimestamp},
     datasets::InternalDefaultDS,
     WireFormatError,
 };
 use crate::{
     config::LeapIndicator,
+    crypto::{NoSpaceError, SecurityAssociation, SecurityAssociationProvider, SenderIdentificaton},
     ptp_instance::PtpInstanceState,
     time::{Interval, Time},
 };
@@ -41,7 +42,7 @@ mod sync;
 /// `statime`.
 pub const MAX_DATA_LEN: usize = 1024;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum MessageType {
     Sync = 0x0,
@@ -240,11 +241,153 @@ fn base_header(
 /// Checks whether message is of PTP revision compatible with Statime
 pub fn is_compatible(buffer: &[u8]) -> bool {
     // this ensures that versionPTP in the header is 2
-    // it will never happen in PTPv1 packets because this octet is the LSB of versionPTP there
-    (buffer.len() >= 2) && (buffer[1] & 0xF) == 2
+    // it will never happen in PTPv1 packets because this octet is the LSB of
+    // versionPTP there
+    (buffer.len() >= 2) && (buffer[1] & 0xf) == 2
+}
+
+impl<'a> Message<'a> {
+    #[allow(unused)]
+    pub(crate) fn add_signature(
+        &mut self,
+        spp: u8,
+        provider: &impl SecurityAssociationProvider,
+        backing_buffer: &'a mut [u8],
+    ) -> Result<(), NoSpaceError> {
+        let association = provider.lookup(spp).ok_or(NoSpaceError)?;
+        let (key_id, key) = association.signing_mac();
+
+        // partial authentication tlv
+        let mut temp_tlv_value = [0; MAX_DATA_LEN];
+        temp_tlv_value[0] = spp;
+        temp_tlv_value[1] = 0;
+        temp_tlv_value[2..6].copy_from_slice(&key_id.to_be_bytes());
+
+        // Regenerate the tlv set with partial authentication tlv
+        let mut temp_message = self.clone();
+        temp_message.suffix = self
+            .suffix
+            .extend_with(
+                Tlv {
+                    tlv_type: TlvType::Authentication,
+                    value: temp_tlv_value[0..6 + key.output_size()].into(),
+                },
+                backing_buffer,
+            )
+            .ok_or(NoSpaceError)?;
+
+        // generate tag
+        let mut temp_buffer = [0; MAX_DATA_LEN];
+        temp_message
+            .serialize(&mut temp_buffer)
+            .map_err(|_| NoSpaceError)?;
+        if association.policy_data().ignore_correction {
+            // zero out correction field.
+            temp_buffer[8..16].fill(0)
+        }
+        key.sign(
+            &temp_buffer[..self.wire_size() + 10],
+            &mut temp_tlv_value[6..],
+        )?;
+
+        // Generate final tlv set
+        self.suffix = self
+            .suffix
+            .extend_with(
+                Tlv {
+                    tlv_type: TlvType::Authentication,
+                    value: temp_tlv_value[0..6 + key.output_size()].into(),
+                },
+                backing_buffer,
+            )
+            .ok_or(NoSpaceError)?;
+
+        Ok(())
+    }
 }
 
 impl Message<'_> {
+    pub(crate) fn verify_signed(&self, provider: &impl SecurityAssociationProvider) -> bool {
+        log::trace!("Validation message");
+        let mut tlv_offset = 0;
+        for tlv in self.suffix.tlv() {
+            if tlv.tlv_type == TlvType::Authentication {
+                // Check we have at least the SPP, params and key id
+                if tlv.value.len() < 6 {
+                    log::trace!("Rejected: Incorrect authentication tlv length");
+                    return false;
+                }
+
+                let spp = tlv.value[0];
+                let params = tlv.value[1];
+                let key_id = u32::from_be_bytes(tlv.value[2..6].try_into().unwrap());
+
+                // we dont support presence of any of the optional bits, so not valid if those
+                // are present
+                if params != 0 {
+                    log::trace!("Rejected: Unexpected optional bits");
+                    return false;
+                }
+
+                // get the security association and key
+                let Some(mut association) = provider.lookup(spp) else {
+                    log::trace!("Rejected: Invalid spp");
+                    return false;
+                };
+                let Some(key) = association.mac(key_id) else {
+                    log::trace!("Rejected: Invalid key id");
+                    return false;
+                };
+
+                // Ensure we have a complete ICV
+                if tlv.value.len() < 6 + key.output_size() {
+                    log::trace!("Rejected: TLV too short");
+                    return false;
+                }
+
+                // We need the raw packet data for the signature, so serialize again
+                // TODO: bad practice to reserialize for checking signatures, should be fixed
+                // before production ready
+                let mut buffer = [0; MAX_DATA_LEN];
+                if self.serialize(&mut buffer).is_err() {
+                    log::trace!("Rejected: cannot reserialize");
+                    return false;
+                }
+                if association.policy_data().ignore_correction {
+                    // zero out correction field.
+                    buffer[8..16].fill(0)
+                }
+
+                if !key.verify(
+                    &buffer[..self.header.wire_size() + self.body.wire_size() + tlv_offset + 10],
+                    &tlv.value[6..6 + key.output_size()],
+                ) {
+                    log::trace!("Rejected: signature invalid");
+                    return false;
+                }
+
+                // Check sequence id is acceptable
+                association.register_sequence_id(
+                    key_id,
+                    SenderIdentificaton {
+                        message_type: self.body.content_type(),
+                        source_port_id: self.header.source_port_identity,
+                    },
+                    self.header.sequence_id,
+                );
+
+                log::trace!("Accepted");
+                return true;
+            }
+
+            tlv_offset += tlv.wire_size();
+        }
+
+        // No authentication tlv found, so not signed
+        log::trace!("Rejected: no TLV present");
+        false
+    }
+
     pub(crate) fn sync(
         default_ds: &InternalDefaultDS,
         port_identity: PortIdentity,
@@ -488,5 +631,129 @@ impl<'a> Message<'a> {
             body,
             suffix,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::InstanceConfig,
+        crypto::{HmacSha256_128, SecurityPolicy},
+    };
+
+    struct TestSecurityProvider(SecurityPolicy);
+
+    struct TestSecurityAssociation(SecurityPolicy);
+
+    impl SecurityAssociation for TestSecurityAssociation {
+        fn policy_data(&self) -> crate::crypto::SecurityPolicy {
+            self.0
+        }
+
+        fn mac(&self, _key_id: u32) -> Option<&dyn crate::crypto::Mac> {
+            Some(std::boxed::Box::leak(std::boxed::Box::new(
+                HmacSha256_128::new([0; 32]),
+            )))
+        }
+
+        fn register_sequence_id(
+            &mut self,
+            _key_id: u32,
+            _sender: crate::crypto::SenderIdentificaton,
+            _sequence_id: u16,
+        ) -> bool {
+            true
+        }
+
+        fn signing_mac(&self) -> (u32, &dyn crate::crypto::Mac) {
+            (
+                0,
+                std::boxed::Box::leak(std::boxed::Box::new(HmacSha256_128::new([0; 32]))),
+            )
+        }
+    }
+
+    impl SecurityAssociationProvider for TestSecurityProvider {
+        type Association<'a> = TestSecurityAssociation;
+
+        fn lookup(&self, _spp: u8) -> Option<Self::Association<'_>> {
+            Some(TestSecurityAssociation(self.0))
+        }
+    }
+
+    #[test]
+    fn test_signing_ignoring_correction() {
+        let port_identity = PortIdentity::default();
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
+            clock_identity: Default::default(),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            sdo_id: Default::default(),
+            slave_only: false,
+            path_trace: false,
+        });
+
+        let provider = TestSecurityProvider(SecurityPolicy {
+            ignore_correction: true,
+        });
+
+        let mut test_message = Message::sync(&default_ds, port_identity, 1);
+        let mut backing_buffer = [0; MAX_DATA_LEN];
+        test_message
+            .add_signature(0, &provider, &mut backing_buffer)
+            .unwrap();
+
+        let mut message_buffer = [0; MAX_DATA_LEN];
+        let message_len = test_message.serialize(&mut message_buffer).unwrap();
+
+        // Modify correction field
+        message_buffer[9] = message_buffer[9].wrapping_add(9);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(received_message.verify_signed(&provider));
+
+        // Modify message
+        message_buffer[message_len - 1] = message_buffer[message_len - 1].wrapping_add(5);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(!received_message.verify_signed(&provider));
+    }
+
+    #[test]
+    fn test_signing() {
+        let port_identity = PortIdentity::default();
+        let default_ds = InternalDefaultDS::new(InstanceConfig {
+            clock_identity: Default::default(),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            sdo_id: Default::default(),
+            slave_only: false,
+            path_trace: false,
+        });
+
+        let provider = TestSecurityProvider(SecurityPolicy {
+            ignore_correction: false,
+        });
+
+        let mut test_message = Message::sync(&default_ds, port_identity, 1);
+        let mut backing_buffer = [0; MAX_DATA_LEN];
+        test_message
+            .add_signature(0, &provider, &mut backing_buffer)
+            .unwrap();
+
+        let mut message_buffer = [0; MAX_DATA_LEN];
+        let message_len = test_message.serialize(&mut message_buffer).unwrap();
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(received_message.verify_signed(&provider));
+
+        // Modify correction field
+        message_buffer[9] = message_buffer[9].wrapping_add(9);
+
+        let received_message = Message::deserialize(&message_buffer[..message_len]).unwrap();
+        assert!(!received_message.verify_signed(&provider));
     }
 }

@@ -2,8 +2,10 @@ extern crate core;
 
 pub mod clock;
 pub mod config;
+mod ke;
 pub mod metrics;
 pub mod observer;
+pub mod securityprovider;
 pub mod socket;
 pub mod tlvforwarder;
 pub mod tracing;
@@ -11,6 +13,7 @@ pub mod tracing;
 use std::path::Path;
 
 use config::Config;
+pub use ke::main as ke_main;
 pub use metrics::exporter::main as metrics_exporter_main;
 use tracing::LogLevel;
 use tracing_log::LogTracer;

@@ -55,6 +55,9 @@ pub struct PortConfig<A> {
     // Notes:
     // Fields specific for delay mechanism are kept as part of [DelayMechanism].
     // Version is always 2.1, so not stored (versionNumber, minorVersionNumber)
+    /// Security paramters pointer to use when sending message. If not null,
+    /// also enables checking on reception
+    pub spp: Option<u8>,
 }
 
 impl<A> PortConfig<A> {

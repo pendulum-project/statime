@@ -40,15 +40,20 @@ pin-project-lite = "0.2.13"
 toml = ">=0.5.0, <0.9.0"
 tokio = "1.33"
 rand = { version = "0.8.5", default-features = false }
+ring = "0.17.7"
 serde = { version = "1.0.192", features = ["derive"] }
 serde_json = { version = "1.0.111" }
 serde_test = { version = "1.0.176" }
 az = "1.2.1"
 fixed = "1.24"
 libm = "0.2.8"
-
+rustls = "0.22.2"
+rustls-pemfile = "2.0.0"
+tokio-rustls = "0.25.0"
+tokio-util = { version = "0.7.10", features = ["codec"] }
 clock-steering = "0.2.0"
 timestamped-socket = "0.2.4"
+base64 = "0.22.1"
 
 
 # our own crates used as dependencies, same version as the workspace version
