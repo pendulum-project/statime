@@ -35,10 +35,13 @@ pub(crate) struct DeserializedHeader {
 }
 
 impl Header {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new(minor_ptp_version: u8) -> Self {
         Self {
             sdo_id: SdoId(0),
-            version: PtpVersion { major: 2, minor: 1 },
+            version: PtpVersion {
+                major: 2,
+                minor: minor_ptp_version,
+            },
             domain_number: 0,
             alternate_master_flag: false,
             two_step_flag: false,
@@ -131,12 +134,6 @@ impl Header {
             message_type: (buffer[0] & 0x0f).try_into()?,
             message_length: u16::from_be_bytes(buffer[2..4].try_into().unwrap()),
         })
-    }
-}
-
-impl Default for Header {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -277,19 +274,19 @@ mod tests {
     fn flagfield_wireformat() {
         #[rustfmt::skip]
         let representations = [
-            ([0x00, 0x00u8], Header::default()),
-            ([0x01, 0x00u8], Header { alternate_master_flag: true, ..Default::default() }),
-            ([0x02, 0x00u8], Header { two_step_flag: true, ..Default::default() }),
-            ([0x04, 0x00u8], Header { unicast_flag: true, ..Default::default() }),
-            ([0x20, 0x00u8], Header { ptp_profile_specific_1: true, ..Default::default() }),
-            ([0x40, 0x00u8], Header { ptp_profile_specific_2: true, ..Default::default() }),
-            ([0x00, 0x01u8], Header { leap61: true, ..Default::default() }),
-            ([0x00, 0x02u8], Header { leap59: true, ..Default::default() }),
-            ([0x00, 0x04u8], Header { current_utc_offset_valid: true, ..Default::default() }),
-            ([0x00, 0x08u8], Header { ptp_timescale: true, ..Default::default() }),
-            ([0x00, 0x10u8], Header { time_tracable: true, ..Default::default() }),
-            ([0x00, 0x20u8], Header { frequency_tracable: true, ..Default::default() }),
-            ([0x00, 0x40u8], Header { synchronization_uncertain: true, ..Default::default() }),
+            ([0x00, 0x00u8], Header::new(1)),
+            ([0x01, 0x00u8], Header { alternate_master_flag: true, ..Header::new(1) }),
+            ([0x02, 0x00u8], Header { two_step_flag: true, ..Header::new(1) }),
+            ([0x04, 0x00u8], Header { unicast_flag: true, ..Header::new(1) }),
+            ([0x20, 0x00u8], Header { ptp_profile_specific_1: true, ..Header::new(1) }),
+            ([0x40, 0x00u8], Header { ptp_profile_specific_2: true, ..Header::new(1) }),
+            ([0x00, 0x01u8], Header { leap61: true, ..Header::new(1) }),
+            ([0x00, 0x02u8], Header { leap59: true, ..Header::new(1) }),
+            ([0x00, 0x04u8], Header { current_utc_offset_valid: true, ..Header::new(1) }),
+            ([0x00, 0x08u8], Header { ptp_timescale: true, ..Header::new(1) }),
+            ([0x00, 0x10u8], Header { time_tracable: true, ..Header::new(1) }),
+            ([0x00, 0x20u8], Header { frequency_tracable: true, ..Header::new(1) }),
+            ([0x00, 0x40u8], Header { synchronization_uncertain: true, ..Header::new(1) }),
         ];
 
         for (i, (byte_representation, flag_representation)) in
