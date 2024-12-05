@@ -31,7 +31,7 @@ pub(crate) struct TlvSet<'a> {
     bytes: &'a [u8],
 }
 
-impl<'a> core::fmt::Debug for TlvSet<'a> {
+impl core::fmt::Debug for TlvSet<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("TlvSet")
             .field("wire_size", &self.wire_size())
@@ -102,7 +102,7 @@ pub(crate) struct TlvSetIterator<'a> {
     buffer: &'a [u8],
 }
 
-impl<'a> TlvSetIterator<'a> {
+impl TlvSetIterator<'_> {
     pub(crate) fn empty() -> Self {
         Self { buffer: &[] }
     }
@@ -126,7 +126,7 @@ impl<'a> Iterator for TlvSetIterator<'a> {
     }
 }
 
-impl<'a> FusedIterator for TlvSetIterator<'a> {}
+impl FusedIterator for TlvSetIterator<'_> {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Tlv<'a> {

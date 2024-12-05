@@ -14,7 +14,7 @@ pub struct ForwardedTLV<'a> {
     pub(super) sender_identity: PortIdentity,
 }
 
-impl<'a> ForwardedTLV<'a> {
+impl ForwardedTLV<'_> {
     /// Wire size of the TLV. Can be used to determine how many TLV's to keep
     pub fn size(&self) -> usize {
         self.tlv.wire_size()
