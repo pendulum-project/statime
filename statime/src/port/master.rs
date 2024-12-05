@@ -12,7 +12,7 @@ use crate::{
     time::Time,
 };
 
-impl<'a, A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'a, Running, A, R, C, F, S> {
+impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F, S> {
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
