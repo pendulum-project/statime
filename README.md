@@ -8,18 +8,13 @@ Statime is a library providing an implementation of PTP version 2.1 (IEEE1588-20
 
 It is designed to be able to work with many different underlying platforms, including embedded targets. This does mean that it cannot use the standard library and platform specific libraries to interact with the system clock and to access the network. That needs to be provided by the user of the library.
 
-On modern Linux kernels, the `statime-linux` crate provides ready to use implementations of these interfaces. For other platforms the user will need to implement these themselves.
+On modern Linux kernels, the `statime-linux` crate provides a ready to use ptp daemon. See our [getting started guide](https://docs.statime.pendulum-project.org/guide/getting-started/) for getting started with statime on linux.
 
-The `statime-stm32` crate gives an example of how to use statime on an embedded target.
+If you want to use statime on platforms other than linux, you will need to implement a suitable binary yourself. The `statime-stm32` crate gives an example of how to do this on an embedded target.
 
 <p align="center">
 <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
 </p>
-
-The `statime-linux` crate provides a binary for Linux implementing an ordinary or boundary clock. It will need sufficient permissions to change the system clock to use. The easiest way to start it is through sudo:
-```
-sudo ./target/debug/statime -c path/to/statime.toml
-```
 
 ## Structure
 
@@ -27,40 +22,23 @@ The `statime` library has been built in a way to try and be platform-agnostic. T
 
 ## Rust version
 
-Statime requires a nigthly version of cargo/rust. The easiest way to obtain these is through [rustup](https://rustup.rs)
+Statime requires rust version 1.67 at minimum. The easiest way to obtain these is through [rustup](https://rustup.rs)
 
-## Running with elevated privileges
+## Running from source
 
-Because of the use of ports 319 and 320 in the PTP protocol, the code here needs to be run as root. It is best to build the code as a non-root user with
+Because of the use of ports 319 and 320 in the PTP protocol, `statime-linux` needs to be run as root. It is best to build it as a non-root user with
 ```
-cargo +nightly build
+cargo build
 ```
 and then run it as root with
 ```
 sudo ./target/debug/statime -i <ETHERNET INTERFACE NAME>
 ```
 
-## PTPd setup for testing
-
-PTPd can be used as a ptp master clock for testing. Because of the port usage required by the PTP standard, this master clock must be on a different machine than that used to run the code in this repository. On Ubuntu, it can be installed with
-```bash
-apt install ptpd
-```
-You probably wont want to run this continuously as a service, so disable it with
-```bash
-service ptpd disable
-```
-Then, to start ptpd, as root run
-```bash
-ptpd -V -n -M -i <INTERFACE>
-```
-where `<INTERFACE>` is the network interface you want ptpd to use. Here `-n` disables clock adjustment by ptpd, and `-M` ensures that it runs in master mode only.
-
 # Roadmap
 
-- Q2 2024: Power sector profile + experimental NTS4PTP
-- Q3 2024: Stable release Statime (pending funding)
-- Q1-Q4 2024: Adoption work & maintenance work
+- Stable release Statime (pending funding)
+- Adoption work & maintenance work
 
 # Support our work
 
