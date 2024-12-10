@@ -8,9 +8,9 @@ Statime is a library providing an implementation of PTP version 2.1 (IEEE1588-20
 
 It is designed to be able to work with many different underlying platforms, including embedded targets. This does mean that it cannot use the standard library and platform specific libraries to interact with the system clock and to access the network. That needs to be provided by the user of the library.
 
-On modern Linux kernels, the `statime-linux` crate provides a ready to use ptp daemon. See our [getting started guide](https://docs.statime.pendulum-project.org/guide/getting-started/) for getting started with statime on linux.
+On modern Linux kernels, the `statime-linux` crate provides a ready to use PTP daemon. See our [getting started guide](https://docs.statime.pendulum-project.org/guide/getting-started/).
 
-If you want to use statime on platforms other than linux, you will need to implement a suitable binary yourself. The `statime-stm32` crate gives an example of how to do this on an embedded target.
+If you want to use Statime on platforms other than Linux, you will need to implement a suitable binary yourself. The `statime-stm32` crate gives an example of how to do this on an embedded target.
 
 <p align="center">
 <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
@@ -22,7 +22,7 @@ The `statime` library has been built in a way to try and be platform-agnostic. T
 
 ## Rust version
 
-Statime requires rust version 1.67 at minimum. The easiest way to obtain these is through [rustup](https://rustup.rs)
+Statime requires Rust version 1.67 at minimum. The easiest way to install Rust is through [rustup](https://rustup.rs)
 
 ## Running from source
 
