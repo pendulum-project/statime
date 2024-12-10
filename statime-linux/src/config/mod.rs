@@ -1,8 +1,5 @@
 use std::{
-    fs::read_to_string,
-    net::SocketAddr,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
+    fs::read_to_string, net::SocketAddr, os::unix::fs::PermissionsExt, path::{Path, PathBuf}
 };
 
 use log::warn;
@@ -40,6 +37,42 @@ pub struct Config {
     pub virtual_system_clock: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum HardwareClock {
+    /// Automatically use the (default) hardware clock for the interface specified if available
+    #[default]
+    Auto,
+    /// Require the use of the (default) hardware clock for the interface specified.
+    /// If a hardware clock is not available, statime will refuse to start.
+    Required,
+    /// Use the specified hardware clock
+    Specific(u32),
+    /// Do not use a hardware clock
+    None,
+}
+
+impl<'de> Deserialize<'de> for HardwareClock {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        let raw: String = Deserialize::deserialize(deserializer)?;
+
+        if raw == "auto" {
+            Ok(HardwareClock::Auto)
+        } else if raw == "required" {
+            Ok(HardwareClock::Required)
+        } else if raw == "none" {
+            Ok(HardwareClock::None)
+        } else {
+            let clock = raw.parse().map_err(|e| D::Error::custom(format!("Invalid hardware clock: {}", e)))?;
+            Ok(HardwareClock::Specific(clock))
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PortConfig {
@@ -47,7 +80,7 @@ pub struct PortConfig {
     #[serde(default, deserialize_with = "deserialize_acceptable_master_list")]
     pub acceptable_master_list: Option<Vec<ClockIdentity>>,
     #[serde(default)]
-    pub hardware_clock: Option<u32>,
+    pub hardware_clock: HardwareClock,
     #[serde(default)]
     pub network_mode: NetworkMode,
     #[serde(default = "default_announce_interval")]
