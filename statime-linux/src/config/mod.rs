@@ -8,7 +8,7 @@ use std::{
 use log::warn;
 use serde::{Deserialize, Deserializer};
 use statime::{
-    config::{ClockIdentity, DelayMechanism},
+    config::{ClockIdentity, DelayMechanism, PtpMinorVersion},
     time::{Duration, Interval},
 };
 use timestamped_socket::interface::InterfaceName;
@@ -64,6 +64,20 @@ pub struct PortConfig {
     pub delay_mechanism: DelayType,
     #[serde(default = "default_delay_interval")]
     pub delay_interval: i8,
+    #[serde(
+        default = "default_minor_ptp_version",
+        deserialize_with = "deserialize_minor_version"
+    )]
+    pub minor_ptp_version: PtpMinorVersion,
+}
+
+fn deserialize_minor_version<'de, D>(deserializer: D) -> Result<PtpMinorVersion, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    let raw: u8 = Deserialize::deserialize(deserializer)?;
+    raw.try_into().map_err(D::Error::custom)
 }
 
 fn deserialize_acceptable_master_list<'de, D>(
@@ -116,6 +130,7 @@ impl From<PortConfig> for statime::config::PortConfig<Option<Vec<ClockIdentity>>
                     interval: Interval::from_log_2(pc.delay_interval),
                 },
             },
+            minor_ptp_version: pc.minor_ptp_version,
         }
     }
 }
@@ -218,6 +233,10 @@ fn default_delay_interval() -> i8 {
     0
 }
 
+fn default_minor_ptp_version() -> PtpMinorVersion {
+    PtpMinorVersion::One
+}
+
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ObservabilityConfig {
@@ -251,6 +270,7 @@ fn default_metrics_exporter_listen() -> SocketAddr {
 mod tests {
     use std::str::FromStr;
 
+    use statime::config::PtpMinorVersion;
     use timestamped_socket::interface::InterfaceName;
 
     use crate::{config::ObservabilityConfig, tracing::LogLevel};
@@ -275,6 +295,7 @@ interface = "enp0s31f6"
             delay_asymmetry: 0,
             delay_mechanism: crate::config::DelayType::E2E,
             delay_interval: 0,
+            minor_ptp_version: PtpMinorVersion::One,
         };
 
         let expected = crate::config::Config {

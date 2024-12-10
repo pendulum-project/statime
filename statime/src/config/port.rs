@@ -24,6 +24,34 @@ pub enum DelayMechanism {
     // No support for other delay mechanisms
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash, PartialOrd, Ord)]
+/// Minor version to be used in PTP protocol messages
+pub enum PtpMinorVersion {
+    /// 0
+    Zero = 0,
+    /// 1
+    One = 1,
+}
+
+impl TryFrom<u8> for PtpMinorVersion {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(PtpMinorVersion::Zero),
+            1 => Ok(PtpMinorVersion::One),
+            _ => Err(""),
+        }
+    }
+}
+
+impl From<PtpMinorVersion> for u8 {
+    fn from(value: PtpMinorVersion) -> Self {
+        value as u8
+    }
+}
+
 /// Configuration items of the PTP PortDS dataset. Dynamical fields are kept
 /// as part of [crate::port::Port].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -52,9 +80,12 @@ pub struct PortConfig<A> {
 
     /// The estimated asymmetry in the link connected to this [`Port`]
     pub delay_asymmetry: Duration,
+
+    /// Minor version number to use.
+    pub minor_ptp_version: PtpMinorVersion,
     // Notes:
     // Fields specific for delay mechanism are kept as part of [DelayMechanism].
-    // Version is always 2.1, so not stored (versionNumber, minorVersionNumber)
+    // Major version is always 2, so not stored (versionNumber)
 }
 
 impl<A> PortConfig<A> {
