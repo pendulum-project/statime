@@ -20,7 +20,14 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
             let seq_id = self.sync_seq_ids.generate();
             let packet_length = match self
                 .instance_state
-                .with_ref(|state| Message::sync(&state.default_ds, self.port_identity, seq_id))
+                .with_ref(|state| {
+                    Message::sync(
+                        &state.default_ds,
+                        self.port_identity,
+                        seq_id,
+                        self.config.minor_ptp_version.into(),
+                    )
+                })
                 .serialize(&mut self.packet_buffer)
             {
                 Ok(message) => message,
@@ -52,7 +59,13 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
             let packet_length = match self
                 .instance_state
                 .with_ref(|state| {
-                    Message::follow_up(&state.default_ds, self.port_identity, id, timestamp)
+                    Message::follow_up(
+                        &state.default_ds,
+                        self.port_identity,
+                        id,
+                        timestamp,
+                        self.config.minor_ptp_version.into(),
+                    )
                 })
                 .serialize(&mut self.packet_buffer)
             {
@@ -86,7 +99,12 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
             let mut tlv_builder = TlvSetBuilder::new(&mut tlv_buffer);
 
             let mut message = self.instance_state.with_ref(|state| {
-                Message::announce(state, self.port_identity, self.announce_seq_ids.generate())
+                Message::announce(
+                    state,
+                    self.port_identity,
+                    self.announce_seq_ids.generate(),
+                    self.config.minor_ptp_version.into(),
+                )
             });
             let mut tlv_margin = MAX_DATA_LEN - message.wire_size();
 
@@ -206,7 +224,13 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
     ) -> PortActionIterator {
         log::debug!("Received PDelayReq");
         let pdelay_resp_message = self.instance_state.with_ref(|state| {
-            Message::pdelay_resp(&state.default_ds, self.port_identity, header, timestamp)
+            Message::pdelay_resp(
+                &state.default_ds,
+                self.port_identity,
+                header,
+                timestamp,
+                self.config.minor_ptp_version.into(),
+            )
         });
 
         let packet_length = match pdelay_resp_message.serialize(&mut self.packet_buffer) {
@@ -242,6 +266,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
                 requestor_identity,
                 id,
                 timestamp,
+                self.config.minor_ptp_version.into(),
             )
         });
 
@@ -299,7 +324,7 @@ mod tests {
                     ..Default::default()
                 },
                 correction_field: TimeInterval(I48F16::from_bits(400)),
-                ..Default::default()
+                ..Header::new(1)
             },
             DelayReqMessage {
                 origin_timestamp: Time::from_micros(0).into(),
@@ -352,7 +377,7 @@ mod tests {
                     ..Default::default()
                 },
                 correction_field: TimeInterval(I48F16::from_bits(200)),
-                ..Default::default()
+                ..Header::new(1)
             },
             DelayReqMessage {
                 origin_timestamp: Time::from_micros(0).into(),
@@ -674,7 +699,7 @@ mod tests {
 
         let mut port = setup_test_port(&state);
 
-        let mut actions = port.handle_pdelay_req(Header::default(), Time::from_micros(500));
+        let mut actions = port.handle_pdelay_req(Header::new(1), Time::from_micros(500));
 
         let Some(PortAction::SendEvent {
             context,
