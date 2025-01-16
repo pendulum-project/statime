@@ -1,8 +1,9 @@
-use crate::time::Duration;
-use crate::time::Time;
-use crate::Clock;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+use crate::{
+    time::{Duration, Time},
+    Clock,
+};
 
 /// A wrapper for stateful `statime::Clock` implementations to make them behave
 /// like e.g. `statime_linux::LinuxClock` - clones share state with each other
@@ -19,7 +20,8 @@ impl<C: Clock> SharedClock<C> {
 }
 
 impl<C: Clock> Clone for SharedClock<C> {
-    /// Clone the shared reference to the clock (behaviour consistent with `statime_linux::LinuxClock`)
+    /// Clone the shared reference to the clock (behaviour consistent with
+    /// `statime_linux::LinuxClock`)
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }

@@ -237,10 +237,7 @@ mod app {
 
     /// Task that runs the BMCA every required interval
     #[task(shared = [net, ptp_port], priority = 1)]
-    async fn instance_bmca(
-        mut cx: instance_bmca::Context,
-        ptp_instance: &'static StmPtpInstance,
-    ) {
+    async fn instance_bmca(mut cx: instance_bmca::Context, ptp_instance: &'static StmPtpInstance) {
         let net = &mut cx.shared.net;
         let ptp_port = &mut cx.shared.ptp_port;
 
