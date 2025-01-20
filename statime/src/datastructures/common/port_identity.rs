@@ -1,5 +1,5 @@
 use super::clock_identity::ClockIdentity;
-use crate::datastructures::{WireFormat, WireFormatError};
+use crate::datastructures::{messages_v1, WireFormat, WireFormatError};
 
 /// Identity of a single port of a PTP instance
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
@@ -23,6 +23,18 @@ impl WireFormat for PortIdentity {
             clock_identity: ClockIdentity::deserialize(&buffer[0..8])?,
             port_number: u16::from_be_bytes(buffer[8..10].try_into().unwrap()),
         })
+    }
+}
+
+impl PortIdentity {
+    pub fn from_v1_fields(uuid: [u8; 6], port: u16) -> Self {
+        Self {
+            clock_identity: ClockIdentity::from_mac_address(uuid),
+            port_number: port
+        }
+    }
+    pub fn from_v1_header(header: &messages_v1::Header) -> Self {
+        Self::from_v1_fields(header.source_uuid, header.source_port_id)
     }
 }
 

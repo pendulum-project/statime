@@ -12,7 +12,7 @@ use statime::{
     config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
-        is_message_buffer_compatible, InBmca, Measurement, Port, PortAction, PortActionIterator,
+        InBmca, Measurement, Port, PortAction, PortActionIterator,
         TimestampContext, MAX_DATA_LEN,
     },
     time::Time,
@@ -579,7 +579,7 @@ async fn port_task<A: NetworkAddress + PtpTargetAddress>(
             let mut actions = tokio::select! {
                 result = event_socket.recv(&mut event_buffer) => match result {
                     Ok(packet) => {
-                        if !is_message_buffer_compatible(&event_buffer[..packet.bytes_read]) {
+                        if !port.is_message_buffer_compatible(&event_buffer[..packet.bytes_read]) {
                             // do not spam with missing timestamp error in mixed-version PTPv1+v2 networks
                             PortActionIterator::empty()
                         } else if let Some(timestamp) = packet.timestamp {
