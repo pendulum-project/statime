@@ -7,6 +7,14 @@ use self::messages::EnumConversionError;
 pub mod common;
 pub mod datasets;
 pub mod messages;
+pub mod messages_v1;
+
+/// Universal Message container supporting multiple PTP versions
+pub enum MessageV<'a> {
+    PTPv1(messages_v1::Message),
+    PTPv2(messages::Message<'a>),
+}
+
 
 #[derive(Clone, Debug)]
 pub(crate) enum WireFormatError {
@@ -54,3 +62,5 @@ trait WireFormat: Debug + Clone + Eq {
     /// error.
     fn deserialize(buffer: &[u8]) -> Result<Self, WireFormatError>;
 }
+
+

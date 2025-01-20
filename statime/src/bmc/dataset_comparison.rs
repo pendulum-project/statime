@@ -3,10 +3,12 @@
 use core::cmp::Ordering;
 
 use crate::datastructures::{
-    common::{ClockIdentity, ClockQuality, PortIdentity},
+    common::{ClockIdentity, ClockQuality, PortIdentity, V2_COMPAT_PRIORITY1, V2_COMPAT_PRIORITY1_PREFERRED, V2_COMPAT_PRIORITY2},
     datasets::InternalDefaultDS,
-    messages::AnnounceMessage,
+    messages::AnnounceMessage, messages_v1,
 };
+
+use super::foreign_master::MasterAnnouncement;
 
 /// A collection of data that is gathered from other sources (mainly announce
 /// messages and the DefaultDS). When gathered from two different sources, the
@@ -39,6 +41,30 @@ impl ComparisonDataset {
             steps_removed: message.steps_removed,
             identity_of_senders: message.header.source_port_identity.clock_identity,
             identity_of_receiver: *port_receiver_identity,
+        }
+    }
+
+    pub(crate) fn from_sync_v1_message(message: &messages_v1::SyncMessage, port_receiver_identity: &PortIdentity) -> Self {
+        // TODO: DRY handle_announce_from_v1_sync
+        Self {
+            gm_priority_1: if message.grandmaster.preferred { V2_COMPAT_PRIORITY1_PREFERRED } else { V2_COMPAT_PRIORITY1 },
+            gm_identity: ClockIdentity::from_mac_address(message.grandmaster.clock_uuid),
+            gm_clock_quality: ClockQuality {
+                clock_class: 248, /* TODO: is it possible to fill it??? */
+                clock_accuracy: crate::config::ClockAccuracy::Unknown, /* TODO: is it possible to fill it??? */
+                offset_scaled_log_variance: message.grandmaster.clock_variance as u16 /* FIXME */
+            },
+            gm_priority_2: V2_COMPAT_PRIORITY2,
+            steps_removed: message.local_steps_removed,
+            identity_of_senders: ClockIdentity::from_mac_address(message.header.source_uuid),
+            identity_of_receiver: *port_receiver_identity,
+        }
+    }
+
+    pub(crate) fn from_master_announcement(announcement: &MasterAnnouncement, port_receiver_identity: &PortIdentity) -> Self {
+        match announcement {
+            MasterAnnouncement::PTPv2(message) => Self::from_announce_message(message, port_receiver_identity),
+            MasterAnnouncement::PTPv1(message) => Self::from_sync_v1_message(message, port_receiver_identity),
         }
     }
 

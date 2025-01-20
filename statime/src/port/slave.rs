@@ -5,13 +5,13 @@ use super::{
     Measurement, PeerDelayState, Port, PortActionIterator, Running,
 };
 use crate::{
-    config::DelayMechanism,
-    datastructures::messages::{
+    config::{DelayMechanism, ProtocolVersion},
+    datastructures::{messages::{
         DelayRespMessage, FollowUpMessage, Header, Message, PDelayRespFollowUpMessage,
         PDelayRespMessage, SyncMessage,
-    },
+    }, messages_v1},
     filters::Filter,
-    port::{actions::TimestampContextInner, state::SyncState, PortAction, TimestampContext},
+    port::{actions::TimestampContextInner, state::SyncState, MessageV1, PortAction, PortIdentity, TimestampContext},
     ptp_instance::PtpInstanceStateMutex,
     time::{Duration, Interval, Time},
     Clock,
@@ -160,6 +160,72 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         }
     }
 
+    // TODO DRY
+    pub(super) fn handle_sync_v1(
+        &mut self,
+        header: messages_v1::Header,
+        message: messages_v1::SyncMessage,
+        recv_time: Time,
+    ) -> PortActionIterator {
+        match self.port_state {
+            PortState::Slave(ref mut state) => {
+                log::debug!("Received sync {:?}", header.sequence_id);
+                if state.remote_master != PortIdentity::from_v1_header(&header) {
+                    return actions![];
+                }
+
+                let corrected_recv_time = recv_time;
+
+                if header.ptp_assist {
+                    match state.sync_state {
+                        SyncState::Measuring {
+                            id,
+                            recv_time: Some(_),
+                            ..
+                        } if id == header.sequence_id => {
+                            log::warn!("Duplicate sync message");
+                            // Ignore the sync message
+                            actions![]
+                        }
+                        SyncState::Measuring {
+                            id,
+                            ref mut recv_time,
+                            ..
+                        } if id == header.sequence_id => {
+                            *recv_time = Some(corrected_recv_time);
+                            self.handle_time_measurement()
+                        }
+                        _ => {
+                            state.sync_state = SyncState::Measuring {
+                                id: header.sequence_id,
+                                send_time: None,
+                                recv_time: Some(corrected_recv_time),
+                            };
+                            actions![]
+                        }
+                    }
+                } else {
+                    match state.sync_state {
+                        SyncState::Measuring { id, .. } if id == header.sequence_id => {
+                            log::warn!("Duplicate sync message");
+                            // Ignore the sync message
+                            actions![]
+                        }
+                        _ => {
+                            state.sync_state = SyncState::Measuring {
+                                id: header.sequence_id,
+                                send_time: Some(Time::from(message.origin_timestamp)),
+                                recv_time: Some(corrected_recv_time),
+                            };
+                            self.handle_time_measurement()
+                        }
+                    }
+                }
+            }
+            _ => actions![],
+        }
+    }
+
     pub(super) fn handle_follow_up(
         &mut self,
         header: Header,
@@ -174,6 +240,52 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
 
                 let packet_send_time = Time::from(message.precise_origin_timestamp)
                     + Duration::from(header.correction_field);
+
+                match state.sync_state {
+                    SyncState::Measuring {
+                        id,
+                        send_time: Some(_),
+                        ..
+                    } if id == header.sequence_id => {
+                        log::warn!("Duplicate FollowUp message");
+                        // Ignore the followup
+                        actions![]
+                    }
+                    SyncState::Measuring {
+                        id,
+                        ref mut send_time,
+                        ..
+                    } if id == header.sequence_id => {
+                        *send_time = Some(packet_send_time);
+                        self.handle_time_measurement()
+                    }
+                    _ => {
+                        state.sync_state = SyncState::Measuring {
+                            id: header.sequence_id,
+                            send_time: Some(packet_send_time),
+                            recv_time: None,
+                        };
+                        self.handle_time_measurement()
+                    }
+                }
+            }
+            _ => actions![],
+        }
+    }
+
+    pub(super) fn handle_follow_up_v1(
+        &mut self,
+        header: messages_v1::Header,
+        message: messages_v1::FollowUpMessage,
+    ) -> PortActionIterator {
+        match self.port_state {
+            PortState::Slave(ref mut state) => {
+                log::debug!("Received FollowUp {:?}", header.sequence_id);
+                if state.remote_master != PortIdentity::from_v1_header(&header) {
+                    return actions![];
+                }
+
+                let packet_send_time = Time::from(message.precise_origin_timestamp);
 
                 match state.sync_state {
                     SyncState::Measuring {
@@ -244,6 +356,51 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
                     }
                     _ => {
                         log::warn!("Unexpected DelayResp message");
+                        // Ignore the Delay response
+                        actions![]
+                    }
+                }
+            }
+            _ => actions![],
+        }
+    }
+
+    pub(super) fn handle_delay_resp_v1(
+        &mut self,
+        header: messages_v1::Header,
+        message: messages_v1::DelayRespMessage,
+    ) -> PortActionIterator {
+        match self.port_state {
+            PortState::Slave(ref mut state) => {
+                log::debug!("Received DelayResp v1");
+                if self.port_identity != PortIdentity::from_v1_fields(message.requesting_source_uuid, message.requesting_source_port_id)
+                    || state.remote_master != PortIdentity::from_v1_header(&header)
+                {
+                    return actions![];
+                }
+
+                match state.delay_state {
+                    DelayState::Measuring {
+                        id,
+                        recv_time: Some(_),
+                        ..
+                    } if id == message.requesting_source_sequence_id => {
+                        log::warn!("Duplicate DelayResp v1 message");
+                        // Ignore the Delay response
+                        actions![]
+                    }
+                    DelayState::Measuring {
+                        id,
+                        ref mut recv_time,
+                        ..
+                    } if id == message.requesting_source_sequence_id => {
+                        *recv_time = Some(
+                            Time::from(message.receive_timestamp),
+                        );
+                        self.handle_time_measurement()
+                    }
+                    _ => {
+                        log::warn!("Unexpected DelayResp v1 message");
                         // Ignore the Delay response
                         actions![]
                     }
@@ -468,6 +625,9 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
         &mut self,
         log_min_pdelay_req_interval: Interval,
     ) -> PortActionIterator {
+        if self.config.protocol_version==ProtocolVersion::PTPv1 {
+            return actions![];
+        }
         let pdelay_id = self.pdelay_seq_ids.generate();
 
         let pdelay_req = self.instance_state.with_ref(|state| {
@@ -517,11 +677,25 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
                 log::debug!("Starting new delay measurement");
 
                 let delay_id = self.delay_seq_ids.generate();
-                let delay_req = self.instance_state.with_ref(|state| {
-                    Message::delay_req(&state.default_ds, self.port_identity, delay_id)
-                });
+                let serialize_result = match self.config.protocol_version {
+                    ProtocolVersion::PTPv2 => {
+                        let delay_req = self.instance_state.with_ref(|state| {
+                            Message::delay_req(&state.default_ds, self.port_identity, delay_id)
+                        });
+                        delay_req.serialize(&mut self.packet_buffer)
+                    }
+                    ProtocolVersion::PTPv1 => {
+                        if self.instance_state.with_ref(|state| state.parent_ds.grandmaster_v1.is_none() ) {
+                            return actions![];
+                        }
+                        let delay_req = self.instance_state.with_ref(|state| {
+                            MessageV1::delay_req(&state, self.port_identity, delay_id)
+                        });
+                        delay_req.serialize(&mut self.packet_buffer)
+                    }
+                };
 
-                let message_length = match delay_req.serialize(&mut self.packet_buffer) {
+                let message_length = match serialize_result {
                     Ok(length) => length,
                     Err(error) => {
                         log::error!("Could not serialize delay request: {:?}", error);

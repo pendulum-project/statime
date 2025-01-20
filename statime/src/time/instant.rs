@@ -11,7 +11,7 @@ use fixed::{
 };
 
 use super::duration::Duration;
-use crate::datastructures::common::WireTimestamp;
+use crate::datastructures::common::{WireTimestamp, WireTimestampV1};
 
 /// Time represents a specific moment in time.
 ///
@@ -93,6 +93,12 @@ impl Time {
 
 impl From<WireTimestamp> for Time {
     fn from(ts: WireTimestamp) -> Self {
+        Self::from_fixed_nanos(ts.seconds as i128 * 1_000_000_000i128 + ts.nanos as i128)
+    }
+}
+
+impl From<WireTimestampV1> for Time {
+    fn from(ts: WireTimestampV1) -> Self {
         Self::from_fixed_nanos(ts.seconds as i128 * 1_000_000_000i128 + ts.nanos as i128)
     }
 }

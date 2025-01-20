@@ -1,19 +1,20 @@
 use arrayvec::ArrayVec;
+use log::warn;
 
 use super::{state::PortState, ForwardedTLVProvider, Port, PortActionIterator, Running};
 use crate::{
-    datastructures::{
+    config::ProtocolVersion, datastructures::{
         common::{PortIdentity, Tlv, TlvSetBuilder, TlvType},
         messages::{DelayReqMessage, Header, Message, MAX_DATA_LEN},
-    },
-    filters::Filter,
-    port::{actions::TimestampContextInner, PortAction, TimestampContext},
-    ptp_instance::PtpInstanceStateMutex,
-    time::Time,
+    }, filters::Filter, port::{actions::TimestampContextInner, PortAction, TimestampContext}, ptp_instance::PtpInstanceStateMutex, time::Time
 };
 
 impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F, S> {
     pub(super) fn send_sync(&mut self) -> PortActionIterator {
+        if self.config.protocol_version==ProtocolVersion::PTPv1 {
+            // TODO
+            return actions![];
+        }
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
 
@@ -79,7 +80,13 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         &mut self,
         tlv_provider: &mut impl ForwardedTLVProvider,
     ) -> PortActionIterator {
-        if matches!(self.port_state, PortState::Master) {
+        if self.config.protocol_version==ProtocolVersion::PTPv1 {
+            // TODO
+            warn!("trying to act as master in PTPv1, not implemented yet");
+            return actions![];
+        }
+        // PTPv1 does not have separate announce, master metadata is carried in Sync message
+        if matches!(self.port_state, PortState::Master) && matches!(self.config.protocol_version, ProtocolVersion::PTPv2) {
             log::trace!("sending announce message");
 
             let mut tlv_buffer = [0; MAX_DATA_LEN];

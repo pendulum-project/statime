@@ -24,6 +24,15 @@ pub enum DelayMechanism {
     // No support for other delay mechanisms
 }
 
+/// PTP protocol revision
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum ProtocolVersion {
+    /// IEEE 1588-2002
+    PTPv1,
+    /// IEEE 1588-2019
+    PTPv2,
+}
+
 /// Configuration items of the PTP PortDS dataset. Dynamical fields are kept
 /// as part of [crate::port::Port].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -54,7 +63,18 @@ pub struct PortConfig<A> {
     pub delay_asymmetry: Duration,
     // Notes:
     // Fields specific for delay mechanism are kept as part of [DelayMechanism].
-    // Version is always 2.1, so not stored (versionNumber, minorVersionNumber)
+
+    /// PTP protocol version this port will use
+    pub protocol_version: ProtocolVersion,
+    // Notes: it is technically possible to run different versions of PTP on
+    // the same physical Ethernet interface (Dante devices do this when having
+    // AES67 enabled) - this way PTPv1-to-v2 or vice versa "converter" can be
+    // created.
+    // To do this in Statime, create multiple Port instances, route packets
+    // to `handle_*_receive` methods according to PTP version in packet's
+    // header and merge actions from `PortActionIterator`s.
+    // Not tested yet, beware of possible strange conditions like boundary clock
+    // loops.
 }
 
 impl<A> PortConfig<A> {

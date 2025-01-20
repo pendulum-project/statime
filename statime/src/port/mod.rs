@@ -8,12 +8,14 @@ pub use actions::{
     ForwardedTLV, ForwardedTLVProvider, NoForwardedTLVs, PortAction, PortActionIterator,
     TimestampContext,
 };
+use log::warn;
 pub use measurement::Measurement;
 use rand::Rng;
 use state::PortState;
 
 use self::sequence_id::SequenceIdGenerator;
-pub use crate::datastructures::messages::is_compatible as is_message_buffer_compatible;
+pub use crate::datastructures::messages::is_compatible as is_message_buffer_compatible_v2;
+pub use crate::datastructures::messages_v1::is_compatible as is_message_buffer_compatible_v1;
 pub use crate::datastructures::messages::MAX_DATA_LEN;
 #[cfg(doc)]
 use crate::PtpInstance;
@@ -23,7 +25,7 @@ use crate::{
         bmca::{BestAnnounceMessage, Bmca},
     },
     clock::Clock,
-    config::PortConfig,
+    config::{PortConfig, ProtocolVersion},
     datastructures::{
         common::PortIdentity,
         messages::{Message, MessageBody},
@@ -32,6 +34,8 @@ use crate::{
     ptp_instance::{PtpInstanceState, PtpInstanceStateMutex},
     time::{Duration, Time},
 };
+use crate::datastructures::messages_v1::Message as MessageV1;
+use crate::datastructures::messages_v1::MessageBody as MessageBodyV1;
 
 // Needs to be here because of use rules
 macro_rules! actions {
@@ -117,7 +121,7 @@ pub(crate) mod state;
 /// # }
 /// # let (instance_config, time_properties_ds) = unimplemented!();
 /// use rand::thread_rng;
-/// use statime::config::{AcceptAnyMaster, DelayMechanism, PortConfig};
+/// use statime::config::{AcceptAnyMaster, DelayMechanism, PortConfig, ProtocolVersion};
 /// use statime::filters::BasicFilter;
 /// use statime::PtpInstance;
 /// use statime::time::Interval;
@@ -134,6 +138,7 @@ pub(crate) mod state;
 ///     sync_interval: interval,
 ///     master_only: false,
 ///     delay_asymmetry: Default::default(),
+///     protocol_version: ProtocolVersion::PTPv2,
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
@@ -438,7 +443,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
         &mut self,
         data: &'b [u8],
     ) -> ControlFlow<PortActionIterator<'b>, Message<'b>> {
-        if !is_message_buffer_compatible(data) {
+        if !self.is_message_buffer_compatible(data) {
             // do not spam with parse error in mixed-version PTPv1+v2 networks
             return ControlFlow::Break(actions![]);
         }
@@ -459,38 +464,96 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
         ControlFlow::Continue(message)
     }
 
+    // parse and do basic domain filtering on message
+    fn parse_and_filter_v1<'b>(
+        &mut self,
+        data: &'b [u8],
+    ) -> ControlFlow<PortActionIterator<'b>, MessageV1> {
+        if !self.is_message_buffer_compatible(data) {
+            // do not spam with parse error in mixed-version PTPv1+v2 networks
+            return ControlFlow::Break(actions![]);
+        }
+        let message = match MessageV1::deserialize(data) {
+            Ok(message) => message,
+            Err(error) => {
+                log::warn!("Could not parse packet: {:?}", error);
+                return ControlFlow::Break(actions![]);
+            }
+        };
+        // TODO: add PTPv1 domain to config and compare here
+        // otherwise strange things will happen in multi-domain PTP network (e.g. Dante with pull up/down)
+        ControlFlow::Continue(message)
+    }
+
     /// Handle a message over the event channel
     pub fn handle_event_receive<'b>(
         &'b mut self,
         data: &'b [u8],
         timestamp: Time,
     ) -> PortActionIterator<'b> {
-        let message = match self.parse_and_filter(data) {
-            ControlFlow::Continue(value) => value,
-            ControlFlow::Break(value) => return value,
-        };
+        match self.config.protocol_version {
+            ProtocolVersion::PTPv2 => {
+                let message = match self.parse_and_filter(data) {
+                    ControlFlow::Continue(value) => value,
+                    ControlFlow::Break(value) => return value,
+                };
 
-        match message.body {
-            MessageBody::Sync(sync) => self.handle_sync(message.header, sync, timestamp),
-            MessageBody::DelayReq(delay_request) => {
-                self.handle_delay_req(message.header, delay_request, timestamp)
+                match message.body {
+                    MessageBody::Sync(sync) => self.handle_sync(message.header, sync, timestamp),
+                    MessageBody::DelayReq(delay_request) => {
+                        self.handle_delay_req(message.header, delay_request, timestamp)
+                    }
+                    MessageBody::PDelayReq(_) => self.handle_pdelay_req(message.header, timestamp),
+                    MessageBody::PDelayResp(peer_delay_response) => {
+                        self.handle_peer_delay_response(message.header, peer_delay_response, timestamp)
+                    }
+                    _ => self.handle_general_internal(message),
+                }
+            },
+            ProtocolVersion::PTPv1 => {
+                let message = match self.parse_and_filter_v1(data) {
+                    ControlFlow::Continue(value) => value,
+                    ControlFlow::Break(value) => return value,
+                };
+
+                match message.body {
+                    MessageBodyV1::Sync(sync) => {
+                        let actions1 = self.handle_announce_from_v1_sync(&message, sync).reown();
+                        let actions2 = self.handle_sync_v1(message.header, sync, timestamp);
+                        actions1.concat(actions2)
+                    },
+                    MessageBodyV1::DelayReq(_delay_request) => {
+                        // TODO
+                        warn!("got DelayReq, master operation not implemented yet for PTPv1");
+                        //self.handle_delay_req(message.header, delay_request, timestamp)
+                        actions![]
+                    }
+                    _ => self.handle_general_internal_v1(message),
+                }
             }
-            MessageBody::PDelayReq(_) => self.handle_pdelay_req(message.header, timestamp),
-            MessageBody::PDelayResp(peer_delay_response) => {
-                self.handle_peer_delay_response(message.header, peer_delay_response, timestamp)
-            }
-            _ => self.handle_general_internal(message),
         }
     }
 
     /// Handle a general ptp message
     pub fn handle_general_receive<'b>(&'b mut self, data: &'b [u8]) -> PortActionIterator<'b> {
-        let message = match self.parse_and_filter(data) {
-            ControlFlow::Continue(value) => value,
-            ControlFlow::Break(value) => return value,
-        };
+        match self.config.protocol_version {
+            ProtocolVersion::PTPv2 => {
+                let message = match self.parse_and_filter(data) {
+                    ControlFlow::Continue(value) => value,
+                    ControlFlow::Break(value) => return value,
+                };
 
-        self.handle_general_internal(message)
+                self.handle_general_internal(message)
+            },
+            ProtocolVersion::PTPv1 => {
+                let message = match self.parse_and_filter_v1(data) {
+                    ControlFlow::Continue(value) => value,
+                    ControlFlow::Break(value) => return value,
+                };
+
+                self.handle_general_internal_v1(message)
+            },
+        }
     }
 
     fn handle_general_internal<'b>(&'b mut self, message: Message<'b>) -> PortActionIterator<'b> {
@@ -511,6 +574,29 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
                 actions![]
             }
             MessageBody::Management(_) | MessageBody::Signaling(_) => actions![],
+        }
+    }
+
+    fn handle_general_internal_v1<'b>(&'b mut self, message: MessageV1) -> PortActionIterator<'b> {
+        match message.body {
+            MessageBodyV1::FollowUp(follow_up) => self.handle_follow_up_v1(message.header, follow_up),
+            MessageBodyV1::DelayResp(delay_response) => {
+                self.handle_delay_resp_v1(message.header, delay_response)
+            }
+            MessageBodyV1::Sync(_)
+            | MessageBodyV1::DelayReq(_) => {
+                log::warn!("Received event message over general interface");
+                actions![]
+            }
+            // MessageBodyV1::Management(_) => actions![], // TODO
+        }
+    }
+
+    /// Checks whether message is compatible with Statime and with PTP version configured for this port
+    pub fn is_message_buffer_compatible(&self, buffer: &[u8]) -> bool {
+        match self.config.protocol_version {
+            ProtocolVersion::PTPv1 => is_message_buffer_compatible_v1(buffer),
+            ProtocolVersion::PTPv2 => is_message_buffer_compatible_v2(buffer),
         }
     }
 }
@@ -617,6 +703,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
                 sync_interval: config.sync_interval,
                 master_only: config.master_only,
                 delay_asymmetry: config.delay_asymmetry,
+                protocol_version: config.protocol_version,
             },
             filter_config,
             clock,
@@ -696,6 +783,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                protocol_version: ProtocolVersion::PTPv2,
             },
             0.25,
             TestClock,
@@ -723,6 +811,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                protocol_version: ProtocolVersion::PTPv2,
             },
             0.25,
             TestClock,
@@ -750,6 +839,7 @@ mod tests {
                 sync_interval: Interval::from_log_2(0),
                 master_only: false,
                 delay_asymmetry: Duration::ZERO,
+                protocol_version: ProtocolVersion::PTPv2,
             },
             filter_config,
             TestClock,

@@ -1,13 +1,14 @@
+use log::trace;
 use rand::Rng;
 
-use super::{InBmca, Port, PortActionIterator, Running};
+use super::{InBmca, MessageV1, Port, PortActionIterator, PortIdentity, Running};
 use crate::{
-    bmc::bmca::{BestAnnounceMessage, RecommendedState},
-    config::{AcceptableMasterList, LeapIndicator, TimePropertiesDS, TimeSource},
+    bmc::{bmca::{BestAnnounceMessage, RecommendedState}, foreign_master::MasterAnnouncement},
+    config::{AcceptableMasterList, ClockQuality, LeapIndicator, TimePropertiesDS, TimeSource},
     datastructures::{
-        common::{ClockIdentity, TlvType},
+        common::{ClockIdentity, TlvType, V2_COMPAT_PRIORITY1, V2_COMPAT_PRIORITY1_PREFERRED, V2_COMPAT_PRIORITY2},
         datasets::{InternalCurrentDS, InternalDefaultDS, InternalParentDS, PathTraceDS},
-        messages::Message,
+        messages::Message, MessageV,
     },
     filters::Filter,
     port::{
@@ -47,6 +48,7 @@ impl<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMu
                 parent_ds.grandmaster_clock_quality = announce.grandmaster_clock_quality;
                 parent_ds.grandmaster_priority_1 = announce.grandmaster_priority_1;
                 parent_ds.grandmaster_priority_2 = announce.grandmaster_priority_2;
+                parent_ds.grandmaster_v1 = None;
 
                 *time_properties_ds = announce.time_properties();
 
@@ -98,6 +100,69 @@ impl<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMu
                 duration: self.config.announce_duration(&mut self.rng),
             }]
             .with_forward_tlvs(message.suffix.tlv(), message.header.source_port_identity)
+        } else {
+            actions![]
+        }
+    }
+
+    pub(super) fn handle_announce_from_v1_sync<'b>(
+        &'b mut self,
+        message: &MessageV1,
+        body: crate::datastructures::messages_v1::SyncMessage,
+    ) -> PortActionIterator<'b> {
+        if matches!(self.port_state, PortState::Slave(_))
+            && PortIdentity::from_v1_header(&message.header)
+                == self
+                    .instance_state
+                    .with_ref(|s| s.parent_ds.parent_port_identity)
+        {
+            let clock_loop_detected = self.instance_state.with_mut(|state| {
+                let current_ds = &mut state.current_ds;
+                let parent_ds = &mut state.parent_ds;
+                let time_properties_ds = &mut state.time_properties_ds;
+                let _path_trace_ds = &mut state.path_trace_ds;
+
+                current_ds.steps_removed = body.local_steps_removed + 1;
+
+                parent_ds.parent_port_identity = PortIdentity::from_v1_header(&message.header);
+                parent_ds.grandmaster_identity = ClockIdentity::from_mac_address(body.grandmaster.clock_uuid);
+                parent_ds.grandmaster_clock_quality = ClockQuality {
+                    clock_class: 248, /* TODO: is it possible to fill it??? */
+                    clock_accuracy: crate::config::ClockAccuracy::Unknown, /* TODO: is it possible to fill it??? */
+                    offset_scaled_log_variance: body.grandmaster.clock_variance as u16 /* FIXME */
+                };
+                parent_ds.grandmaster_priority_1 = if body.grandmaster.preferred { V2_COMPAT_PRIORITY1_PREFERRED } else { V2_COMPAT_PRIORITY1 };
+                parent_ds.grandmaster_priority_2 = V2_COMPAT_PRIORITY2;
+                parent_ds.grandmaster_v1 = Some(body.grandmaster);
+
+                *time_properties_ds = body.time_properties();
+
+                // MAYBE TODO: PTPv1 doesn't have TLVs which are used in v2 for clock loop detection
+                // any way of handling it here???
+                false
+            });
+
+            if clock_loop_detected {
+                return actions![];
+            }
+        }
+        if self
+            .bmca
+            .register_sync_v1_message(&message.header, &body)
+        {
+            // Doing the multiport-same network check after registering the announce message
+            // ensures that the message is acceptable wrt the acceptable master list.
+            // This ensures that an administrator can block this mechanism via the
+            // acceptable master list, making this less of an attack vector.
+            if self.port_identity.clock_identity == ClockIdentity::from_mac_address(message.header.source_uuid)
+                && self.port_identity.port_number > message.header.source_port_id
+            {
+                self.multiport_disable = Some(Duration::ZERO);
+                self.set_forced_port_state(PortState::Passive);
+            }
+            actions![PortAction::ResetAnnounceReceiptTimer {
+                duration: self.config.announce_duration(&mut self.rng),
+            }]
         } else {
             actions![]
         }
@@ -185,15 +250,34 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
                 // a master-only PTP port should never end up in the slave state
                 debug_assert!(!self.config.master_only);
 
-                current_ds.steps_removed = announce_message.steps_removed + 1;
+                match announce_message {
+                    MasterAnnouncement::PTPv2(message) => {
+                        current_ds.steps_removed = message.steps_removed + 1;
 
-                parent_ds.parent_port_identity = announce_message.header.source_port_identity;
-                parent_ds.grandmaster_identity = announce_message.grandmaster_identity;
-                parent_ds.grandmaster_clock_quality = announce_message.grandmaster_clock_quality;
-                parent_ds.grandmaster_priority_1 = announce_message.grandmaster_priority_1;
-                parent_ds.grandmaster_priority_2 = announce_message.grandmaster_priority_2;
+                        parent_ds.parent_port_identity = message.header.source_port_identity;
+                        parent_ds.grandmaster_identity = message.grandmaster_identity;
+                        parent_ds.grandmaster_clock_quality = message.grandmaster_clock_quality;
+                        parent_ds.grandmaster_priority_1 = message.grandmaster_priority_1;
+                        parent_ds.grandmaster_priority_2 = message.grandmaster_priority_2;
+        
+                        *time_properties_ds = message.time_properties();
+                    },
+                    MasterAnnouncement::PTPv1(message) => {
+                        current_ds.steps_removed = message.local_steps_removed + 1;
 
-                *time_properties_ds = announce_message.time_properties();
+                        parent_ds.parent_port_identity = PortIdentity::from_v1_header(&message.header);
+                        parent_ds.grandmaster_identity = ClockIdentity::from_mac_address(message.grandmaster.clock_uuid);
+                        parent_ds.grandmaster_clock_quality = ClockQuality { // TODO DRY: repeated at least 3 times
+                            clock_class: 248, /* TODO: is it possible to fill it??? */
+                            clock_accuracy: crate::config::ClockAccuracy::Unknown, /* TODO: is it possible to fill it??? */
+                            offset_scaled_log_variance: message.grandmaster.clock_variance as u16 /* TODO: really? */
+                        };
+                        parent_ds.grandmaster_priority_1 = if message.grandmaster.preferred { V2_COMPAT_PRIORITY1_PREFERRED } else { V2_COMPAT_PRIORITY1 };
+                        parent_ds.grandmaster_priority_2 = V2_COMPAT_PRIORITY2;
+        
+                        *time_properties_ds = message.time_properties();
+                    },
+                }
 
                 if let Err(error) = self.clock.set_properties(time_properties_ds) {
                     log::error!("Could not update clock: {:?}", error);
@@ -205,7 +289,14 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
         // the master's time properties separately
         if let RecommendedState::S1(announce_message) = &recommended_state {
             // Update time properties
-            *time_properties_ds = announce_message.time_properties();
+            match announce_message {
+                MasterAnnouncement::PTPv2(message) => {
+                    *time_properties_ds = message.time_properties();
+                },
+                MasterAnnouncement::PTPv1(message) => {
+                    *time_properties_ds = message.time_properties();
+                },
+            }
         }
     }
 
@@ -221,7 +312,10 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
                 // a master-only PTP port should never end up in the slave state
                 debug_assert!(!self.config.master_only);
 
-                let remote_master = announce_message.header.source_port_identity;
+                let remote_master = match announce_message {
+                    MasterAnnouncement::PTPv2(message) => message.header.source_port_identity,
+                    MasterAnnouncement::PTPv1(message) => PortIdentity::from_v1_header(&message.header),
+                };
 
                 let update_state = match &self.port_state {
                     PortState::Faulty => false,
