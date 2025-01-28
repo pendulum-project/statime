@@ -5,7 +5,7 @@ use arrayvec::ArrayVec;
 use crate::{
     datastructures::{
         common::{PortIdentity, TimeInterval},
-        messages::{AnnounceMessage, Header},
+        messages::{AnnounceMessage, Header}, messages_v1,
     },
     time::Duration,
 };
@@ -31,18 +31,31 @@ pub struct ForeignMaster {
     announce_messages: ArrayVec<ForeignAnnounceMessage, MAX_ANNOUNCE_MESSAGES>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MasterAnnouncement {
+    PTPv1(messages_v1::SyncMessage),
+    PTPv2(AnnounceMessage),
+}
+
+impl MasterAnnouncement {
+    pub(crate) fn sequence_id(&self) -> u16 {
+        match self {
+            MasterAnnouncement::PTPv2(message) => message.header.sequence_id,
+            MasterAnnouncement::PTPv1(message) => message.header.sequence_id,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ForeignAnnounceMessage {
-    pub(crate) header: Header,
-    pub(crate) message: AnnounceMessage,
+    pub(crate) message: MasterAnnouncement,
     pub(crate) age: Duration,
 }
 
 impl ForeignMaster {
-    fn new(header: Header, announce_message: AnnounceMessage) -> Self {
+    fn new(_header: Header, announce_message: AnnounceMessage) -> Self {
         let message = ForeignAnnounceMessage {
-            header,
-            message: announce_message,
+            message: MasterAnnouncement::PTPv2(announce_message),
             age: Duration::ZERO,
         };
 
@@ -51,6 +64,21 @@ impl ForeignMaster {
 
         Self {
             foreign_master_port_identity: announce_message.header.source_port_identity,
+            announce_messages: messages,
+        }
+    }
+
+    fn new_v1(sync_message: messages_v1::SyncMessage) -> Self {
+        let message = ForeignAnnounceMessage {
+            message: MasterAnnouncement::PTPv1(sync_message),
+            age: Duration::ZERO,
+        };
+
+        let mut messages = ArrayVec::<_, MAX_ANNOUNCE_MESSAGES>::new();
+        messages.push(message);
+
+        Self {
+            foreign_master_port_identity: PortIdentity::from_v1_header(&sync_message.header),
             announce_messages: messages,
         }
     }
@@ -72,7 +100,7 @@ impl ForeignMaster {
 
     fn register_announce_message(
         &mut self,
-        header: Header,
+        _header: Header,
         announce_message: AnnounceMessage,
         announce_interval: TimeInterval,
         age: Duration,
@@ -80,8 +108,28 @@ impl ForeignMaster {
         self.purge_old_messages(announce_interval);
 
         let new_message = ForeignAnnounceMessage {
-            header,
-            message: announce_message,
+            message: MasterAnnouncement::PTPv2(announce_message),
+            age,
+        };
+
+        // Try to add new message; otherwise remove the first message and then add
+        if let Err(e) = self.announce_messages.try_push(new_message) {
+            self.announce_messages.remove(0);
+            self.announce_messages.push(e.element());
+        }
+    }
+
+    // TODO DRY
+    fn register_sync_v1_message(
+        &mut self,
+        sync_message: messages_v1::SyncMessage,
+        announce_interval: TimeInterval,
+        age: Duration,
+    ) {
+        self.purge_old_messages(announce_interval);
+
+        let new_message = ForeignAnnounceMessage {
+            message: MasterAnnouncement::PTPv1(sync_message),
             age,
         };
 
@@ -192,6 +240,38 @@ impl ForeignMasterList {
         }
     }
 
+    pub(crate) fn register_sync_v1_message(
+        &mut self,
+        header: &messages_v1::Header,
+        announce_message: &messages_v1::SyncMessage,
+        age: Duration,
+    ) {
+        if !self.is_sync_v1_message_qualified(announce_message) {
+            // We don't want to store unqualified messages
+            return;
+        }
+
+        let port_announce_interval = self.own_port_announce_interval;
+
+        // Is the foreign master that the message represents already known?
+        if let Some(foreign_master) =
+            self.get_foreign_master_mut(PortIdentity::from_v1_header(&announce_message.header))
+        {
+            // Yes, so add the announce message to it
+            foreign_master.register_sync_v1_message(
+                *announce_message,
+                port_announce_interval,
+                age,
+            );
+        } else {
+            // No, insert a new foreign master, if there is room in the array
+            if self.foreign_masters.len() < MAX_FOREIGN_MASTERS {
+                self.foreign_masters
+                    .push(ForeignMaster::new_v1(*announce_message));
+            }
+        }
+    }
+
     fn get_foreign_master_mut(
         &mut self,
         port_identity: PortIdentity,
@@ -222,7 +302,7 @@ impl ForeignMasterList {
         if let Some(foreign_master) = self.get_foreign_master(source_identity) {
             if let Some(last_announce_message) = foreign_master.announce_messages.last() {
                 let announce_sequence_id = announce_message.header.sequence_id;
-                let last_sequence_id = last_announce_message.header.sequence_id;
+                let last_sequence_id = last_announce_message.message.sequence_id();
 
                 if announce_sequence_id.wrapping_sub(last_sequence_id) >= u16::MAX / 2 {
                     return false;
@@ -232,6 +312,43 @@ impl ForeignMasterList {
 
         // 3. The announce message must not have a steps removed of 255 and greater
         if announce_message.steps_removed >= 255 {
+            return false;
+        }
+
+        // 4. The announce message may not be from a foreign master with fewer messages
+        // than FOREIGN_MASTER_THRESHOLD, but that is handled in the
+        // `take_qualified_announce_messages` method.
+
+        // Otherwise, the announce message is qualified
+        true
+    }
+
+    // TODO DRY
+    fn is_sync_v1_message_qualified(&self, announce_message: &messages_v1::SyncMessage) -> bool {
+        let source_identity = PortIdentity::from_v1_header(&announce_message.header);
+
+        // 1. The message must not come from our own ptp instance. Since every instance
+        // only has 1 clock, we can check the clock identity. That must be
+        // different.
+        if source_identity.clock_identity == self.own_port_identity.clock_identity {
+            return false;
+        }
+
+        // 2. The announce message must be newer than the one(s) we already have
+        // We can check the sequence id for that (with some logic for u16 rollover)
+        if let Some(foreign_master) = self.get_foreign_master(source_identity) {
+            if let Some(last_announce_message) = foreign_master.announce_messages.last() {
+                let announce_sequence_id = announce_message.header.sequence_id;
+                let last_sequence_id = last_announce_message.message.sequence_id();
+
+                if announce_sequence_id.wrapping_sub(last_sequence_id) >= u16::MAX / 2 {
+                    return false;
+                }
+            }
+        }
+
+        // 3. The announce message must not have a steps removed of 255 and greater
+        if announce_message.local_steps_removed >= 255 {
             return false;
         }
 

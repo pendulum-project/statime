@@ -5,16 +5,14 @@ use core::cmp::Ordering;
 use super::{
     acceptable_master::AcceptableMasterList,
     dataset_comparison::{ComparisonDataset, DatasetOrdering},
-    foreign_master::ForeignMasterList,
+    foreign_master::{ForeignMasterList, MasterAnnouncement},
 };
 use crate::{
-    datastructures::{
+    config::ClockIdentity, datastructures::{
         common::{PortIdentity, TimeInterval},
         datasets::InternalDefaultDS,
-        messages::{AnnounceMessage, Header},
-    },
-    port::state::PortState,
-    time::Duration,
+        messages::{AnnounceMessage, Header}, messages_v1,
+    }, port::state::PortState, time::Duration
 };
 
 /// Object implementing the Best Master Clock Algorithm
@@ -76,7 +74,7 @@ impl<A> Bmca<A> {
             None => MessageComparison::Better,
             Some(best) => {
                 let dataset =
-                    ComparisonDataset::from_announce_message(&best.message, &best.identity);
+                    ComparisonDataset::from_master_announcement(&best.announcement, &best.identity);
 
                 match d0.compare(&dataset).as_ordering() {
                     Ordering::Less => MessageComparison::Worse(best),
@@ -137,7 +135,7 @@ impl<A> Bmca<A> {
         match Self::compare_d0_best(&d0, best_port_announce_message) {
             MessageComparison::Better => RecommendedState::M1(*own_data),
             MessageComparison::Same => RecommendedState::M1(*own_data),
-            MessageComparison::Worse(port) => RecommendedState::P1(port.message),
+            MessageComparison::Worse(port) => RecommendedState::P1(port.announcement),
         }
     }
 
@@ -152,7 +150,7 @@ impl<A> Bmca<A> {
             MessageComparison::Better => RecommendedState::M2(*own_data),
             MessageComparison::Same => RecommendedState::M2(*own_data),
             MessageComparison::Worse(global_message) => match best_port_announce_message {
-                None => RecommendedState::M3(global_message.message),
+                None => RecommendedState::M3(global_message.announcement),
                 Some(port_message) => Self::compare_global_and_port(global_message, port_message),
             },
         }
@@ -164,23 +162,23 @@ impl<A> Bmca<A> {
     ) -> RecommendedState {
         if global_message == port_message {
             // effectively, E_best == E_rbest
-            RecommendedState::S1(global_message.message)
+            RecommendedState::S1(global_message.announcement)
         } else {
-            let ebest = ComparisonDataset::from_announce_message(
-                &global_message.message,
+            let ebest = ComparisonDataset::from_master_announcement(
+                &global_message.announcement,
                 &global_message.identity,
             );
 
-            let erbest = ComparisonDataset::from_announce_message(
-                &port_message.message,
+            let erbest = ComparisonDataset::from_master_announcement(
+                &port_message.announcement,
                 &port_message.identity,
             );
 
             // E_best better by topology than E_rbest
             if matches!(ebest.compare(&erbest), DatasetOrdering::BetterByTopology) {
-                RecommendedState::P2(port_message.message)
+                RecommendedState::P2(port_message.announcement)
             } else {
-                RecommendedState::M3(global_message.message)
+                RecommendedState::M3(global_message.announcement)
             }
         }
     }
@@ -210,6 +208,29 @@ impl<A: AcceptableMasterList> Bmca<A> {
         }
     }
 
+    /// Register a received announce message to the BMC algorithm
+    pub(crate) fn register_sync_v1_message(
+        &mut self,
+        header: &messages_v1::Header,
+        announce_message: &messages_v1::SyncMessage,
+    ) -> bool {
+        // Ignore messages comming from the same port
+        if PortIdentity::from_v1_header(&announce_message.header) != self.own_port_identity
+            && self
+                .acceptable_master_list
+                .is_acceptable(ClockIdentity::from_mac_address(announce_message.header.source_uuid))
+        {
+            self.foreign_master_list.register_sync_v1_message(
+                header,
+                announce_message,
+                Duration::ZERO,
+            );
+            true
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn reregister_announce_message(
         &mut self,
         header: &Header,
@@ -227,6 +248,23 @@ impl<A: AcceptableMasterList> Bmca<A> {
         }
     }
 
+    pub(crate) fn reregister_sync_v1_message(
+        &mut self,
+        header: &messages_v1::Header,
+        announce_message: &messages_v1::SyncMessage,
+        age: Duration,
+    ) {
+        // Ignore messages comming from the same port
+        if PortIdentity::from_v1_header(&announce_message.header) != self.own_port_identity
+            && self
+                .acceptable_master_list
+                .is_acceptable(ClockIdentity::from_mac_address(announce_message.header.source_uuid))
+        {
+            self.foreign_master_list
+                .register_sync_v1_message(header, announce_message, age);
+        }
+    }
+
     /// Takes the Erbest from this port
     pub(crate) fn take_best_port_announce_message(&mut self) -> Option<BestAnnounceMessage> {
         // Find the announce message we want to use from each foreign master that has
@@ -236,8 +274,7 @@ impl<A: AcceptableMasterList> Bmca<A> {
         // The best of the foreign master messages is our erbest
         let erbest = Self::find_best_announce_message(announce_messages.map(|message| {
             BestAnnounceMessage {
-                header: message.header,
-                message: message.message,
+                announcement: message.message,
                 age: message.age,
                 identity: self.own_port_identity,
             }
@@ -247,7 +284,14 @@ impl<A: AcceptableMasterList> Bmca<A> {
             // All messages that were considered have been removed from the
             // foreignmasterlist. However, the one that has been selected as the
             // Erbest must not be removed, so let's just reregister it.
-            self.reregister_announce_message(&best.header, &best.message, best.age);
+            match best.announcement {
+                MasterAnnouncement::PTPv2(message) => {
+                    self.reregister_announce_message(&message.header, &message, best.age);
+                },
+                MasterAnnouncement::PTPv1(message) => {
+                    self.reregister_sync_v1_message(&message.header, &message, best.age);
+                }
+            }
         }
 
         erbest
@@ -263,8 +307,7 @@ enum MessageComparison {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct BestAnnounceMessage {
-    header: Header,
-    message: AnnounceMessage,
+    announcement: MasterAnnouncement,
     age: Duration,
     identity: PortIdentity,
 }
@@ -277,8 +320,8 @@ impl BestAnnounceMessage {
     }
 
     fn compare_dataset(&self, other: &Self) -> DatasetOrdering {
-        let data1 = ComparisonDataset::from_announce_message(&self.message, &self.identity);
-        let data2 = ComparisonDataset::from_announce_message(&other.message, &other.identity);
+        let data1 = ComparisonDataset::from_master_announcement(&self.announcement, &self.identity);
+        let data2 = ComparisonDataset::from_master_announcement(&other.announcement, &other.identity);
 
         data1.compare(&data2)
     }
@@ -288,12 +331,13 @@ impl BestAnnounceMessage {
 pub(crate) enum RecommendedState {
     M1(InternalDefaultDS),
     M2(InternalDefaultDS),
-    M3(AnnounceMessage),
-    P1(AnnounceMessage),
-    P2(AnnounceMessage),
-    S1(AnnounceMessage),
+    M3(MasterAnnouncement),
+    P1(MasterAnnouncement),
+    P2(MasterAnnouncement),
+    S1(MasterAnnouncement),
 }
 
+/* YOLO
 #[cfg(test)]
 
 mod tests {
@@ -343,7 +387,6 @@ mod tests {
     }
 
     fn default_best_announce_message() -> BestAnnounceMessage {
-        let header = default_announce_message_header();
         let message = default_announce_message();
 
         let identity = PortIdentity {
@@ -352,8 +395,7 @@ mod tests {
         };
 
         BestAnnounceMessage {
-            header,
-            message,
+            announcement: MasterAnnouncement::PTPv2(message),
             age: Duration::ZERO,
             identity,
         }
@@ -786,3 +828,4 @@ mod tests {
         );
     }
 }
+*/

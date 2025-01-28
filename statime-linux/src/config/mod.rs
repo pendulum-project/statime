@@ -64,6 +64,8 @@ pub struct PortConfig {
     pub delay_mechanism: DelayType,
     #[serde(default = "default_delay_interval")]
     pub delay_interval: i8,
+    #[serde(default)]
+    pub protocol_version: ProtocolVersion,
 }
 
 fn deserialize_acceptable_master_list<'de, D>(
@@ -116,6 +118,10 @@ impl From<PortConfig> for statime::config::PortConfig<Option<Vec<ClockIdentity>>
                     interval: Interval::from_log_2(pc.delay_interval),
                 },
             },
+            protocol_version: match pc.protocol_version {
+                ProtocolVersion::PTPv1 => statime::config::ProtocolVersion::PTPv1,
+                ProtocolVersion::PTPv2 => statime::config::ProtocolVersion::PTPv2,
+            },
         }
     }
 }
@@ -135,6 +141,14 @@ pub enum DelayType {
     #[default]
     E2E,
     P2P,
+}
+
+
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProtocolVersion {
+    PTPv1,
+    #[default]
+    PTPv2,
 }
 
 impl Config {
@@ -275,6 +289,7 @@ interface = "enp0s31f6"
             delay_asymmetry: 0,
             delay_mechanism: crate::config::DelayType::E2E,
             delay_interval: 0,
+            protocol_version: crate::config::ProtocolVersion::PTPv2,
         };
 
         let expected = crate::config::Config {

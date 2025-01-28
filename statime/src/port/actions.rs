@@ -125,6 +125,23 @@ pub enum PortAction<'a> {
     ForwardTLV { tlv: ForwardedTLV<'a> },
 }
 
+impl<'a> PortAction<'a> {
+    pub(super) fn reown<'b>(self) -> PortAction<'b> {
+        // yes, this is ugly but required as a workaround to make PortActionIterator::concat work.
+        // possibly a cleaner way would be to refactor all the communication through PortActionIterator to callbacks
+        match self {
+            Self::SendEvent { context: _, data: _, link_local: _ } => panic!("can't reown borrowed buffer (SendEvent)"),
+            Self::SendGeneral { data: _, link_local: _ } => panic!("can't reown borrowed buffer (SendGeneral)"),
+            Self::ResetAnnounceTimer { duration } => PortAction::ResetAnnounceTimer { duration },
+            Self::ResetSyncTimer { duration } => PortAction::ResetSyncTimer { duration },
+            Self::ResetDelayRequestTimer { duration } => PortAction::ResetDelayRequestTimer { duration },
+            Self::ResetAnnounceReceiptTimer { duration } => PortAction::ResetAnnounceReceiptTimer { duration },
+            Self::ResetFilterUpdateTimer { duration } => PortAction::ResetFilterUpdateTimer { duration },
+            Self::ForwardTLV { tlv: _ } => panic!("can't reown borrowed buffer (ForwardTLV)"),
+        }
+    }
+}
+
 const MAX_ACTIONS: usize = 2;
 
 /// An Iterator over [`PortAction`]s
@@ -177,6 +194,38 @@ impl<'a> PortActionIterator<'a> {
             internal: self.internal,
             tlvs,
             sender_identity,
+        }
+    }
+
+
+    pub(super) fn reown<'b>(mut self) -> PortActionIterator<'b> {
+        assert!(self.tlvs.next().is_none());
+        let mut list = ArrayVec::<PortAction<'b>, MAX_ACTIONS>::new();
+        for elem in self.internal {
+            list.push(elem.reown::<'b>());
+        }
+        PortActionIterator::<'b> {
+            internal: list.into_iter().fuse(),
+            tlvs: TlvSetIterator::empty(),
+            sender_identity: self.sender_identity
+        }
+    }
+    pub(super) fn concat<'b>(mut self, mut other: PortActionIterator<'b>) -> PortActionIterator<'b> {
+        assert_eq!(self.sender_identity, other.sender_identity);
+        let sender_identity = self.sender_identity;
+        assert!(self.tlvs.next().is_none());
+        assert!(other.tlvs.next().is_none()); // TLVs are not used in PTPv1
+        let mut list = ArrayVec::<PortAction<'b>, MAX_ACTIONS>::new();
+        for elem in self.internal {
+            list.push(elem.reown::<'b>());
+        }
+        for elem in other.internal {
+            list.try_push(elem).expect("PortActionIterator overflow when trying to concat");
+        }
+        PortActionIterator::<'b> {
+            internal: list.into_iter().fuse(),
+            tlvs: TlvSetIterator::empty(),
+            sender_identity
         }
     }
 }
