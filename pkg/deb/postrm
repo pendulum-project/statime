@@ -21,6 +21,7 @@ fi
 if [ "$1" = "remove" ]; then
     if [ -x "/usr/bin/deb-systemd-helper" ]; then
         deb-systemd-helper mask statime.service >/dev/null || true
+        deb-systemd-helper mask statime-metrics-exporter.service >/dev/null || true
     fi
 
     if [ -d /run/udev ]; then
@@ -33,6 +34,8 @@ if [ "$1" = "purge" ]; then
     if [ -x "/usr/bin/deb-systemd-helper" ]; then
         deb-systemd-helper purge statime.service >/dev/null || true
         deb-systemd-helper unmask statime.service >/dev/null || true
+        deb-systemd-helper purge statime-metrics-exporter.service >/dev/null || true
+        deb-systemd-helper unmask statime-metrics-exporter.service >/dev/null || true
     fi
 
     if [ -d /run/udev ]; then

@@ -4,10 +4,15 @@ set -e
 
 STATIME_HOME="/var/lib/statime/"
 STATIME_USER="statime"
+STATIME_OBSERVE_HOME="/var/lib/statime-observe/"
+STATIME_OBSERVE_USER="statime-observe"
 
 create_user() {
     if ! id ${STATIME_USER} > /dev/null 2>&1; then
         adduser --system --home "${STATIME_HOME}" --group ${STATIME_USER}
+    fi
+    if ! id ${STATIME_OBSERVE_USER} > /dev/null 2>&1; then
+        adduser --system --home "${STATIME_OBSERVE_HOME}" --group ${STATIME_OBSERVE_USER}
     fi
 }
 
@@ -34,6 +39,22 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 fi
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+    if deb-systemd-helper debian-installed statime-metrics-exporter.service; then
+        # This will only remove masks created by d-s-h on package removal.
+        deb-systemd-helper unmask statime-metrics-exporter.service >/dev/null || true
+
+        if deb-systemd-helper --quiet was-enabled statime-metrics-exporter.service; then
+            # Create new symlinks, if any.
+            deb-systemd-helper enable statime-metrics-exporter.service >/dev/null || true
+        fi
+    fi
+
+    # Update the statefile to add new symlinks (if any), which need to be cleaned
+    # up on purge. Also remove old symlinks.
+    deb-systemd-helper update-state statime-metrics-exporter.service >/dev/null || true
+fi
+
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
@@ -41,13 +62,13 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			_dh_action=start
 		fi
-		deb-systemd-invoke $_dh_action statime.service >/dev/null || true
+		deb-systemd-invoke $_dh_action statime.service statime-metrics-exporter.service >/dev/null || true
 	fi
 
-    if [ -d /run/udev ]; then
-        udevadm control -R
-        udevadm trigger
-    fi
+  if [ -d /run/udev ]; then
+      udevadm control -R
+      udevadm trigger
+  fi
 fi
 
 #DEBHELPER#
