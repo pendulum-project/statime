@@ -93,3 +93,21 @@ will be indicated by each configuration setting shown.
 
 `minor-ptp-version` = *version number* (**1**)
 :   Set a different minor ptp version. Should be either 1 or 0, intended to work around misbehaving ptp 2.0 hardware
+
+## `[observability]`
+
+`observation-path` = *path* (**unset**)
+:   Path where the daemon will create an observation Unix domain socket. This
+    socket is used by `statime-metrics-exporter` to read the current
+    status of the daemon. If not set (the default) no observation socket will be
+    created, and it is not possible to use `statime-metrics-exporter` to
+    observe the daemon.
+
+`observation-permissions` = *mode* (**0o666**)
+:   The file system permissions with which the observation socket should be
+    created. Warning: You should always write this number with the octal prefix
+    `0o`, otherwise your permissions might be interpreted wrongly. The default
+    should be OK for most applications.
+
+`metrics-exporter-listen` = *socketaddr* (**127.0.0.1:9975**)
+:   The listen address that is used for the statime-metrics-exporter(8).
