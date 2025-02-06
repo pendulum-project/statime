@@ -32,6 +32,9 @@ will be indicated by each configuration setting shown.
 `sdo-id` = *u12* (**0**)
 :   The "source domain identity" of this PTP instance. Together with the `domain` it identifies a domain.
 
+`slave-only` = *bool* (**false**)
+:   Forbids this instance to ever become a master on any port.
+
 `priority1` = *priority* (**128**)
 :   A tie breaker for the best master clock algorithm in the range `0..256`. `0` being the highest priority and `255` the lowest.
 
