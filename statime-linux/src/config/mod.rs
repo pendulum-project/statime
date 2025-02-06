@@ -24,6 +24,8 @@ pub struct Config {
     pub sdo_id: u16,
     #[serde(default = "default_domain")]
     pub domain: u8,
+    #[serde(default = "default_slave_only")]
+    pub slave_only: bool,
     #[serde(default, deserialize_with = "deserialize_clock_identity")]
     pub identity: Option<ClockIdentity>,
     #[serde(default = "default_priority1")]
@@ -205,6 +207,10 @@ fn default_sdo_id() -> u16 {
     0x000
 }
 
+fn default_slave_only() -> bool {
+    false
+}
+
 fn default_announce_interval() -> i8 {
     1
 }
@@ -302,6 +308,7 @@ interface = "enp0s31f6"
             loglevel: LogLevel::Info,
             sdo_id: 0x000,
             domain: 0,
+            slave_only: false,
             identity: None,
             priority1: 128,
             priority2: 128,

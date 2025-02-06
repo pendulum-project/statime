@@ -268,7 +268,7 @@ async fn actual_main() {
         priority_1: config.priority1,
         priority_2: config.priority2,
         domain_number: config.domain,
-        slave_only: false,
+        slave_only: config.slave_only,
         sdo_id: SdoId::try_from(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
         path_trace: config.path_trace,
     };
