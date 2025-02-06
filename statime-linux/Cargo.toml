@@ -54,6 +54,7 @@ It currently implements support for acting as a master and an ordinary or a boun
 assets = [
   ["target/release/statime", "/usr/bin/statime", "755"],
   ["docs/precompiled/man/statime.8", "/usr/share/man/man8/statime.8", "644"],
+  ["docs/precompiled/man/statime-metrics-exporter.8", "/usr/share/man/man8/statime-metrics-exporter.8", "644"],
   ["docs/precompiled/man/statime.toml.5", "/usr/share/man/man5/statime.toml.5", "644"],
   ["docs/examples/conf/statime.toml.default", "/usr/share/doc/statime/statime.toml.default", "644"],
   ["docs/examples/conf/statime.toml.default", "/etc/statime/statime.toml", "644"],
@@ -78,6 +79,7 @@ license = "MIT or ASL 2.0"
 assets = [
   { source = "target/release/statime", dest = "/usr/bin/statime", mode = "755" },
   { source = "docs/precompiled/man/statime.8", dest = "/usr/share/man/man8/statime.8", mode = "644", doc = true },
+  { source = "docs/precompiled/man/statime-metrics-exporter.8", dest = "/usr/share/man/man8/statime-metrics-exporter.8", mode = "644", doc = true },
   { source = "docs/precompiled/man/statime.toml.5", dest = "/usr/share/man/man5/statime-toml.5", mode = "644", doc = true },
   { source = "docs/examples/conf/statime.toml.default", dest = "/usr/share/doc/statime/statime.toml.default", mode = "644", doc = true },
   { source = "docs/examples/conf/statime.toml.default", dest = "/etc/statime/statime.toml", mode = "644", config = true },
