@@ -111,3 +111,7 @@ will be indicated by each configuration setting shown.
 
 `metrics-exporter-listen` = *socketaddr* (**127.0.0.1:9975**)
 :   The listen address that is used for the statime-metrics-exporter(8).
+
+# SEE ALSO
+
+[statime(8)](statime.8.md), [statime-metrics-exporter(8)](statime-metrics-exporter.8.md)

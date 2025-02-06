@@ -25,3 +25,7 @@ title: STATIME-METRICS-EXPORTER(8) statime 0.2.2 | statime
 
 `-V`, `--version`
 :   Display version information.
+
+# SEE ALSO
+
+[statime(8)](statime.8.md), [statime.toml(5)](statime.toml.5.md)
