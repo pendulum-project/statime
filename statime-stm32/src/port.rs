@@ -281,8 +281,8 @@ pub fn setup_statime(
 
     let instance_config = InstanceConfig {
         clock_identity: ClockIdentity::from_mac_address(mac_address),
-        priority_1: 255,
-        priority_2: 255,
+        priority_1: 128,
+        priority_2: 128,
         domain_number: 0,
         slave_only: false,
         sdo_id: SdoId::default(),
@@ -296,15 +296,16 @@ pub fn setup_statime(
     let port_config = PortConfig {
         acceptable_master_list: AcceptAnyMaster,
         delay_mechanism: DelayMechanism::E2E {
-            interval: Interval::from_log_2(-2),
+            interval: Interval::from_log_2(0),
         },
         announce_interval: Interval::from_log_2(1),
         announce_receipt_timeout: 3,
-        sync_interval: Interval::from_log_2(-6),
+        sync_interval: Interval::from_log_2(0),
         master_only: false,
         delay_asymmetry: Duration::ZERO,
         minor_ptp_version: PtpMinorVersion::One,
     };
+
     let filter_config = 0.1;
 
     let ptp_port = ptp_instance.add_port(port_config, filter_config, ptp_clock, rng);
