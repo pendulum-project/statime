@@ -83,7 +83,7 @@ mod app {
         // Uncomment to see the statime logs at the cost of quite a bit of extra flash
         // usage
         //
-        // log_to_defmt::setup();
+        log_to_defmt::setup();
 
         // Setup GPIO
         let (led_pin, pps, eth_pins, mdio, mdc) = {
@@ -169,7 +169,7 @@ mod app {
         let general_socket = crate::ethernet::setup_udp_socket(&mut sockets, g_res, 320);
 
         // Setup DHCP
-        let dhcp_socket = crate::ethernet::setup_dhcp_socket(&mut sockets);
+        // let dhcp_socket = crate::ethernet::setup_dhcp_socket(&mut sockets);
 
         let net = NetworkStack {
             dma,
@@ -220,8 +220,8 @@ mod app {
                 .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
 
             // Poll network interfaces and run DHCP
-            poll_smoltcp::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
-            dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
+            // poll_smoltcp::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
+            // dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
         }
 
         (
