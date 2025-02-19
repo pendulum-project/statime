@@ -1,8 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(type_alias_impl_trait)]
-// This lint produces false positives in this project with the nightly-2023-09-19 compiler
-#![allow(clippy::needless_pass_by_ref_mut)]
 
 use core::{pin::pin, task::Poll};
 
@@ -13,7 +10,7 @@ use ethernet::{DmaResources, NetworkStack};
 use futures::future::FutureExt;
 use panic_probe as _;
 use rtic::{app, Mutex};
-use rtic_monotonics::systick::{ExtU64, Systick};
+use rtic_monotonics::fugit::ExtU64;
 use rtic_sync::{channel::Receiver, make_channel};
 use smoltcp::{
     iface::{SocketHandle, SocketStorage},
@@ -47,6 +44,9 @@ defmt::timestamp!("{=u64:iso8601ms}", {
     time.seconds() as u64 * 1_000 + (time.subseconds().nanos() / 1000000) as u64
 });
 
+use rtic_monotonics::systick::prelude::*;
+systick_monotonic!(Systick, 1_000);
+
 #[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0])]
 mod app {
     use super::*;
@@ -78,8 +78,7 @@ mod app {
         };
 
         // Setup systick to be used for delays
-        let systick_token = rtic_monotonics::create_systick_token!();
-        Systick::start(cx.core.SYST, clocks.sysclk().to_Hz(), systick_token);
+        Systick::start(cx.core.SYST, clocks.sysclk().to_Hz());
 
         // Uncomment to see the statime logs at the cost of quite a bit of extra flash
         // usage

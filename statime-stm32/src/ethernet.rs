@@ -1,5 +1,6 @@
 use core::task::Poll;
 
+use super::{Monotonic, Systick};
 use defmt::unwrap;
 use futures::future::poll_fn;
 use ieee802_3_miim::{
@@ -7,7 +8,6 @@ use ieee802_3_miim::{
     Phy,
 };
 use rtic::Mutex;
-use rtic_monotonics::{systick::Systick, Monotonic};
 use smoltcp::{
     iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage},
     socket::{dhcpv4, udp},
@@ -27,6 +27,10 @@ pub struct DmaResources {
 }
 
 impl DmaResources {
+    #[expect(
+        clippy::new_without_default,
+        reason = "needs to be constructed in const context"
+    )]
     pub const fn new() -> Self {
         Self {
             rx_ring: [RxRingEntry::new(), RxRingEntry::new()],
@@ -44,6 +48,10 @@ pub struct UdpSocketResources {
 }
 
 impl UdpSocketResources {
+    #[expect(
+        clippy::new_without_default,
+        reason = "needs to be constructed in const context"
+    )]
     pub const fn new() -> Self {
         Self {
             rx_meta_storage: [udp::PacketMetadata::EMPTY; 8],
