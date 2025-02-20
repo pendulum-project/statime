@@ -298,6 +298,7 @@ async fn actual_main() {
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
             path_trace_ds: instance.path_trace_ds(),
+            port_ds: vec![],
         });
     statime_linux::observer::spawn(&config, instance_state_receiver).await;
 
@@ -505,6 +506,7 @@ async fn run(
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
             path_trace_ds: instance.path_trace_ds(),
+            port_ds: mut_bmca_ports.iter().map(|v| v.port_ds()).collect(),
         });
 
         let mut clock_states = vec![ClockSyncMode::FromSystem; internal_sync_senders.len()];

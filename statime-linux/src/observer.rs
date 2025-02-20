@@ -2,7 +2,9 @@ use std::{fs::Permissions, os::unix::prelude::PermissionsExt, path::Path, time::
 
 use statime::{
     config::TimePropertiesDS,
-    observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS, PathTraceDS},
+    observability::{
+        current::CurrentDS, default::DefaultDS, parent::ParentDS, port::PortDS, PathTraceDS,
+    },
 };
 use tokio::{io::AsyncWriteExt, net::UnixStream, task::JoinHandle};
 
@@ -29,6 +31,8 @@ pub struct ObservableInstanceState {
     /// A concrete implementation of the PTP Path Trace dataset (IEEE1588-2019
     /// section 16.2.2)
     pub path_trace_ds: PathTraceDS,
+    /// Port datasets for all the ports.
+    pub port_ds: Vec<PortDS>,
 }
 
 pub async fn spawn(

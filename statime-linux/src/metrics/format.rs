@@ -352,6 +352,57 @@ fn format_path_trace_ds(
     Ok(())
 }
 
+fn format_port_ds(
+    w: &mut impl Write,
+    port_ds: &[statime::observability::port::PortDS],
+    labels: Vec<(&'static str, String)>,
+) -> std::fmt::Result {
+    format_metric(
+        w,
+        "port_state",
+        "The current state of the port",
+        MetricType::Gauge,
+        None,
+        port_ds
+            .iter()
+            .map(|port_ds| {
+                let mut labels = labels.clone();
+                labels.push(("port", format!("{}", port_ds.port_identity.port_number)));
+                Measurement {
+                    labels,
+                    value: port_ds.port_state as u8,
+                }
+            })
+            .collect(),
+    )?;
+
+    format_metric(
+        w,
+        "mean_link_delay",
+        "The current mean link delay of the port",
+        MetricType::Gauge,
+        Some(Unit::Nanoseconds),
+        port_ds
+            .iter()
+            .filter_map(|port_ds| match port_ds.delay_mechanism {
+                statime::observability::port::DelayMechanism::P2P {
+                    mean_link_delay, ..
+                } => {
+                    let mut labels = labels.clone();
+                    labels.push(("port", format!("{}", port_ds.port_identity.port_number)));
+                    Some(Measurement {
+                        labels,
+                        value: mean_link_delay.to_nanos(),
+                    })
+                }
+                _ => None,
+            })
+            .collect(),
+    )?;
+
+    Ok(())
+}
+
 pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> std::fmt::Result {
     format_metric(
         w,
@@ -379,6 +430,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
     format_parent_ds(w, &state.instance.parent_ds, labels.clone())?;
     format_time_properties_ds(w, &state.instance.time_properties_ds, labels.clone())?;
     format_path_trace_ds(w, &state.instance.path_trace_ds, labels.clone())?;
+    format_port_ds(w, &state.instance.port_ds, labels.clone())?;
 
     w.write_str("# EOF\n")?;
     Ok(())
