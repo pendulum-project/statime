@@ -1,5 +1,6 @@
 use core::ops::{Deref, DerefMut};
 
+use az::Cast;
 use fixed::types::I48F16;
 
 use crate::{
@@ -9,7 +10,29 @@ use crate::{
 
 /// Represents time intervals in nanoseconds
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) struct TimeInterval(pub I48F16);
+pub struct TimeInterval(pub I48F16);
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TimeInterval {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(TimeInterval(I48F16::from_bits(i64::deserialize(
+            deserializer,
+        )?)))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TimeInterval {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i64(self.0.to_bits())
+    }
+}
 
 impl Deref for TimeInterval {
     type Target = I48F16;
@@ -42,6 +65,12 @@ impl From<Duration> for TimeInterval {
     fn from(duration: Duration) -> Self {
         let val = (duration.nanos().to_bits() >> 16) as i64;
         TimeInterval(fixed::types::I48F16::from_bits(val))
+    }
+}
+
+impl TimeInterval {
+    pub fn to_nanos(self) -> f64 {
+        self.0.cast()
     }
 }
 

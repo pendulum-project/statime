@@ -30,6 +30,7 @@ use crate::{
         messages::{Message, MessageBody},
     },
     filters::Filter,
+    observability::{self, port::PortDS},
     ptp_instance::{PtpInstanceState, PtpInstanceStateMutex},
     time::{Duration, Time},
 };
@@ -588,6 +589,40 @@ impl<L, A, R, C, F: Filter, S> Port<'_, L, A, R, C, F, S> {
 
     pub(crate) fn number(&self) -> u16 {
         self.port_identity.port_number
+    }
+
+    /// Get a copy of the port dataset of the port
+    pub fn port_ds(&self) -> PortDS {
+        PortDS {
+            port_identity: self.port_identity,
+            port_state: match self.port_state {
+                PortState::Faulty => observability::port::PortState::Faulty,
+                PortState::Listening => observability::port::PortState::Listening,
+                PortState::Master => observability::port::PortState::Master,
+                PortState::Passive => observability::port::PortState::Passive,
+                PortState::Slave(_) => observability::port::PortState::Slave,
+            },
+            log_announce_interval: self.config.announce_interval.as_log_2(),
+            announce_receipt_timeout: self.config.announce_receipt_timeout,
+            log_sync_interval: self.config.sync_interval.as_log_2(),
+            delay_mechanism: match self.config.delay_mechanism {
+                crate::config::DelayMechanism::E2E { interval } => {
+                    observability::port::DelayMechanism::E2E {
+                        log_min_delay_req_interval: interval.as_log_2(),
+                    }
+                }
+                crate::config::DelayMechanism::P2P { interval } => {
+                    observability::port::DelayMechanism::P2P {
+                        log_min_p_delay_req_interval: interval.as_log_2(),
+                        mean_link_delay: self.mean_delay.map(|v| v.into()).unwrap_or_default(),
+                    }
+                }
+            },
+            version_number: 2,
+            minor_version_number: self.config.minor_ptp_version as u8,
+            delay_asymmetry: self.config.delay_asymmetry.into(),
+            master_only: self.config.master_only,
+        }
     }
 }
 
