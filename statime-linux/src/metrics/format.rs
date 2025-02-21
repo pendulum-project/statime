@@ -310,12 +310,12 @@ fn format_path_trace_ds(
     format_metric(
         w,
         "path_trace_enable",
-        "true if path trace options is enabled",
+        "1 if path trace options is enabled, 0 otherwise",
         MetricType::Gauge,
         None,
         vec![Measurement {
             labels: labels.clone(),
-            value: path_trace_ds.enable,
+            value: format_bool!(path_trace_ds.enable),
         }],
     )?;
 
