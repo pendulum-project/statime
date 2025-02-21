@@ -290,7 +290,7 @@ pub fn format_time_properties_ds(
     format_metric(
         w,
         "time_source",
-        "Wheter the timescale of the Grandmaster PTP Instance is PTP",
+        "The source of time used by the Grandmaster PTP instance",
         MetricType::Gauge,
         None,
         vec![Measurement {
