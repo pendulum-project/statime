@@ -254,7 +254,7 @@ pub fn format_time_properties_ds(
     format_metric(
         w,
         "time_traceable",
-        "Wheter the timescale is tracable to a primary reference",
+        "Whether the timescale is traceable to a primary reference",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -266,7 +266,7 @@ pub fn format_time_properties_ds(
     format_metric(
         w,
         "frequency_traceable",
-        "Wheter the frequence determining the timescale is tracable to a primary reference",
+        "Whether the frequency determining the timescale is traceable to a primary reference",
         MetricType::Gauge,
         None,
         vec![Measurement {
@@ -278,7 +278,7 @@ pub fn format_time_properties_ds(
     format_metric(
         w,
         "ptp_timescale",
-        "Wheter the timescale of the Grandmaster PTP Instance is PTP",
+        "Whether the timescale of the Grandmaster PTP Instance is PTP",
         MetricType::Gauge,
         None,
         vec![Measurement {
