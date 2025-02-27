@@ -252,7 +252,7 @@ impl PtpVersion {
     }
 
     fn as_byte(&self) -> u8 {
-        self.minor << 4 | self.major
+        (self.minor << 4) | self.major
     }
 
     fn from_byte(byte: u8) -> Self {

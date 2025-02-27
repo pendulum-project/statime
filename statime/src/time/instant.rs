@@ -66,7 +66,7 @@ impl Time {
     /// assert_eq!(Time::from_nanos_subnanos(0, 1 << 31), Time::from_fixed_nanos(0.5.az::<I96F32>()))
     /// ```
     pub fn from_nanos_subnanos(nanos: u64, subnanos: u32) -> Self {
-        let bits = (nanos as u128) << 32 | (subnanos as u128);
+        let bits = ((nanos as u128) << 32) | (subnanos as u128);
         let inner = U96F32::from_bits(bits);
         Self { inner }
     }
