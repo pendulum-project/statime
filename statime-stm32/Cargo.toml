@@ -11,40 +11,40 @@ rtic-monotonics = { version = "2.0.3", features = [
     "systick-64bit",
 ] }
 rtic-sync = "1.3.0"
-embassy-sync = "0.3"
+embassy-sync = "0.6.2"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
-critical-section = "1.1.2"
-stm32f7xx-hal = { version = "0.7.0", features = ["stm32f767", "rt"] }
-stm32-eth = { version = "0.5.2", features = [
+critical-section = "1.2.0"
+stm32f7xx-hal = { version = "0.8.0", features = ["stm32f767", "rt"] }
+stm32-eth = { version = "0.8.0", features = [
     "smoltcp-phy",
     "async-await",
     "stm32f767",
 ] }
 ieee802_3_miim = "0.8.0"
-smoltcp = { version = "0.10.0", default-features = false, features = [
+smoltcp = { version = "0.12.0", default-features = false, features = [
     "defmt",
     "medium-ethernet",
     "proto-ipv4",
     "proto-ipv6",
-    "proto-igmp",
+    "multicast",
     "socket-dhcpv4",
     "socket-udp",
     "async",
 ] }
 
-defmt = "0.3.5"
-defmt-rtt = "0.4"
-panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt = "0.3.10"
+defmt-rtt = "0.4.1"
+panic-probe = { version = "0.3.2", features = ["print-defmt"] }
 
-futures = { version = "0.3.28", default-features = false, features = [
+futures = { version = "0.3.31", default-features = false, features = [
     "async-await",
 ] }
 
 statime = { path = "../statime", default-features = false }
-fixed = "1.23.1"
-az = "1.2"
-static_cell = "1.2.0"
+fixed = "1.29.0"
+az = "1.2.1"
+static_cell = "2.1.0"
 log-to-defmt = "0.1.0"
 adler = { version = "1.0.2", default-features = false }
 
