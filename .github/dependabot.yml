@@ -12,3 +12,12 @@ updates:
     interval: daily
   versioning-strategy: lockfile-only
   open-pull-requests-limit: 10
+
+- package-ecosystem: cargo
+  directory: "/statime-stm32/"
+  schedule:
+    interval: "monthly"
+  groups:
+    stm32-example:
+      patterns:
+        - "*"

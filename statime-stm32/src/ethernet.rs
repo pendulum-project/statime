@@ -1,5 +1,6 @@
 use core::task::Poll;
 
+use super::{Monotonic, Systick};
 use defmt::unwrap;
 use futures::future::poll_fn;
 use ieee802_3_miim::{
@@ -7,7 +8,6 @@ use ieee802_3_miim::{
     Phy,
 };
 use rtic::Mutex;
-use rtic_monotonics::{systick::Systick, Monotonic};
 use smoltcp::{
     iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage},
     socket::{dhcpv4, udp},
@@ -27,6 +27,10 @@ pub struct DmaResources {
 }
 
 impl DmaResources {
+    #[expect(
+        clippy::new_without_default,
+        reason = "needs to be constructed in const context"
+    )]
     pub const fn new() -> Self {
         Self {
             rx_ring: [RxRingEntry::new(), RxRingEntry::new()],
@@ -44,6 +48,10 @@ pub struct UdpSocketResources {
 }
 
 impl UdpSocketResources {
+    #[expect(
+        clippy::new_without_default,
+        reason = "needs to be constructed in const context"
+    )]
     pub const fn new() -> Self {
         Self {
             rx_meta_storage: [udp::PacketMetadata::EMPTY; 8],
@@ -120,14 +128,10 @@ pub fn setup_smoltcp(
     });
 
     unwrap!(interface.join_multicast_group(
-        &mut dma,
-        Ipv4Address::new(224, 0, 1, 129),
-        smoltcp::time::Instant::ZERO
+        Ipv4Address::new(224, 0, 1, 129)
     ));
     unwrap!(interface.join_multicast_group(
-        &mut dma,
-        Ipv4Address::new(224, 0, 0, 107),
-        smoltcp::time::Instant::ZERO
+        Ipv4Address::new(224, 0, 0, 107)
     ));
 
     defmt::info!("Set IPs to: {}", interface.ip_addrs());
@@ -199,6 +203,7 @@ pub async fn recv_slice(
 #[derive(Debug, Clone, Copy, defmt::Format)]
 pub enum RecvError {
     Exhausted,
+    Truncated,
     PacketIdNotFound(PacketIdNotFound),
     NoTimestampRecorded,
 }
@@ -213,6 +218,7 @@ impl From<udp::RecvError> for RecvError {
     fn from(value: udp::RecvError) -> Self {
         match value {
             udp::RecvError::Exhausted => Self::Exhausted,
+            udp::RecvError::Truncated => Self::Truncated,
         }
     }
 }
