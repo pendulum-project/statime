@@ -33,3 +33,4 @@ nav:
   - Man Pages:
     - statime(8): man/statime.8.md
     - statime.toml(5): man/statime.toml.5.md
+    - statime-metrics-exporter(8): man/statime-metrics-exporter.8.md
