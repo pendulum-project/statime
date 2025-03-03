@@ -51,6 +51,7 @@ systick_monotonic!(Systick, 1_000);
 mod app {
     use super::*;
     use crate::port::TimerName;
+    use stm32f7xx_hal::rcc::{HSEClock, HSEClockMode};
 
     #[shared]
     struct Shared {
@@ -73,7 +74,7 @@ mod app {
         // Setup clocks
         let clocks = {
             let rcc = p.RCC.constrain();
-            let clocks = rcc.cfgr.sysclk(216.MHz()).hclk(216.MHz());
+            let clocks = rcc.cfgr.hse(HSEClock::new(8.MHz(), HSEClockMode::Bypass)).sysclk(216.MHz()).hclk(216.MHz());
             clocks.freeze()
         };
 
