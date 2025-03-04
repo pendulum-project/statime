@@ -124,7 +124,7 @@ pub fn setup_smoltcp(
     let mut interface = Interface::new(cfg, &mut dma, smoltcp::time::Instant::ZERO);
 
     interface.update_ip_addrs(|a| {
-        unwrap!(a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 24)));
+        unwrap!(a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 8)));
     });
 
     unwrap!(interface.join_multicast_group(
