@@ -24,6 +24,8 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: thumbv7em-none-eabihf
+          components: rustfmt, clippy, llvm-tools
           override: true
 
       - name: Build no-std
