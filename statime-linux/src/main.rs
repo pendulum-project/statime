@@ -134,28 +134,31 @@ enum ClockSyncMode {
 }
 
 fn start_clock_task(
-    clock: LinuxClock,
-    system_clock: SystemClock,
+    _clock: LinuxClock,
+    _system_clock: SystemClock,
 ) -> tokio::sync::watch::Sender<ClockSyncMode> {
     let (mode_sender, mode_receiver) = tokio::sync::watch::channel(ClockSyncMode::FromSystem);
 
-    match system_clock {
-        SystemClock::Linux(system_clock) => {
-            tokio::spawn(clock_task(clock, system_clock, None, mode_receiver));
-        }
-        SystemClock::Overlay(overlay_clock) => {
-            tokio::spawn(clock_task(
-                clock,
-                overlay_clock.clone(),
-                Some(overlay_clock),
-                mode_receiver,
-            ));
-        }
-    }
+    // match system_clock {
+    // SystemClock::Linux(system_clock) => {
+    // tokio::spawn(clock_task(clock, system_clock, None, mode_receiver));
+    // }
+    // SystemClock::Overlay(overlay_clock) => {
+    // tokio::spawn(clock_task(
+    // clock,
+    // overlay_clock.clone(),
+    // Some(overlay_clock),
+    // mode_receiver,
+    // ));
+    // }
+    // }
+
+    std::mem::forget(mode_receiver);
 
     mode_sender
 }
 
+#[allow(unused)]
 async fn clock_task<C: Clock<Error = impl core::fmt::Debug>>(
     mut clock: LinuxClock,
     mut system_clock: C,
