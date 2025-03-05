@@ -1,6 +1,5 @@
 use core::task::Poll;
 
-use super::{Monotonic, Systick};
 use defmt::unwrap;
 use futures::future::poll_fn;
 use ieee802_3_miim::{
@@ -20,6 +19,8 @@ use stm32_eth::{
     ptp::Timestamp,
 };
 use stm32f7xx_hal::signature::Uid;
+
+use super::{Monotonic, Systick};
 
 pub struct DmaResources {
     pub rx_ring: [RxRingEntry; 2],
@@ -127,12 +128,8 @@ pub fn setup_smoltcp(
         unwrap!(a.push(IpCidr::new(IpAddress::v4(10, 0, 0, 2), 8)));
     });
 
-    unwrap!(interface.join_multicast_group(
-        Ipv4Address::new(224, 0, 1, 129)
-    ));
-    unwrap!(interface.join_multicast_group(
-        Ipv4Address::new(224, 0, 0, 107)
-    ));
+    unwrap!(interface.join_multicast_group(Ipv4Address::new(224, 0, 1, 129)));
+    unwrap!(interface.join_multicast_group(Ipv4Address::new(224, 0, 0, 107)));
 
     defmt::info!("Set IPs to: {}", interface.ip_addrs());
 
