@@ -146,8 +146,17 @@ pub fn format_current_ds(
 pub fn format_parent_ds(
     w: &mut impl std::fmt::Write,
     parent_ds: &ParentDS,
-    labels: Vec<(&'static str, String)>,
+    mut labels: Vec<(&'static str, String)>,
 ) -> std::fmt::Result {
+    labels.push((
+        "parent_clock_identity",
+        parent_ds.parent_port_identity.clock_identity.to_string(),
+    ));
+    labels.push((
+        "parent_port_number",
+        parent_ds.parent_port_identity.port_number.to_string(),
+    ));
+
     format_metric(
         w,
         "grandmaster_clock_quality_class",
