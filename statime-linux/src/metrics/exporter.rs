@@ -83,6 +83,35 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (mut tcp_stream, _) = listener.accept().await?;
 
+        // Wait until a request was sent, dropping the bytes read when this scope ends
+        // to ensure we don't accidentally use them afterwards
+        {
+            // Receive all data until the header was fully received, or until max buf size
+            let mut buf = [0u8; 2048];
+            let mut bytes_read = 0;
+            loop {
+                bytes_read += tcp_stream.read(&mut buf[bytes_read..]).await?;
+
+                // The headers end with two CRLFs in a row
+                if buf[0..bytes_read].windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+
+                // Headers should easily fit within the buffer
+                // If we have not found the end yet, we are not going to
+                if bytes_read >= buf.len() {
+                    tracing::warn!("Metrics connection request too long");
+                    continue;
+                }
+            }
+
+            // We only respond to GET requests
+            if !buf[0..bytes_read].starts_with(b"GET ") {
+                tracing::warn!("Metrics connection wasn't get");
+                continue;
+            }
+        }
+
         buf.clear();
         match handler(&mut buf, &observation_socket_path).await {
             Ok(()) => {
