@@ -629,19 +629,19 @@ impl KalmanFilter {
         if let Some(cur_frequency) = self.cur_frequency {
             let error_ppm = clamp_adjustment(
                 cur_frequency,
-                self.running_filter.freq_offset() * 1e6 - target,
+                target - self.running_filter.freq_offset() * 1e6,
                 self.config.max_freq_offset,
             );
-            if let Ok(time) = clock.set_frequency(cur_frequency - error_ppm) {
-                self.cur_frequency = Some(cur_frequency - error_ppm);
+            if let Ok(time) = clock.set_frequency(cur_frequency + error_ppm) {
+                self.cur_frequency = Some(cur_frequency + error_ppm);
                 self.running_filter.absorb_frequency_steer(
-                    -error_ppm,
+                    error_ppm,
                     time,
                     self.wander,
                     &self.config,
                 );
                 self.wander_filter.absorb_frequency_steer(
-                    -error_ppm,
+                    error_ppm,
                     time,
                     self.wander,
                     &self.config,
@@ -777,5 +777,139 @@ impl KalmanFilter {
                 log::error!("Could not adjust clock frequency");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Clock;
+
+    #[derive(Default)]
+    struct TestClock {
+        last_freq: Option<f64>,
+    }
+
+    impl Clock for TestClock {
+        type Error = core::convert::Infallible;
+
+        fn now(&self) -> Time {
+            Time::from_nanos(0)
+        }
+
+        fn step_clock(&mut self, _offset: Duration) -> Result<Time, Self::Error> {
+            panic!("Test should not step clock");
+        }
+
+        fn set_frequency(&mut self, ppm: f64) -> Result<Time, Self::Error> {
+            self.last_freq = Some(ppm);
+            Ok(Time::from_nanos(0))
+        }
+
+        fn set_properties(
+            &mut self,
+            _time_properties_ds: &crate::config::TimePropertiesDS,
+        ) -> Result<(), Self::Error> {
+            panic!("Test should not set properties");
+        }
+    }
+
+    #[test]
+    fn check_frequency_steering_bounding() {
+        let timebase = Time::from_nanos(0);
+        let mut filter = KalmanFilter {
+            config: KalmanConfiguration {
+                max_freq_offset: 10.0,
+                ..Default::default()
+            },
+            running_filter: BaseFilter(Some(InnerFilter {
+                state: Vector::new_vector([0.0, 0.0, 0.0]),
+                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
+                filter_time: timebase,
+            })),
+            wander_filter: BaseFilter(None),
+            wander_score: 0,
+            wander: KalmanConfiguration::default().initial_wander,
+            wander_measurement_error: 1.0,
+            measurement_error_estimator: MeasurementErrorEstimator::default(),
+            cur_frequency: Some(0.0),
+        };
+        let mut clock = TestClock::default();
+        filter.change_frequency(50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(10.0));
+        filter.change_frequency(50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(10.0));
+        filter.change_frequency(-50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(-10.0));
+
+        let timebase = Time::from_nanos(0);
+        let mut filter = KalmanFilter {
+            config: KalmanConfiguration {
+                max_freq_offset: 10.0,
+                ..Default::default()
+            },
+            running_filter: BaseFilter(Some(InnerFilter {
+                state: Vector::new_vector([0.0, 0.0, 0.0]),
+                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
+                filter_time: timebase,
+            })),
+            wander_filter: BaseFilter(None),
+            wander_score: 0,
+            wander: KalmanConfiguration::default().initial_wander,
+            wander_measurement_error: 1.0,
+            measurement_error_estimator: MeasurementErrorEstimator::default(),
+            cur_frequency: Some(0.0),
+        };
+        let mut clock = TestClock::default();
+        filter.change_frequency(-50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(-10.0));
+        filter.change_frequency(-50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(-10.0));
+        filter.change_frequency(50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(10.0));
+
+        let timebase = Time::from_nanos(0);
+        let mut filter = KalmanFilter {
+            config: KalmanConfiguration {
+                max_freq_offset: 10.0,
+                ..Default::default()
+            },
+            running_filter: BaseFilter(Some(InnerFilter {
+                state: Vector::new_vector([0.0, 0.0, 0.0]),
+                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
+                filter_time: timebase,
+            })),
+            wander_filter: BaseFilter(None),
+            wander_score: 0,
+            wander: KalmanConfiguration::default().initial_wander,
+            wander_measurement_error: 1.0,
+            measurement_error_estimator: MeasurementErrorEstimator::default(),
+            cur_frequency: Some(20.0),
+        };
+        let mut clock = TestClock::default();
+        filter.change_frequency(50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(10.0));
+
+        let timebase = Time::from_nanos(0);
+        let mut filter = KalmanFilter {
+            config: KalmanConfiguration {
+                max_freq_offset: 10.0,
+                ..Default::default()
+            },
+            running_filter: BaseFilter(Some(InnerFilter {
+                state: Vector::new_vector([0.0, 0.0, 0.0]),
+                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
+                filter_time: timebase,
+            })),
+            wander_filter: BaseFilter(None),
+            wander_score: 0,
+            wander: KalmanConfiguration::default().initial_wander,
+            wander_measurement_error: 1.0,
+            measurement_error_estimator: MeasurementErrorEstimator::default(),
+            cur_frequency: Some(-20.0),
+        };
+        let mut clock = TestClock::default();
+        filter.change_frequency(50.0, &mut clock);
+        assert_eq!(clock.last_freq, Some(10.0));
     }
 }
