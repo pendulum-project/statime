@@ -380,22 +380,37 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
 
     /// Handle the announce receipt timer going off
     pub fn handle_announce_receipt_timer(&mut self) -> PortActionIterator<'_> {
-        // we didn't hear announce messages from other masters, so become master
-        // ourselves
-        match self.port_state {
-            PortState::Master => (),
-            _ => self.set_forced_port_state(PortState::Master),
-        }
-
-        // Immediately start sending syncs and announces
-        actions![
-            PortAction::ResetAnnounceTimer {
-                duration: core::time::Duration::from_secs(0)
-            },
-            PortAction::ResetSyncTimer {
-                duration: core::time::Duration::from_secs(0)
+        if self
+            .instance_state
+            .with_ref(|state| state.default_ds.slave_only)
+        {
+            // We didn't hear messages from the master anymore, reset to the listening state
+            // since we can't become master.
+            if !matches!(self.port_state, PortState::Listening) {
+                self.set_forced_port_state(PortState::Listening);
             }
-        ]
+
+            // consistent with Port<InBmca>::new()
+            let duration = self.config.announce_duration(&mut self.rng);
+            actions![PortAction::ResetAnnounceReceiptTimer { duration }]
+        } else {
+            // we didn't hear announce messages from other masters, so become master
+            // ourselves
+            match self.port_state {
+                PortState::Master => (),
+                _ => self.set_forced_port_state(PortState::Master),
+            }
+
+            // Immediately start sending syncs and announces
+            actions![
+                PortAction::ResetAnnounceTimer {
+                    duration: core::time::Duration::from_secs(0)
+                },
+                PortAction::ResetSyncTimer {
+                    duration: core::time::Duration::from_secs(0)
+                }
+            ]
+        }
     }
 
     /// Handle the filter update timer going off
