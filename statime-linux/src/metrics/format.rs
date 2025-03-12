@@ -136,7 +136,19 @@ pub fn format_current_ds(
         Some(Unit::Nanoseconds),
         vec![Measurement {
             labels: labels.clone(),
-            value: current_ds.offset_from_master,
+            value: current_ds.offset_from_master.seconds(),
+        }],
+    )?;
+
+    format_metric(
+        w,
+        "mean_delay",
+        "Packet delay between a Master PTP Instance as calculated by the Slave instance",
+        MetricType::Gauge,
+        Some(Unit::Nanoseconds),
+        vec![Measurement {
+            labels: labels.clone(),
+            value: current_ds.mean_delay.seconds(),
         }],
     )?;
 

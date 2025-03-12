@@ -294,7 +294,7 @@ async fn actual_main() {
     let (instance_state_sender, instance_state_receiver) =
         tokio::sync::watch::channel(ObservableInstanceState {
             default_ds: instance.default_ds(),
-            current_ds: instance.current_ds(),
+            current_ds: instance.current_ds(None),
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
             path_trace_ds: instance.path_trace_ds(),
@@ -502,7 +502,12 @@ async fn run(
         // We don't care if isn't anybody on the other side
         let _ = instance_state_sender.send(ObservableInstanceState {
             default_ds: instance.default_ds(),
-            current_ds: instance.current_ds(),
+            current_ds: instance.current_ds(
+                mut_bmca_ports
+                    .iter()
+                    .filter_map(|v| v.port_current_ds_contribution())
+                    .next(),
+            ),
             parent_ds: instance.parent_ds(),
             time_properties_ds: instance.time_properties_ds(),
             path_trace_ds: instance.path_trace_ds(),

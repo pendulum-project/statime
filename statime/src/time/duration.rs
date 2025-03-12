@@ -113,6 +113,28 @@ impl Duration {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Duration {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Duration {
+            inner: I96F32::from_bits(i128::deserialize(deserializer)?),
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Duration {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i128(self.inner.to_bits())
+    }
+}
+
 impl From<TimeInterval> for Duration {
     fn from(interval: TimeInterval) -> Self {
         Self::from_fixed_nanos(interval.0)

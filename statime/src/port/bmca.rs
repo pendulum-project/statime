@@ -162,7 +162,6 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
                 debug_assert!(!default_ds.slave_only);
 
                 current_ds.steps_removed = 0;
-                current_ds.offset_from_master = Duration::ZERO;
 
                 parent_ds.parent_port_identity.clock_identity = defaultds.clock_identity;
                 parent_ds.parent_port_identity.port_number = 0;

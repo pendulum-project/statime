@@ -1,4 +1,7 @@
-use super::matrix::{Matrix, Vector};
+use super::{
+    matrix::{Matrix, Vector},
+    FilterEstimate,
+};
 #[allow(unused_imports)]
 use crate::float_polyfill::FloatPolyfill;
 use crate::{
@@ -621,6 +624,13 @@ impl Filter for KalmanFilter {
         // Remote has gone away, set frequency as close as possible to our best estimate
         // of correct
         self.change_frequency(0.0, clock);
+    }
+
+    fn current_estimates(&self) -> super::FilterEstimate {
+        FilterEstimate {
+            offset_from_master: Duration::from_seconds(self.running_filter.offset()),
+            mean_delay: Duration::from_seconds(self.running_filter.mean_delay()),
+        }
     }
 }
 

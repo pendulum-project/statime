@@ -32,6 +32,9 @@ pub struct BasicFilter {
     gain: f64,
 
     cur_freq: f64,
+
+    last_offset: Duration,
+    last_delay: Duration,
 }
 
 impl Filter for BasicFilter {
@@ -44,6 +47,8 @@ impl Filter for BasicFilter {
             freq_confidence: 1e-4,
             gain,
             cur_freq: 0.0,
+            last_offset: Duration::ZERO,
+            last_delay: Duration::ZERO,
         }
     }
 
@@ -51,10 +56,12 @@ impl Filter for BasicFilter {
         let mut update = FilterUpdate::default();
 
         if let Some(delay) = measurement.delay {
+            self.last_delay = delay;
             update.mean_delay = Some(delay);
         }
 
         if let Some(peer_delay) = measurement.peer_delay {
+            self.last_delay = peer_delay;
             update.mean_delay = Some(peer_delay);
         }
 
@@ -62,6 +69,8 @@ impl Filter for BasicFilter {
             // No measurement, so no further actions
             return update;
         };
+
+        self.last_offset = offset;
 
         // Reset on too-large difference
         if offset.abs() > Duration::from_nanos(1_000_000_000) {
@@ -153,5 +162,12 @@ impl Filter for BasicFilter {
     fn update<C: Clock>(&mut self, _clock: &mut C) -> FilterUpdate {
         // ignore
         Default::default()
+    }
+
+    fn current_estimates(&self) -> super::FilterEstimate {
+        super::FilterEstimate {
+            offset_from_master: self.last_offset,
+            mean_delay: self.last_delay,
+        }
     }
 }

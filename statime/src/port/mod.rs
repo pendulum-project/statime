@@ -29,7 +29,7 @@ use crate::{
         common::PortIdentity,
         messages::{Message, MessageBody},
     },
-    filters::Filter,
+    filters::{Filter, FilterEstimate},
     observability::{self, port::PortDS},
     ptp_instance::{PtpInstanceState, PtpInstanceStateMutex},
     time::{Duration, Time},
@@ -637,6 +637,16 @@ impl<L, A, R, C, F: Filter, S> Port<'_, L, A, R, C, F, S> {
             minor_version_number: self.config.minor_ptp_version as u8,
             delay_asymmetry: self.config.delay_asymmetry.into(),
             master_only: self.config.master_only,
+        }
+    }
+
+    /// If this port is in the slave state, this returns the current estimate
+    /// of the current_ds offset_to_master and mean_delay fields.
+    pub fn port_current_ds_contribution(&self) -> Option<FilterEstimate> {
+        if matches!(self.port_state, PortState::Slave(_)) {
+            Some(self.filter.current_estimates())
+        } else {
+            None
         }
     }
 }

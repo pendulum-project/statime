@@ -617,6 +617,10 @@ mod tests {
         fn update<C: Clock>(&mut self, _clock: &mut C) -> FilterUpdate {
             Default::default()
         }
+
+        fn current_estimates(&self) -> crate::filters::FilterEstimate {
+            unimplemented!()
+        }
     }
 
     #[test]

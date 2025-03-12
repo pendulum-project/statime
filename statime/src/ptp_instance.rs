@@ -18,7 +18,7 @@ use crate::{
             InternalCurrentDS, InternalDefaultDS, InternalParentDS, PathTraceDS, TimePropertiesDS,
         },
     },
-    filters::Filter,
+    filters::{Filter, FilterEstimate},
     observability::{current::CurrentDS, default::DefaultDS, parent::ParentDS},
     port::{InBmca, Port},
     time::Duration,
@@ -177,8 +177,9 @@ impl<F, S: PtpInstanceStateMutex> PtpInstance<F, S> {
     }
 
     /// Return IEEE-1588 currentDS for introspection
-    pub fn current_ds(&self) -> CurrentDS {
-        self.state.with_ref(|s| (&s.current_ds).into())
+    pub fn current_ds(&self, port_contribution: Option<FilterEstimate>) -> CurrentDS {
+        self.state
+            .with_ref(|s| CurrentDS::from_state(&s.current_ds, port_contribution))
     }
 
     /// Return IEEE-1588 parentDS for introspection
