@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2025-03-13
+
+### Added
+- Added a number of new metrics to the exporter.
+
+### Changed
+- Updated stm32 sample to use the kalman filter.
+- Changed the type of the CurrentDS offset_from_master field.
+
+### Fixed
+- Fixed a bug in slave only mode
+- Fixed the definitions and delivery of promethues metrics
+- Corrected incorrect bounding of the maximum frequency deviation used during steering of the clock.
+
 ## [0.3.0] - 2025-02-12
 
 ### Added
@@ -58,6 +72,7 @@
 ### Fixed
 - Fixed race condition during startup
 
+[0.4.0]: https://github.com/pendulum-project/statime/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/pendulum-project/statime/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/pendulum-project/statime/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/pendulum-project/statime/compare/v0.2.0...v0.2.1
