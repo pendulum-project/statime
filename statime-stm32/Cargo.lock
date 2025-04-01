@@ -201,9 +201,9 @@ dependencies = [
 
 [[package]]
 name = "defmt-rtt"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bab697b3dbbc1750b7c8b821aa6f6e7f2480b47a99bc057a2ed7b170ebef0c51"
+checksum = "c6eca0aae8aa2cf8333200ecbd236274697bc0a394765c858b3d9372eb1abcfa"
 dependencies = [
  "critical-section",
  "defmt",
@@ -259,13 +259,14 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal-bus"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b4e6ede84339ebdb418cd986e6320a34b017cdf99b5cc3efceec6450b06886"
+checksum = "0d3980bf28e8577db59fe2bdb3df868a419469d2cecb363644eea2b6f7797669"
 dependencies = [
  "critical-section",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -494,9 +495,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.26"
+version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bde2b3dc3671ae49d8e2e9f044c7c005836e7a023ee57cffa25ab82764bb9e"
+checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "log-to-defmt"
@@ -688,9 +689,9 @@ dependencies = [
 
 [[package]]
 name = "rtic-sync"
-version = "1.3.0"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49b1200137ccb2bf272a1801fa6e27264535facd356cb2c1d5bc8e12aa211bad"
+checksum = "d0c3648d8ab27216a940ccfc1939479bfd14010fbae9f5b7706a5b3d30ef561f"
 dependencies = [
  "critical-section",
  "embedded-hal 1.0.0",
@@ -800,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "statime"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "arrayvec",
  "az",
