@@ -10,7 +10,7 @@ rtic-monotonics = { version = "2.0.3", features = [
     "cortex-m-systick",
     "systick-64bit",
 ] }
-rtic-sync = "1.3.0"
+rtic-sync = "1.3.2"
 embassy-sync = "0.6.2"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
@@ -34,7 +34,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
 ] }
 
 defmt = "0.3.10"
-defmt-rtt = "0.4.1"
+defmt-rtt = "0.4.2"
 panic-probe = { version = "0.3.2", features = ["print-defmt"] }
 
 futures = { version = "0.3.31", default-features = false, features = [
