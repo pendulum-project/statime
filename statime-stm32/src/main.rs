@@ -17,7 +17,7 @@ use smoltcp::{
     socket::dhcpv4,
     wire::{IpCidr, Ipv4Address, Ipv4Cidr},
 };
-use statime::{filters::BasicFilter, port::TimestampContext, PtpInstance};
+use statime::{filters::KalmanFilter, port::TimestampContext, PtpInstance};
 use stm32_eth::{dma::PacketId, EthPins, Parts, PartsIn};
 use stm32f7xx_hal::{
     gpio::{Output, Pin, Speed},
@@ -37,7 +37,7 @@ mod port;
 mod ptp_clock;
 mod ptp_state_mutex;
 
-type StmPtpInstance = PtpInstance<BasicFilter, PtpStateMutex>;
+type StmPtpInstance = PtpInstance<KalmanFilter, PtpStateMutex>;
 
 defmt::timestamp!("{=u64:iso8601ms}", {
     let time = stm32_eth::ptp::EthernetPTP::get_time();
@@ -220,8 +220,9 @@ mod app {
                 .unwrap_or_else(|_| defmt::panic!("Failed to start instance bmca"));
 
             // Poll network interfaces and run DHCP
-            // poll_smoltcp::spawn().unwrap_or_else(|_| defmt::panic!("Failed to start poll_smoltcp"));
-            // dhcp::spawn(dhcp_socket).unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
+            // poll_smoltcp::spawn().unwrap_or_else(|_| defmt::panic!("Failed to
+            // start poll_smoltcp")); dhcp::spawn(dhcp_socket).
+            // unwrap_or_else(|_| defmt::panic!("Failed to start dhcp"));
         }
 
         (
