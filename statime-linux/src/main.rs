@@ -30,7 +30,7 @@ use statime_linux::{
     tlvforwarder::TlvForwarder,
 };
 use timestamped_socket::{
-    interface::interfaces,
+    interface::{interfaces, InterfaceName},
     networkaddress::{EthernetAddress, NetworkAddress},
     socket::{InterfaceTimestampMode, Open, Socket},
 };
@@ -258,8 +258,13 @@ async fn actual_main() {
             .expect("could not determine config file path"),
     );
 
+    let allowed_interfaces = config
+        .ports
+        .iter()
+        .map(|port| port.interface)
+        .collect::<Vec<_>>();
     let clock_identity = config.identity.unwrap_or(ClockIdentity(
-        get_clock_id().expect("could not get clock identity"),
+        get_clock_id(&allowed_interfaces).expect("could not get clock identity"),
     ));
 
     log::info!("Clock identity: {}", hex::encode(clock_identity.0));
@@ -953,11 +958,17 @@ async fn handle_actions_ethernet(
     pending_timestamp
 }
 
-fn get_clock_id() -> Option<[u8; 8]> {
+fn get_clock_id(allowed_names: &[InterfaceName]) -> Option<[u8; 8]> {
     let candidates = interfaces()
         .unwrap()
         .into_iter()
-        .filter_map(|(_, data)| data.mac());
+        .filter_map(|(name, data)| {
+            if allowed_names.contains(&name) {
+                data.mac()
+            } else {
+                None
+            }
+        });
 
     for mac in candidates {
         // Ignore multicast and locally administered mac addresses
