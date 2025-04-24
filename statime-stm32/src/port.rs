@@ -12,7 +12,7 @@ use statime::{
         AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig,
         PtpMinorVersion, SdoId, TimePropertiesDS, TimeSource,
     },
-    filters::BasicFilter,
+    filters::KalmanFilter,
     port::{InBmca, NoForwardedTLVs, PortAction, PortActionIterator, Running, TimestampContext},
     time::{Duration, Interval, Time},
     PtpInstance,
@@ -30,7 +30,7 @@ type StmPort<State> = statime::port::Port<
     AcceptAnyMaster,
     Rng,
     &'static PtpClock,
-    BasicFilter,
+    KalmanFilter,
     PtpStateMutex,
 >;
 
@@ -306,9 +306,7 @@ pub fn setup_statime(
         minor_ptp_version: PtpMinorVersion::One,
     };
 
-    let filter_config = 0.1;
-
-    let ptp_port = ptp_instance.add_port(port_config, filter_config, ptp_clock, rng);
+    let ptp_port = ptp_instance.add_port(port_config, Default::default(), ptp_clock, rng);
 
     (ptp_instance, ptp_port)
 }
