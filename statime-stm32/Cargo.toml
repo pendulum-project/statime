@@ -33,9 +33,9 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     "async",
 ] }
 
-defmt = "0.3.10"
-defmt-rtt = "0.4.2"
-panic-probe = { version = "0.3.2", features = ["print-defmt"] }
+defmt = "1.0.1"
+defmt-rtt = "1.0.0"
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 
 futures = { version = "0.3.31", default-features = false, features = [
     "async-await",
