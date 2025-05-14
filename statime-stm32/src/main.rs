@@ -49,6 +49,8 @@ systick_monotonic!(Systick, 1_000);
 
 #[app(device = stm32f7xx_hal::pac, dispatchers = [CAN1_RX0])]
 mod app {
+    use stm32f7xx_hal::rcc::{HSEClock, HSEClockMode};
+
     use super::*;
     use crate::port::TimerName;
 
@@ -73,7 +75,11 @@ mod app {
         // Setup clocks
         let clocks = {
             let rcc = p.RCC.constrain();
-            let clocks = rcc.cfgr.sysclk(216.MHz()).hclk(216.MHz());
+            let clocks = rcc
+                .cfgr
+                .hse(HSEClock::new(8.MHz(), HSEClockMode::Bypass))
+                .sysclk(216.MHz())
+                .hclk(216.MHz());
             clocks.freeze()
         };
 
