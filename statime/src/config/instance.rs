@@ -1,4 +1,4 @@
-use crate::config::{ClockIdentity, SdoId};
+use crate::config::{ClockIdentity, ClockQuality, SdoId};
 #[cfg(doc)]
 use crate::PtpInstance;
 
@@ -7,7 +7,7 @@ use crate::PtpInstance;
 /// # Example
 /// A configuration with common default values:
 /// ```
-/// # use statime::config::{ClockIdentity, InstanceConfig, SdoId};
+/// # use statime::config::{ClockIdentity, InstanceConfig, SdoId, ClockQuality};
 /// let config = InstanceConfig {
 ///     clock_identity: ClockIdentity::from_mac_address([1,2,3,4,5,6]),
 ///     priority_1: 128,
@@ -16,6 +16,7 @@ use crate::PtpInstance;
 ///     sdo_id: SdoId::default(),
 ///     slave_only: false,
 ///     path_trace: false,
+///     clock_quality: ClockQuality::default(),
 /// };
 /// ```
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -49,4 +50,7 @@ pub struct InstanceConfig {
 
     /// Whether the path trace option is enabled
     pub path_trace: bool,
+
+    /// A description of the accuracy and type of the local clock.
+    pub clock_quality: ClockQuality,
 }
