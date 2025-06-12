@@ -58,7 +58,7 @@ use crate::{
 /// # let rng: rand::rngs::mock::StepRng = unimplemented!();
 /// #
 /// use statime::PtpInstance;
-/// use statime::config::{AcceptAnyMaster, ClockIdentity, InstanceConfig, TimePropertiesDS, TimeSource};
+/// use statime::config::{AcceptAnyMaster, ClockIdentity, ClockQuality, InstanceConfig, TimePropertiesDS, TimeSource};
 /// use statime::filters::BasicFilter;
 ///
 /// let instance_config = InstanceConfig {
@@ -69,6 +69,7 @@ use crate::{
 ///     slave_only: false,
 ///     sdo_id: Default::default(),
 ///     path_trace: false,
+///     clock_quality: ClockQuality::default(),
 /// };
 /// let time_properties_ds = TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
 ///

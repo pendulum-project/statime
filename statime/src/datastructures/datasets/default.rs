@@ -30,7 +30,7 @@ impl InternalDefaultDS {
         Self {
             clock_identity: config.clock_identity,
             number_ports: 0,
-            clock_quality: Default::default(),
+            clock_quality: config.clock_quality,
             priority_1: config.priority_1,
             priority_2: config.priority_2,
             domain_number: config.domain_number,

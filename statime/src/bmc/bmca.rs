@@ -300,7 +300,7 @@ mod tests {
     use super::*;
     use crate::{
         bmc::acceptable_master::AcceptAnyMaster,
-        config::{ClockIdentity, InstanceConfig},
+        config::{ClockIdentity, ClockQuality, InstanceConfig},
         datastructures::messages::{Header, PtpVersion},
     };
 
@@ -505,6 +505,7 @@ mod tests {
             slave_only,
             sdo_id,
             path_trace,
+            clock_quality: ClockQuality::default(),
         })
     }
 
@@ -539,8 +540,11 @@ mod tests {
         let slave_only = false;
         let sdo_id = Default::default();
         let path_trace = false;
+        let mut clock_quality = ClockQuality::default();
+        clock_quality.clock_class = 1;
+        assert!((1..=127).contains(&clock_quality.clock_class));
 
-        let mut own_data = InternalDefaultDS::new(InstanceConfig {
+        let own_data = InternalDefaultDS::new(InstanceConfig {
             clock_identity,
             priority_1,
             priority_2,
@@ -548,10 +552,8 @@ mod tests {
             slave_only,
             sdo_id,
             path_trace,
+            clock_quality,
         });
-
-        own_data.clock_quality.clock_class = 1;
-        assert!((1..=127).contains(&own_data.clock_quality.clock_class));
 
         // D0 is the same as E_rbest; this is unreachable in practice, but we return M1
         // in this case

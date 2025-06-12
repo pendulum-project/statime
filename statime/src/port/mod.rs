@@ -712,7 +712,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            AcceptAnyMaster, DelayMechanism, InstanceConfig, PtpMinorVersion, TimePropertiesDS,
+            AcceptAnyMaster, ClockQuality, DelayMechanism, InstanceConfig, PtpMinorVersion,
+            TimePropertiesDS,
         },
         datastructures::datasets::{InternalDefaultDS, InternalParentDS, PathTraceDS},
         filters::BasicFilter,
@@ -838,6 +839,7 @@ mod tests {
             slave_only: false,
             sdo_id: Default::default(),
             path_trace: false,
+            clock_quality: ClockQuality::default(),
         });
 
         let parent_ds = InternalParentDS::new(default_ds);

@@ -2,7 +2,7 @@ use super::clock_accuracy::ClockAccuracy;
 use crate::datastructures::{WireFormat, WireFormatError};
 
 /// A description of the accuracy and type of a clock.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ClockQuality {
     /// The PTP clock class.

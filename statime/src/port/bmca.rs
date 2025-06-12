@@ -292,7 +292,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
 mod tests {
     use super::*;
     use crate::{
-        config::{ClockIdentity, InstanceConfig, SdoId},
+        config::{ClockIdentity, ClockQuality, InstanceConfig, SdoId},
         datastructures::{
             common::{PortIdentity, Tlv, TlvSetBuilder},
             messages::{AnnounceMessage, Header, Message, MessageBody, PtpVersion, MAX_DATA_LEN},
@@ -402,6 +402,7 @@ mod tests {
             sdo_id: SdoId::default(),
             slave_only: false,
             path_trace: false,
+            clock_quality: ClockQuality::default(),
         };
         let mut port = port.start_bmca();
         port.set_recommended_port_state(
