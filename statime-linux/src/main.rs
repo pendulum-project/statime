@@ -9,7 +9,7 @@ use std::{
 use clap::Parser;
 use rand::{rngs::StdRng, SeedableRng};
 use statime::{
-    config::{ClockIdentity, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
+    config::{ClockIdentity, ClockQuality, InstanceConfig, SdoId, TimePropertiesDS, TimeSource},
     filters::{Filter, KalmanConfiguration, KalmanFilter},
     port::{
         is_message_buffer_compatible, InBmca, Measurement, Port, PortAction, PortActionIterator,
@@ -272,6 +272,7 @@ async fn actual_main() {
         slave_only: config.slave_only,
         sdo_id: SdoId::try_from(config.sdo_id).expect("sdo-id should be between 0 and 4095"),
         path_trace: config.path_trace,
+        clock_quality: ClockQuality::default(),
     };
 
     let time_properties_ds =

@@ -9,7 +9,7 @@ use smoltcp::{
 use static_cell::StaticCell;
 use statime::{
     config::{
-        AcceptAnyMaster, ClockIdentity, DelayMechanism, InstanceConfig, PortConfig,
+        AcceptAnyMaster, ClockIdentity, ClockQuality, DelayMechanism, InstanceConfig, PortConfig,
         PtpMinorVersion, SdoId, TimePropertiesDS, TimeSource,
     },
     filters::BasicFilter,
@@ -287,6 +287,7 @@ pub fn setup_statime(
         slave_only: false,
         sdo_id: SdoId::default(),
         path_trace: false,
+        clock_quality: ClockQuality::default(),
     };
     let time_properties_ds =
         TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
