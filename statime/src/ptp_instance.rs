@@ -11,7 +11,7 @@ use crate::float_polyfill::FloatPolyfill;
 use crate::{
     bmc::{acceptable_master::AcceptableMasterList, bmca::Bmca},
     clock::Clock,
-    config::{InstanceConfig, PortConfig},
+    config::{ClockQuality, InstanceConfig, PortConfig},
     datastructures::{
         common::PortIdentity,
         datasets::{
@@ -259,6 +259,17 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
             2f64.powi(self.log_bmca_interval.load(Ordering::Relaxed) as i32),
         )
     }
+
+    /// Set the clock quality of the instance
+    ///
+    /// This allows changing the clock quality after the instance has been created.
+    /// The change will be reflected in all subsequent PTP messages sent by this instance
+    /// and the BMCA algorithm will use the new clock quality.
+    pub fn set_clock_quality(&self, clock_quality: ClockQuality) {
+        self.state.with_mut(|state| {
+            state.default_ds.clock_quality = clock_quality;
+        });
+    }
 }
 
 /// A mutex over a [`PtpInstanceState`]
@@ -303,5 +314,62 @@ impl PtpInstanceStateMutex for std::sync::RwLock<PtpInstanceState> {
 
     fn with_mut<R, F: FnOnce(&mut PtpInstanceState) -> R>(&self, f: F) -> R {
         f(&mut self.write().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::{
+            ClockAccuracy, ClockIdentity, ClockQuality, InstanceConfig, TimePropertiesDS,
+            TimeSource,
+        },
+        filters::BasicFilter,
+    };
+
+    fn create_test_instance() -> PtpInstance<BasicFilter> {
+        let config = InstanceConfig {
+            clock_identity: ClockIdentity::from_mac_address([1, 2, 3, 4, 5, 6]),
+            priority_1: 128,
+            priority_2: 128,
+            domain_number: 0,
+            slave_only: false,
+            sdo_id: Default::default(),
+            path_trace: false,
+            clock_quality: ClockQuality::default(),
+        };
+        let time_properties_ds =
+            TimePropertiesDS::new_arbitrary_time(false, false, TimeSource::InternalOscillator);
+        PtpInstance::new(config, time_properties_ds)
+    }
+
+    #[test]
+    fn test_set_clock_quality_basic() {
+        let instance = create_test_instance();
+
+        let default_ds = instance.default_ds();
+        assert_eq!(default_ds.clock_quality.clock_class, 248);
+        assert_eq!(
+            default_ds.clock_quality.clock_accuracy,
+            ClockAccuracy::Unknown
+        );
+
+        // Set custom clock quality and verify that it is applied
+        let custom_quality = ClockQuality {
+            clock_class: 6,
+            clock_accuracy: ClockAccuracy::NS1,
+            offset_scaled_log_variance: 0x8000 - (20 * 256),
+        };
+
+        instance.set_clock_quality(custom_quality);
+
+        let updated_ds = instance.default_ds();
+        assert_eq!(updated_ds.clock_quality.clock_class, 6);
+        assert_eq!(updated_ds.clock_quality.clock_accuracy, ClockAccuracy::NS1);
+        assert_eq!(
+            updated_ds.clock_quality.offset_scaled_log_variance,
+            0x8000 - (20 * 256)
+        );
     }
 }
