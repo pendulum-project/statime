@@ -5,12 +5,12 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rtic = { version = "2.1.2", features = ["thumbv7-backend"] }
-rtic-monotonics = { version = "2.0.3", features = [
+rtic = { version = "2.2.0", features = ["thumbv7-backend"] }
+rtic-monotonics = { version = "2.1.0", features = [
     "cortex-m-systick",
     "systick-64bit",
 ] }
-rtic-sync = "1.3.2"
+rtic-sync = "1.4.0"
 embassy-sync = "0.7.0"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
@@ -44,7 +44,7 @@ futures = { version = "0.3.31", default-features = false, features = [
 statime = { path = "../statime", default-features = false }
 fixed = "1.29.0"
 az = "1.2.1"
-static_cell = "2.1.0"
+static_cell = "2.1.1"
 log-to-defmt = "0.1.0"
 adler = { version = "1.0.2", default-features = false }
 
