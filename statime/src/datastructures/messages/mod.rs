@@ -33,7 +33,7 @@ mod p_delay_req;
 mod p_delay_resp;
 mod p_delay_resp_follow_up;
 mod signalling;
-mod sync;
+pub mod sync;
 
 /// Maximum length of a packet
 ///
@@ -115,14 +115,14 @@ mod fuzz {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Message<'a> {
-    pub(crate) header: Header,
-    pub(crate) body: MessageBody,
-    pub(crate) suffix: TlvSet<'a>,
+pub struct Message<'a> {
+    pub header: Header,
+    pub body: MessageBody,
+    pub suffix: TlvSet<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum MessageBody {
+pub enum MessageBody {
     Sync(SyncMessage),
     DelayReq(DelayReqMessage),
     PDelayReq(PDelayReqMessage),
@@ -456,7 +456,7 @@ impl<'a> Message<'a> {
     /// Serializes the object into the PTP wire format.
     ///
     /// Returns the used buffer size that contains the message or an error.
-    pub(crate) fn serialize(&self, buffer: &mut [u8]) -> Result<usize, super::WireFormatError> {
+    pub fn serialize(&self, buffer: &mut [u8]) -> Result<usize, super::WireFormatError> {
         let (header, rest) = buffer.split_at_mut(34);
         let (body, tlv) = rest.split_at_mut(self.body.wire_size());
 
@@ -478,7 +478,7 @@ impl<'a> Message<'a> {
     /// Deserializes a message from the PTP wire format.
     ///
     /// Returns the message or an error.
-    pub(crate) fn deserialize(buffer: &'a [u8]) -> Result<Self, super::WireFormatError> {
+    pub fn deserialize(buffer: &'a [u8]) -> Result<Self, super::WireFormatError> {
         let header_data = Header::deserialize_header(buffer)?;
 
         if header_data.message_length < 34 {

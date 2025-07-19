@@ -3,23 +3,23 @@ use core::iter::FusedIterator;
 use crate::datastructures::WireFormatError;
 
 #[derive(PartialEq, Eq)]
-pub(crate) struct TlvSetBuilder<'a> {
+pub struct TlvSetBuilder<'a> {
     buffer: &'a mut [u8],
     used: usize,
 }
 
 impl<'a> TlvSetBuilder<'a> {
-    pub(crate) fn new(buffer: &'a mut [u8]) -> Self {
+    pub fn new(buffer: &'a mut [u8]) -> Self {
         Self { buffer, used: 0 }
     }
 
-    pub(crate) fn add(&mut self, tlv: Tlv<'_>) -> Result<(), WireFormatError> {
+    pub fn add(&mut self, tlv: Tlv<'_>) -> Result<(), WireFormatError> {
         tlv.serialize(&mut self.buffer[self.used..])?;
         self.used += tlv.wire_size();
         Ok(())
     }
 
-    pub(crate) fn build(self) -> TlvSet<'a> {
+    pub fn build(self) -> TlvSet<'a> {
         TlvSet {
             bytes: &self.buffer[..self.used],
         }
@@ -27,7 +27,7 @@ impl<'a> TlvSetBuilder<'a> {
 }
 
 #[derive(Clone, PartialEq, Eq, Default)]
-pub(crate) struct TlvSet<'a> {
+pub struct TlvSet<'a> {
     bytes: &'a [u8],
 }
 
@@ -92,18 +92,18 @@ impl<'a> TlvSet<'a> {
         self.tlv().filter(|tlv| tlv.tlv_type.announce_propagate())
     }
 
-    pub(crate) fn tlv(&self) -> TlvSetIterator<'a> {
+    pub fn tlv(&self) -> TlvSetIterator<'a> {
         TlvSetIterator { buffer: self.bytes }
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct TlvSetIterator<'a> {
+pub struct TlvSetIterator<'a> {
     buffer: &'a [u8],
 }
 
 impl TlvSetIterator<'_> {
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self { buffer: &[] }
     }
 }
@@ -129,7 +129,7 @@ impl<'a> Iterator for TlvSetIterator<'a> {
 impl FusedIterator for TlvSetIterator<'_> {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Tlv<'a> {
+pub struct Tlv<'a> {
     pub tlv_type: TlvType,
     #[cfg(not(feature = "std"))]
     pub value: &'a [u8],

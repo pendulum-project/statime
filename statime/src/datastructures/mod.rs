@@ -9,7 +9,7 @@ pub mod datasets;
 pub mod messages;
 
 #[derive(Clone, Debug)]
-pub(crate) enum WireFormatError {
+pub enum WireFormatError {
     EnumConversionError,
     BufferTooShort,
     CapacityError,
@@ -42,7 +42,7 @@ impl From<EnumConversionError> for WireFormatError {
     }
 }
 
-trait WireFormat: Debug + Clone + Eq {
+pub trait WireFormat: Debug + Clone + Eq {
     /// Serializes the object into the PTP wire format.
     ///
     /// Returns the used buffer size that contains the message or an error.

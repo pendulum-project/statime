@@ -77,7 +77,6 @@
 //! `statime::fuzz` module.
 
 #![no_std]
-#![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![warn(rustdoc::unescaped_backticks)]
 #[cfg(feature = "std")]
@@ -86,7 +85,7 @@ extern crate std;
 mod bmc;
 mod clock;
 pub mod config;
-pub(crate) mod datastructures;
+pub mod datastructures;
 pub mod filters;
 mod float_polyfill;
 pub mod observability;

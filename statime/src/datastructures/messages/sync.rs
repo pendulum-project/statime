@@ -1,8 +1,8 @@
 use crate::datastructures::{common::WireTimestamp, WireFormat, WireFormatError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SyncMessage {
-    pub(crate) origin_timestamp: WireTimestamp,
+pub struct SyncMessage {
+    pub origin_timestamp: WireTimestamp,
 }
 
 impl SyncMessage {
