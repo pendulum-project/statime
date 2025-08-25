@@ -27,7 +27,7 @@ jobs:
           version: 1
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "stable"
           components: "llvm-tools"
@@ -93,7 +93,7 @@ jobs:
           path: target/pkg/
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "stable"
           components: "llvm-tools"
