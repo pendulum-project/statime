@@ -22,7 +22,7 @@ The `statime` library has been built in a way to try and be platform-agnostic. T
 
 ## Rust version
 
-Statime requires Rust version 1.67 at minimum. The easiest way to install Rust is through [rustup](https://rustup.rs)
+Statime requires Rust version 1.69 at minimum. The easiest way to install Rust is through [rustup](https://rustup.rs)
 
 ## Running from source
 
