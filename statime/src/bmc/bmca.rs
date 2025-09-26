@@ -295,7 +295,6 @@ pub(crate) enum RecommendedState {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::{
@@ -540,8 +539,10 @@ mod tests {
         let slave_only = false;
         let sdo_id = Default::default();
         let path_trace = false;
-        let mut clock_quality = ClockQuality::default();
-        clock_quality.clock_class = 1;
+        let clock_quality = ClockQuality {
+            clock_class: 1,
+            ..Default::default()
+        };
         assert!((1..=127).contains(&clock_quality.clock_class));
 
         let own_data = InternalDefaultDS::new(InstanceConfig {
@@ -672,9 +673,6 @@ mod tests {
                 &PortState::Passive,
             )
         );
-
-        // D0 is NOT better than E_best
-        let mut own_data = own_data;
 
         let mut global_message = default_best_announce_message();
 

@@ -33,7 +33,7 @@ impl ForwardedTLV<'_> {
 /// Source of TLVs that need to be forwarded, provided to announce sender.
 pub trait ForwardedTLVProvider {
     /// Should provide the next available TLV, unless it is larger than max_size
-    fn next_if_smaller(&mut self, max_size: usize) -> Option<ForwardedTLV>;
+    fn next_if_smaller(&mut self, max_size: usize) -> Option<ForwardedTLV<'_>>;
 }
 
 /// Simple implementation when
@@ -41,7 +41,7 @@ pub trait ForwardedTLVProvider {
 pub struct NoForwardedTLVs;
 
 impl ForwardedTLVProvider for NoForwardedTLVs {
-    fn next_if_smaller(&mut self, _max_size: usize) -> Option<ForwardedTLV> {
+    fn next_if_smaller(&mut self, _max_size: usize) -> Option<ForwardedTLV<'_>> {
         None
     }
 }

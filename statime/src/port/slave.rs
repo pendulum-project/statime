@@ -36,7 +36,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         &mut self,
         timestamp_id: u16,
         timestamp: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Slave(ref mut state) => match state.delay_state {
                 DelayState::Measuring {
@@ -68,7 +68,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         &mut self,
         timestamp_id: u16,
         timestamp: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.peer_delay_state {
             PeerDelayState::Measuring {
                 id,
@@ -98,7 +98,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         header: Header,
         message: SyncMessage,
         recv_time: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received sync {:?}", header.sequence_id);
@@ -164,7 +164,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         &mut self,
         header: Header,
         message: FollowUpMessage,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received FollowUp {:?}", header.sequence_id);
@@ -211,7 +211,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         &mut self,
         header: Header,
         message: DelayRespMessage,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Received DelayResp");
@@ -258,7 +258,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         header: Header,
         message: PDelayRespMessage,
         recv_time: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         if self.port_identity != message.requesting_port_identity {
             return actions![];
         }
@@ -321,7 +321,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
         &mut self,
         header: Header,
         message: PDelayRespFollowUpMessage,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         if self.port_identity != message.requesting_port_identity {
             return actions![];
         }
@@ -457,7 +457,7 @@ impl<A, C: Clock, F: Filter, R, S> Port<'_, Running, A, R, C, F, S> {
 }
 
 impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F, S> {
-    pub(super) fn send_delay_request(&mut self) -> PortActionIterator {
+    pub(super) fn send_delay_request(&mut self) -> PortActionIterator<'_> {
         match self.config.delay_mechanism {
             DelayMechanism::E2E { interval } => self.send_e2e_delay_request(interval),
             DelayMechanism::P2P { interval } => self.send_p2p_delay_request(interval),
@@ -467,7 +467,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
     fn send_p2p_delay_request(
         &mut self,
         log_min_pdelay_req_interval: Interval,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         let pdelay_id = self.pdelay_seq_ids.generate();
 
         let pdelay_req = self.instance_state.with_ref(|state| {
@@ -516,7 +516,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
     fn send_e2e_delay_request(
         &mut self,
         log_min_delay_req_interval: Interval,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         match self.port_state {
             PortState::Slave(ref mut state) => {
                 log::debug!("Starting new delay measurement");

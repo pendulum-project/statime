@@ -414,7 +414,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
     }
 
     /// Handle the filter update timer going off
-    pub fn handle_filter_update_timer(&mut self) -> PortActionIterator {
+    pub fn handle_filter_update_timer(&mut self) -> PortActionIterator<'_> {
         let update = self.filter.update(&mut self.clock);
         if update.mean_delay.is_some() {
             self.mean_delay = update.mean_delay;
@@ -779,7 +779,7 @@ mod tests {
         port_identity: PortIdentity,
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
-            &state,
+            state,
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
@@ -844,13 +844,12 @@ mod tests {
 
         let parent_ds = InternalParentDS::new(default_ds);
 
-        let state = RefCell::new(PtpInstanceState {
+        RefCell::new(PtpInstanceState {
             default_ds,
             current_ds: Default::default(),
             parent_ds,
             time_properties_ds: Default::default(),
             path_trace_ds: PathTraceDS::new(false),
-        });
-        state
+        })
     }
 }
