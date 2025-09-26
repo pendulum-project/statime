@@ -38,7 +38,7 @@ jobs:
       - name: Build stm32
         working-directory: statime-stm32
         run: cargo build
-    
+
       # Build std is handled by test job
 
   test:
@@ -108,24 +108,46 @@ jobs:
   fuzz:
     name: Smoke-test fuzzing targets
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - fuzz_target: message_sound
+            corpus: ""
+            features: ''
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
           persist-credentials: false
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: nightly
-          override: true
-          default: true
-      - name: Install cargo fuzz
-        uses: taiki-e/install-action@70233fe3d27d863712ee34eede2087e36bde6b5e
+          components: llvm-tools-preview
+      - name: Install cargo fuzz & rustfilt
+        uses: taiki-e/install-action@d6912b47771be2c443ec90dbb3d28e023987e782
         with:
-          tool: cargo-fuzz
-      - name: Smoke-test fuzz targets
+          tool: cargo-fuzz,rustfilt
+      - name: Run `cargo fuzz`
+        env:
+          RUST_BACKTRACE: "1"
+          # prevents `cargo fuzz coverage` from rebuilding everything
+          RUSTFLAGS: "-C instrument-coverage"
         run: |
-          cargo fuzz build
-          for target in $(cargo fuzz list) ; do
-            cargo fuzz run $target -- -max_total_time=10
-          done
+          cargo fuzz run --target $(rustc --print host-tuple) ${{matrix.features}} ${{matrix.fuzz_target}} ${{matrix.corpus}} -- -max_total_time=10
+      - name: Fuzz codecov
+        run: |
+          cargo fuzz coverage --target $(rustc --print host-tuple) ${{matrix.features}} ${{matrix.fuzz_target}} ${{matrix.corpus}}
+          $(rustc --print sysroot)/lib/rustlib/$(rustc --print host-tuple)/bin/llvm-cov export -Xdemangler=rustfilt \
+              target/x86_64-unknown-linux-musl/coverage/$(rustc --print host-tuple)/release/${{matrix.fuzz_target}} \
+              -instr-profile=fuzz/coverage/${{matrix.fuzz_target}}/coverage.profdata \
+              --format=lcov \
+              -ignore-filename-regex="\.cargo|\.rustup" > lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7
+        with:
+          files: ./lcov.info
+          fail_ci_if_error: false
+          flags: fuzz, fuzz-${{ matrix.fuzz_target }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          name: fuzz
