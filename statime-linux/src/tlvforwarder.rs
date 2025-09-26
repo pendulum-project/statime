@@ -51,7 +51,7 @@ impl TlvForwarder {
 }
 
 impl ForwardedTLVProvider for TlvForwarder {
-    fn next_if_smaller(&mut self, max_size: usize) -> Option<statime::port::ForwardedTLV> {
+    fn next_if_smaller(&mut self, max_size: usize) -> Option<statime::port::ForwardedTLV<'_>> {
         use tokio::sync::broadcast::error::TryRecvError;
 
         while self.peek.is_none() {

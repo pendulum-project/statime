@@ -13,7 +13,7 @@ use crate::{
 };
 
 impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F, S> {
-    pub(super) fn send_sync(&mut self) -> PortActionIterator {
+    pub(super) fn send_sync(&mut self) -> PortActionIterator<'_> {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending sync message");
 
@@ -54,7 +54,11 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         }
     }
 
-    pub(super) fn handle_sync_timestamp(&mut self, id: u16, timestamp: Time) -> PortActionIterator {
+    pub(super) fn handle_sync_timestamp(
+        &mut self,
+        id: u16,
+        timestamp: Time,
+    ) -> PortActionIterator<'_> {
         if matches!(self.port_state, PortState::Master) {
             let packet_length = match self
                 .instance_state
@@ -91,7 +95,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
     pub(super) fn send_announce(
         &mut self,
         tlv_provider: &mut impl ForwardedTLVProvider,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         if matches!(self.port_state, PortState::Master) {
             log::trace!("sending announce message");
 
@@ -189,7 +193,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         header: Header,
         message: DelayReqMessage,
         timestamp: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         if matches!(self.port_state, PortState::Master) {
             log::debug!("Received DelayReq");
             let delay_resp_message = Message::delay_resp(
@@ -221,7 +225,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         &mut self,
         header: Header,
         timestamp: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         log::debug!("Received PDelayReq");
         let pdelay_resp_message = self.instance_state.with_ref(|state| {
             Message::pdelay_resp(
@@ -258,7 +262,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         id: u16,
         requestor_identity: PortIdentity,
         timestamp: Time,
-    ) -> PortActionIterator {
+    ) -> PortActionIterator<'_> {
         let pdelay_resp_follow_up_messgae = self.instance_state.with_ref(|state| {
             Message::pdelay_resp_follow_up(
                 &state.default_ds,
@@ -718,7 +722,6 @@ mod tests {
             response_body.request_receive_timestamp,
             Time::from_micros(500).into()
         );
-        drop(response);
         assert!(actions.next().is_none());
         drop(actions);
 
@@ -740,7 +743,6 @@ mod tests {
             response_body.response_origin_timestamp,
             Time::from_micros(550).into()
         );
-        drop(response);
         assert!(actions.next().is_none());
         drop(actions);
     }

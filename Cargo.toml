@@ -20,12 +20,11 @@ authors = [
     "Folkert de Vries <folkert@tweedegolf.com>",
     "Dion Dokter <dion@tweedegolf.com>",
     "Ruben Nijveld <ruben@tweedegolf.com>",
-    "David Venhoek <david@tweedegolf.com>",
     "Bram Bruines <bram@tweedegolf.com>",
     "Marlon Peeters <marlonpeeters@tweedegolf.com>",
     "Rick van der Wal <rick@tweedegolf.com>"
 ]
-rust-version = "1.67" # MSRV
+rust-version = "1.69" # MSRV
 
 [workspace.dependencies]
 arrayvec = { version = "0.7.4", default-features = false }
