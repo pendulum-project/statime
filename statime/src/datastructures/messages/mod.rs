@@ -26,7 +26,7 @@ mod announce;
 mod control_field;
 mod delay_req;
 mod delay_resp;
-mod follow_up;
+pub mod follow_up;
 mod header;
 mod management;
 mod p_delay_req;
