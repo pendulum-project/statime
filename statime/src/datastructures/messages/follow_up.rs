@@ -1,8 +1,8 @@
 use crate::datastructures::{common::WireTimestamp, WireFormat, WireFormatError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct FollowUpMessage {
-    pub(crate) precise_origin_timestamp: WireTimestamp,
+pub struct FollowUpMessage {
+    pub precise_origin_timestamp: WireTimestamp,
 }
 
 impl FollowUpMessage {
