@@ -1,6 +1,6 @@
 use core::cmp::Ordering;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// How accurate the underlying clock device is expected to be when not
 /// synchronized.
@@ -64,6 +64,7 @@ pub enum ClockAccuracy {
     /// Specific to a profile
     ProfileSpecific(u8),
     /// Accuracy is unknown
+    #[default]
     Unknown,
 }
 
@@ -142,12 +143,6 @@ impl ClockAccuracy {
     /// high accuracy to low accuracy
     pub(crate) fn cmp_numeric(&self, other: &Self) -> Ordering {
         self.to_primitive().cmp(&other.to_primitive())
-    }
-}
-
-impl Default for ClockAccuracy {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 

@@ -262,9 +262,10 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
 
     /// Set the clock quality of the instance
     ///
-    /// This allows changing the clock quality after the instance has been created.
-    /// The change will be reflected in all subsequent PTP messages sent by this instance
-    /// and the BMCA algorithm will use the new clock quality.
+    /// This allows changing the clock quality after the instance has been
+    /// created. The change will be reflected in all subsequent PTP messages
+    /// sent by this instance and the BMCA algorithm will use the new clock
+    /// quality.
     pub fn set_clock_quality(&self, clock_quality: ClockQuality) {
         self.state.with_mut(|state| {
             state.default_ds.clock_quality = clock_quality;
