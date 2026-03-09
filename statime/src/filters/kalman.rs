@@ -123,7 +123,7 @@ struct MeasurementErrorEstimator {
 
 impl MeasurementErrorEstimator {
     fn mean(&self) -> f64 {
-        self.data.iter().take(self.fill).sum::<f64>() / (self.data.len() as f64)
+        self.data.iter().take(self.fill).sum::<f64>() / (self.fill as f64)
     }
 
     fn variance(&self) -> f64 {
