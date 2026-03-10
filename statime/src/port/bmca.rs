@@ -244,18 +244,13 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
                 if default_ds.slave_only {
                     match self.port_state {
                         PortState::Listening | PortState::Faulty => { /* do nothing */ }
-                        PortState::Slave(_) | PortState::Passive => {
+                        PortState::Slave(_) | PortState::Passive | PortState::Master => {
                             self.set_forced_port_state(PortState::Listening);
 
                             // consistent with Port<InBmca>::new()
                             let duration = self.config.announce_duration(&mut self.rng);
                             let reset_announce = PortAction::ResetAnnounceReceiptTimer { duration };
                             self.lifecycle.pending_action = actions![reset_announce];
-                        }
-                        PortState::Master => {
-                            let msg = "slave-only PTP port should not be in master state";
-                            debug_assert!(!default_ds.slave_only, "{msg}");
-                            log::error!("{msg}");
                         }
                     }
                 } else if self.multiport_disable.is_some() {
@@ -292,6 +287,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
 mod tests {
     use super::*;
     use crate::{
+        bmc::bmca::Bmca,
         config::{ClockIdentity, ClockQuality, InstanceConfig, SdoId},
         datastructures::{
             common::{PortIdentity, Tlv, TlvSetBuilder},
@@ -422,6 +418,96 @@ mod tests {
             &InternalDefaultDS::new(instanceconfig),
         );
         assert!(matches!(port.port_state, PortState::Master));
+    }
+
+    #[test]
+    /// Tests that setting `slave_only` on a port currently in the master state will cause it
+    /// to be demoted to a listening state.
+    fn test_slave_only_demotes_master_on_bmca() {
+        let state = setup_test_state();
+        let mut port = setup_test_port(&state).start_bmca();
+
+        port.set_forced_port_state(PortState::Master);
+        state.borrow_mut().default_ds.slave_only = true;
+
+        let default_ds = state.borrow().default_ds;
+        port.set_recommended_port_state(&RecommendedState::M1(default_ds), &default_ds);
+
+        assert!(matches!(port.port_state, PortState::Listening));
+        let mut pending_action = port.lifecycle.pending_action;
+        assert!(matches!(
+            pending_action.next(),
+            Some(PortAction::ResetAnnounceReceiptTimer { .. })
+        ));
+        assert!(pending_action.next().is_none());
+    }
+
+    #[test]
+    /// Tests a port that would normally become a master is prevented from becoming one if
+    /// `slave_only` is set.
+    fn test_slave_only_cannot_become_master() {
+        let state = setup_test_state();
+        let mut port = setup_test_port(&state);
+
+        // Scoped to ensure the mutable state reference is dropped
+        {
+            let mut state_ref = state.borrow_mut();
+            // Local state is forced to slave only, but has high priority and clock class
+            state_ref.default_ds.slave_only = true;
+            state_ref.default_ds.priority_1 = 0;
+            state_ref.default_ds.clock_quality.clock_class = 1;
+        }
+
+        let mut foreign_message = default_announce_message();
+        foreign_message.grandmaster_priority_1 = 255;
+        foreign_message.grandmaster_identity = ClockIdentity([1; 8]);
+        foreign_message.header.source_port_identity = PortIdentity {
+            clock_identity: ClockIdentity([2; 8]),
+            port_number: 1,
+        };
+        let announce_message = Message {
+            header: foreign_message.header,
+            body: MessageBody::Announce(foreign_message),
+            suffix: Default::default(),
+        };
+        let mut packet = [0; MAX_DATA_LEN];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+
+        let mut actions = port.handle_general_receive(packet);
+        let Some(PortAction::ResetAnnounceReceiptTimer { .. }) = actions.next() else {
+            panic!("Unexpected action");
+        };
+        assert!(actions.next().is_none());
+        drop(actions);
+
+        let mut port = port.start_bmca();
+        port.calculate_best_local_announce_message();
+        // We expect the port to stay in passive mode even with a recommended state of M1
+        port.set_forced_port_state(PortState::Passive);
+
+        let default_ds = state.borrow().default_ds;
+        let recommended_state = Bmca::<()>::calculate_recommended_state(
+            &default_ds,
+            None,
+            port.best_local_announce_message_for_state(),
+            &PortState::Passive,
+        )
+        .unwrap();
+
+        assert!(matches!(recommended_state, RecommendedState::M1(_)));
+
+        // The recommended state should be "rejected" since slave_only is set to true,
+        // the port should not be promoted to master.
+        port.set_recommended_port_state(&recommended_state, &default_ds);
+
+        assert!(matches!(port.port_state, PortState::Listening));
+        let mut pending_action = port.lifecycle.pending_action;
+        assert!(matches!(
+            pending_action.next(),
+            Some(PortAction::ResetAnnounceReceiptTimer { .. })
+        ));
+        assert!(pending_action.next().is_none());
     }
 
     #[test]

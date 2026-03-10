@@ -271,6 +271,18 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
             state.default_ds.clock_quality = clock_quality;
         });
     }
+
+    /// Set whether this instance is allowed to become a master.
+    ///
+    /// This allows toggling `slave_only` after the instance has been created.
+    /// The change takes effect during subsequent BMCA decisions and timeout handling.
+    /// After a BMCA run, ports that are currently master will be moved back to the
+    /// listening state, and other ports will be prevented from becoming master.
+    pub fn set_slave_only(&self, slave_only: bool) {
+        self.state.with_mut(|state| {
+            state.default_ds.slave_only = slave_only;
+        })
+    }
 }
 
 /// A mutex over a [`PtpInstanceState`]
@@ -372,5 +384,16 @@ mod tests {
             updated_ds.clock_quality.offset_scaled_log_variance,
             0x8000 - (20 * 256)
         );
+    }
+
+    #[test]
+    fn test_set_slave_only() {
+        let instance = create_test_instance();
+
+        instance.set_slave_only(false);
+        assert!(!instance.default_ds().slave_only);
+
+        instance.set_slave_only(true);
+        assert!(instance.default_ds().slave_only);
     }
 }
