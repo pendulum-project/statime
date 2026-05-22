@@ -495,7 +495,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
             response_recv_time: None,
         };
 
-        let random = self.rng.sample::<f64, _>(rand::distributions::Open01);
+        let random = self.rng.sample::<f64, _>(rand::distr::Open01);
         let factor = random * 2.0f64;
         let duration = log_min_pdelay_req_interval
             .as_core_duration()
@@ -545,7 +545,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
                     recv_time: None,
                 };
 
-                let random = self.rng.sample::<f64, _>(rand::distributions::Open01);
+                let random = self.rng.sample::<f64, _>(rand::distr::Open01);
                 let factor = random * 2.0f64;
                 let duration = log_min_delay_req_interval
                     .as_core_duration()

@@ -102,7 +102,7 @@ impl<A> PortConfig<A> {
     /// For more information see *IEEE1588-2019 section 9.2.6.12*
     pub fn announce_duration(&self, rng: &mut impl Rng) -> core::time::Duration {
         // add some randomness so that not all timers expire at the same time
-        let factor = 1.0 + rng.sample::<f64, _>(rand::distributions::Open01);
+        let factor = 1.0 + rng.sample::<f64, _>(rand::distr::Open01);
         let duration = self.announce_interval.as_core_duration();
 
         duration.mul_f64(factor * self.announce_receipt_timeout as u32 as f64)

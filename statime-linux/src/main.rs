@@ -368,7 +368,7 @@ async fn actual_main() {
             HardwareClock::None => add_sw_clock(&mut clock_port_map),
         };
 
-        let rng = StdRng::from_entropy();
+        let rng = StdRng::from_os_rng();
         let port = instance.add_port(
             port_config.into(),
             KalmanConfiguration::default(),

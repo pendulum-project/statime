@@ -118,7 +118,6 @@ pub(crate) mod state;
 /// #     }
 /// # }
 /// # let (instance_config, time_properties_ds) = unimplemented!();
-/// use rand::thread_rng;
 /// use statime::config::{AcceptAnyMaster, DelayMechanism, PortConfig, PtpMinorVersion};
 /// use statime::filters::BasicFilter;
 /// use statime::PtpInstance;
@@ -140,7 +139,8 @@ pub(crate) mod state;
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
-/// let rng = thread_rng();
+/// # #[allow(deprecated)]
+/// let rng = rand::rngs::mock::StepRng::new(2, 1);
 ///
 /// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
 ///
