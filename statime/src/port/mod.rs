@@ -139,8 +139,13 @@ pub(crate) mod state;
 /// };
 /// let filter_config = 1.0;
 /// let clock = system::Clock {};
-/// # #[allow(deprecated)]
-/// let rng = rand::rngs::mock::StepRng::new(2, 1);
+/// # struct MockRng(u64);
+/// # impl rand::RngCore for MockRng {
+/// #     fn next_u32(&mut self) -> u32 { self.next_u64() as u32 }
+/// #     fn next_u64(&mut self) -> u64 { self.0 = self.0.wrapping_add(1); self.0 }
+/// #     fn fill_bytes(&mut self, dest: &mut [u8]) { for chunk in dest.chunks_mut(8) { let b = self.next_u64().to_le_bytes(); chunk.copy_from_slice(&b[..chunk.len()]); } }
+/// # }
+/// let rng = MockRng(0);
 ///
 /// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
 ///
@@ -722,6 +727,24 @@ mod tests {
     };
 
     // General test infra
+    pub(super) struct MockRng(u64);
+
+    impl rand::RngCore for MockRng {
+        fn next_u32(&mut self) -> u32 {
+            self.next_u64() as u32
+        }
+        fn next_u64(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(1);
+            self.0
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            for chunk in dest.chunks_mut(8) {
+                let bytes = self.next_u64().to_le_bytes();
+                chunk.copy_from_slice(&bytes[..chunk.len()]);
+            }
+        }
+    }
+
     pub(super) struct TestClock;
 
     impl Clock for TestClock {
@@ -749,7 +772,7 @@ mod tests {
 
     pub(super) fn setup_test_port(
         state: &RefCell<PtpInstanceState>,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
+    ) -> Port<'_, Running, AcceptAnyMaster, MockRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             state,
             PortConfig {
@@ -767,7 +790,7 @@ mod tests {
             0.25,
             TestClock,
             Default::default(),
-            rand::rngs::mock::StepRng::new(2, 1),
+            MockRng(0),
         );
 
         let (port, _) = port.end_bmca();
@@ -777,7 +800,7 @@ mod tests {
     pub(super) fn setup_test_port_custom_identity(
         state: &RefCell<PtpInstanceState>,
         port_identity: PortIdentity,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
+    ) -> Port<'_, Running, AcceptAnyMaster, MockRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             state,
             PortConfig {
@@ -795,7 +818,7 @@ mod tests {
             0.25,
             TestClock,
             port_identity,
-            rand::rngs::mock::StepRng::new(2, 1),
+            MockRng(0),
         );
 
         let (port, _) = port.end_bmca();
@@ -805,7 +828,7 @@ mod tests {
     pub(super) fn setup_test_port_custom_filter<F: Filter>(
         state: &RefCell<PtpInstanceState>,
         filter_config: F::Config,
-    ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
+    ) -> Port<'_, Running, AcceptAnyMaster, MockRng, TestClock, F> {
         let port = Port::<_, _, _, _, F>::new(
             state,
             PortConfig {
@@ -823,7 +846,7 @@ mod tests {
             filter_config,
             TestClock,
             Default::default(),
-            rand::rngs::mock::StepRng::new(2, 1),
+            MockRng(0),
         );
 
         let (port, _) = port.end_bmca();

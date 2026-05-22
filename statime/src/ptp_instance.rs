@@ -55,7 +55,13 @@ use crate::{
 /// # let port_config: statime::config::PortConfig<AcceptAnyMaster> = unimplemented!();
 /// # let filter_config = unimplemented!();
 /// # let clock: MockClock = unimplemented!();
-/// # let rng: rand::rngs::mock::StepRng = unimplemented!();
+/// # struct MockRng(u64);
+/// # impl rand::RngCore for MockRng {
+/// #     fn next_u32(&mut self) -> u32 { self.next_u64() as u32 }
+/// #     fn next_u64(&mut self) -> u64 { self.0 = self.0.wrapping_add(1); self.0 }
+/// #     fn fill_bytes(&mut self, dest: &mut [u8]) { for chunk in dest.chunks_mut(8) { let b = self.next_u64().to_le_bytes(); chunk.copy_from_slice(&b[..chunk.len()]); } }
+/// # }
+/// # let rng: MockRng = unimplemented!();
 /// #
 /// use statime::PtpInstance;
 /// use statime::config::{AcceptAnyMaster, ClockIdentity, ClockQuality, InstanceConfig, TimePropertiesDS, TimeSource};
