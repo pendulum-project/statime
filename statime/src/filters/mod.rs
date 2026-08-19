@@ -2,6 +2,7 @@
 
 mod basic;
 mod kalman;
+#[cfg(test)]
 mod matrix;
 
 pub use basic::BasicFilter;
