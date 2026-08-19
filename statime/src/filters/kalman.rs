@@ -233,6 +233,7 @@ impl MeasurementErrorEstimator {
     }
 }
 
+/// State `x = [offset, residual fractional frequency, mean path delay]`.
 #[derive(Clone, Copy, Debug)]
 struct State {
     offset: f64,
@@ -240,7 +241,7 @@ struct State {
     delay: f64,
 }
 
-/// Symmetric covariance of offset, fractional frequency, and path delay.
+/// Independent entries of the symmetric covariance `P` for [`State`].
 #[derive(Clone, Copy, Debug)]
 struct Covariance {
     offset: f64,
@@ -252,14 +253,19 @@ struct Covariance {
 }
 
 #[derive(Clone, Debug)]
-struct InnerFilter {
+pub(super) struct InnerFilter {
     state: State,
     uncertainty: Covariance,
     filter_time: Time,
 }
 
 impl InnerFilter {
-    fn new(initial_offset: f64, time: Time, config: &KalmanConfiguration) -> Self {
+    pub(super) fn new(
+        initial_offset: f64,
+        time: Time,
+        initial_offset_uncertainty: Duration,
+        initial_frequency_uncertainty: f64,
+    ) -> Self {
         Self {
             state: State {
                 offset: initial_offset,
@@ -267,18 +273,18 @@ impl InnerFilter {
                 delay: 0.0,
             },
             uncertainty: Covariance {
-                offset: sqr(config.step_threshold.seconds()),
+                offset: sqr(initial_offset_uncertainty.seconds()),
                 offset_frequency: 0.0,
                 offset_delay: 0.0,
-                frequency: sqr(config.initial_frequency_uncertainty),
+                frequency: sqr(initial_frequency_uncertainty),
                 frequency_delay: 0.0,
-                delay: sqr(config.step_threshold.seconds()),
+                delay: sqr(initial_offset_uncertainty.seconds()),
             },
             filter_time: time,
         }
     }
 
-    fn progress_filtertime(&mut self, time: Time, wander: f64, config: &KalmanConfiguration) {
+    pub(super) fn progress_filtertime(&mut self, time: Time, wander: f64, delay_wander: f64) {
         debug_assert!(time >= self.filter_time);
         if time < self.filter_time {
             return;
@@ -287,6 +293,7 @@ impl InnerFilter {
         let delta_t = (time - self.filter_time).seconds();
         let delta_t2 = delta_t * delta_t;
 
+        // Expand F P F^T + Q for F=[[1,dt,0],[0,1,0],[0,0,1]].
         self.state.offset += delta_t * self.state.frequency;
         self.uncertainty.offset += 2.0 * delta_t * self.uncertainty.offset_frequency
             + delta_t2 * self.uncertainty.frequency
@@ -295,11 +302,11 @@ impl InnerFilter {
             delta_t * self.uncertainty.frequency + wander * delta_t2 / 2.0;
         self.uncertainty.offset_delay += delta_t * self.uncertainty.frequency_delay;
         self.uncertainty.frequency += wander * delta_t;
-        self.uncertainty.delay += config.delay_wander * delta_t * sqr(self.state.delay);
+        self.uncertainty.delay += delay_wander * delta_t * sqr(self.state.delay);
         self.filter_time = time;
     }
 
-    fn absorb_sync_offset(&mut self, sync_offset: f64, variance: f64) {
+    pub(super) fn absorb_sync_offset(&mut self, sync_offset: f64, variance: f64) {
         // h = [1, 0, 1].
         let projected = [
             self.uncertainty.offset + self.uncertainty.offset_delay,
@@ -313,7 +320,7 @@ impl InnerFilter {
         );
     }
 
-    fn absorb_delay_offset(&mut self, delay_offset: f64, variance: f64) {
+    pub(super) fn absorb_delay_offset(&mut self, delay_offset: f64, variance: f64) {
         // h = [1, 0, -1].
         let projected = [
             self.uncertainty.offset - self.uncertainty.offset_delay,
@@ -327,7 +334,7 @@ impl InnerFilter {
         );
     }
 
-    fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
+    pub(super) fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
         // h = [0, 0, 1].
         let projected = [
             self.uncertainty.offset_delay,
@@ -347,8 +354,7 @@ impl InnerFilter {
         innovation_variance: f64,
         projected: [f64; 3],
     ) {
-        // projected = P h^T. The scalar Kalman gain is projected divided by
-        // the innovation variance.
+        // With u=P h^T and S=h u+R: x+=u*innovation/S and P-=u u^T/S.
         let scale = 1.0 / innovation_variance;
         self.state.offset += projected[0] * innovation * scale;
         self.state.frequency += projected[1] * innovation * scale;
@@ -362,18 +368,18 @@ impl InnerFilter {
         self.uncertainty.delay -= projected[2] * projected[2] * scale;
     }
 
-    fn absorb_frequency_steer(
+    pub(super) fn absorb_frequency_steer(
         &mut self,
         steer: f64,
         time: Time,
         wander: f64,
-        config: &KalmanConfiguration,
+        delay_wander: f64,
     ) {
-        self.progress_filtertime(time, wander, config);
+        self.progress_filtertime(time, wander, delay_wander);
         self.state.frequency += steer * 1e-6;
     }
 
-    fn absorb_offset_steer(&mut self, steer: f64) {
+    pub(super) fn absorb_offset_steer(&mut self, steer: f64) {
         self.state.offset += steer;
         self.filter_time += Duration::from_seconds(steer);
     }
@@ -391,6 +397,22 @@ impl InnerFilter {
             self.uncertainty.offset - 2.0 * self.uncertainty.offset_delay + self.uncertainty.delay,
         )
     }
+
+    pub(super) fn offset(&self) -> f64 {
+        self.state.offset
+    }
+
+    pub(super) fn frequency(&self) -> f64 {
+        self.state.frequency
+    }
+
+    pub(super) fn delay(&self) -> f64 {
+        self.state.delay
+    }
+
+    pub(super) fn time(&self) -> Time {
+        self.filter_time
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -403,8 +425,15 @@ impl BaseFilter {
 
     fn progress_filtertime(&mut self, time: Time, wander: f64, config: &KalmanConfiguration) {
         match &mut self.0 {
-            Some(inner) => inner.progress_filtertime(time, wander, config),
-            None => self.0 = Some(InnerFilter::new(0.0, time, config)),
+            Some(inner) => inner.progress_filtertime(time, wander, config.delay_wander),
+            None => {
+                self.0 = Some(InnerFilter::new(
+                    0.0,
+                    time,
+                    config.step_threshold,
+                    config.initial_frequency_uncertainty,
+                ))
+            }
         }
     }
 
@@ -417,7 +446,12 @@ impl BaseFilter {
         if let Some(inner) = &mut self.0 {
             if (sync_offset - inner.state.offset).abs() > config.step_threshold.seconds() {
                 log::info!("Measurement too far from state, resetting");
-                *inner = InnerFilter::new(sync_offset, inner.filter_time, config);
+                *inner = InnerFilter::new(
+                    sync_offset,
+                    inner.filter_time,
+                    config.step_threshold,
+                    config.initial_frequency_uncertainty,
+                );
             } else {
                 inner.absorb_sync_offset(sync_offset, variance)
             }
@@ -433,7 +467,12 @@ impl BaseFilter {
         if let Some(inner) = &mut self.0 {
             if (delay_offset - inner.state.offset).abs() > config.step_threshold.seconds() {
                 log::info!("Measurement too far from state, resetting");
-                *inner = InnerFilter::new(delay_offset, inner.filter_time, config);
+                *inner = InnerFilter::new(
+                    delay_offset,
+                    inner.filter_time,
+                    config.step_threshold,
+                    config.initial_frequency_uncertainty,
+                );
             } else {
                 inner.absorb_delay_offset(delay_offset, variance)
             }
@@ -454,8 +493,15 @@ impl BaseFilter {
         config: &KalmanConfiguration,
     ) {
         match &mut self.0 {
-            Some(inner) => inner.absorb_frequency_steer(steer, time, wander, config),
-            None => self.0 = Some(InnerFilter::new(0.0, time, config)),
+            Some(inner) => inner.absorb_frequency_steer(steer, time, wander, config.delay_wander),
+            None => {
+                self.0 = Some(InnerFilter::new(
+                    0.0,
+                    time,
+                    config.step_threshold,
+                    config.initial_frequency_uncertainty,
+                ))
+            }
         }
     }
 
@@ -1060,7 +1106,7 @@ mod dense_reference {
             let wander = rng.unit() * 1e-6;
             let time = Time::from_nanos(1 + rng.next() % 10_000_000_000);
 
-            actual.progress_filtertime(time, wander, &config);
+            actual.progress_filtertime(time, wander, config.delay_wander);
             expected.progress_filtertime(time, wander, &config);
             assert_equivalent(&actual, &expected);
 
@@ -1095,7 +1141,7 @@ mod dense_reference {
 
             let next_time = time + Duration::from_fixed_nanos(rng.unit() * 1e9);
             let steer = rng.signed() * 100.0;
-            actual.absorb_frequency_steer(steer, next_time, wander, &config);
+            actual.absorb_frequency_steer(steer, next_time, wander, config.delay_wander);
             expected.absorb_frequency_steer(steer, next_time, wander, &config);
             assert_equivalent(&actual, &expected);
 
@@ -1107,7 +1153,12 @@ mod dense_reference {
 
         // Keep the constructor in the reference coverage as well.
         let config = KalmanConfiguration::default();
-        let actual = super::InnerFilter::new(0.25, Time::from_nanos(42), &config);
+        let actual = super::InnerFilter::new(
+            0.25,
+            Time::from_nanos(42),
+            config.step_threshold,
+            config.initial_frequency_uncertainty,
+        );
         let expected = InnerFilter::new(0.25, Time::from_nanos(42), &config);
         assert_equivalent(&actual, &expected);
     }

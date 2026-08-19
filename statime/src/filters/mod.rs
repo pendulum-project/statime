@@ -1,11 +1,13 @@
 //! Definitions and implementations for the abstracted measurement filters
 
 mod basic;
+mod fixed_wander;
 mod kalman;
 #[cfg(test)]
 mod matrix;
 
 pub use basic::BasicFilter;
+pub use fixed_wander::{FixedWanderKalmanConfig, FixedWanderKalmanFilter};
 pub use kalman::{KalmanConfiguration, KalmanFilter};
 
 use crate::{port::Measurement, time::Duration, Clock};
