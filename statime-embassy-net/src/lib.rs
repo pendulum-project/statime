@@ -745,9 +745,14 @@ fn clock_identity_from_mac(mac: [u8; 6]) -> ClockIdentity {
 }
 
 pub(crate) fn time_from(timestamp: Timestamp) -> Time {
-    let nanos =
-        u64::from(timestamp.seconds) * 1_000_000_000 + u64::from(timestamp.quarter_nanos >> 2);
-    Time::from_nanos_subnanos(nanos, (timestamp.quarter_nanos & 3) << 30)
+    time_from_parts(timestamp.seconds, timestamp.quarter_nanos)
+}
+
+// Packet and adjustable-clock timestamps deliberately belong to independent
+// Embassy driver crates. Convert their shared representation only here.
+pub(crate) fn time_from_parts(seconds: u32, quarter_nanos: u32) -> Time {
+    let nanos = u64::from(seconds) * 1_000_000_000 + u64::from(quarter_nanos >> 2);
+    Time::from_nanos_subnanos(nanos, (quarter_nanos & 3) << 30)
 }
 
 fn multicast_endpoint(port: u16, link_local: bool) -> IpEndpoint {

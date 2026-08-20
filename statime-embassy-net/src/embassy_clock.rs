@@ -1,35 +1,39 @@
-use embassy_net::driver::{Clock as NetClock, ScaledPpm};
+use embassy_ptp_driver::{Clock as PtpClock, ScaledPpm, Timestamp};
 use statime::{
     Clock as StatimeClock,
     config::TimePropertiesDS,
     time::{Duration, Time},
 };
 
-use crate::time_from;
+use crate::time_from_parts;
 
-/// A Statime clock backed by an Embassy network driver's clock.
+fn time_from(timestamp: Timestamp) -> Time {
+    time_from_parts(timestamp.seconds(), timestamp.quarter_nanos())
+}
+
+/// A Statime clock backed by an Embassy PTP hardware clock.
 #[derive(Debug)]
 pub struct EmbassyClock<T> {
     inner: T,
 }
 
 impl<T> EmbassyClock<T> {
-    /// Wrap an initialized Embassy network clock.
+    /// Wrap an initialized Embassy PTP clock.
     pub const fn new(inner: T) -> Self {
         Self { inner }
     }
 
-    /// Borrow the underlying network clock.
+    /// Borrow the underlying PTP clock.
     pub const fn inner(&self) -> &T {
         &self.inner
     }
 
-    /// Mutably borrow the underlying network clock.
+    /// Mutably borrow the underlying PTP clock.
     pub const fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
     }
 
-    /// Unwrap the underlying network clock.
+    /// Unwrap the underlying PTP clock.
     pub fn into_inner(self) -> T {
         self.inner
     }
@@ -40,7 +44,7 @@ impl<T> EmbassyClock<T> {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum EmbassyClockError<E> {
-    /// The network driver's clock rejected an operation.
+    /// The PTP clock rejected an operation.
     Clock(E),
     /// Statime requested a frequency adjustment that is not finite.
     NonFiniteFrequency,
@@ -49,7 +53,7 @@ pub enum EmbassyClockError<E> {
 impl<E: core::error::Error> core::fmt::Display for EmbassyClockError<E> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Clock(error) => write!(formatter, "network clock: {error}"),
+            Self::Clock(error) => write!(formatter, "PTP clock: {error}"),
             Self::NonFiniteFrequency => formatter.write_str("non-finite frequency adjustment"),
         }
     }
@@ -64,7 +68,7 @@ impl<E: core::error::Error + 'static> core::error::Error for EmbassyClockError<E
     }
 }
 
-impl<T: NetClock> StatimeClock for EmbassyClock<T> {
+impl<T: PtpClock> StatimeClock for EmbassyClock<T> {
     type Error = EmbassyClockError<T::Error>;
 
     fn now(&self) -> Time {
@@ -107,8 +111,6 @@ impl<T: NetClock> StatimeClock for EmbassyClock<T> {
 
 #[cfg(test)]
 mod tests {
-    use embassy_net::driver::Timestamp;
-
     use super::*;
 
     #[derive(Debug, Default)]
@@ -130,7 +132,7 @@ mod tests {
 
     impl core::error::Error for TestError {}
 
-    impl NetClock for TestClock {
+    impl PtpClock for TestClock {
         type Error = TestError;
 
         fn now(&self) -> Timestamp {
