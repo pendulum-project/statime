@@ -39,6 +39,10 @@ jobs:
         working-directory: statime-stm32
         run: cargo build
 
+      - name: Build Embassy STM32 example
+        working-directory: statime-embassy-net/examples/stm32h743
+        run: cargo build --release
+
       # Build std is handled by test job
 
   test:
@@ -64,6 +68,10 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
+      - name: Test Embassy integration
+        working-directory: statime-embassy-net
+        run: cargo test --target x86_64-unknown-linux-gnu
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7.0.0
         with:
@@ -82,6 +90,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: thumbv7em-none-eabihf
           components: rustfmt, clippy
           override: true
 
@@ -98,6 +107,22 @@ jobs:
           command: clippy
           toolchain: stable
           args: --workspace --all-features -- -D warnings
+
+      - name: Check Embassy formatting
+        working-directory: statime-embassy-net
+        run: cargo fmt --all -- --check
+
+      - name: Check Embassy STM32 example formatting
+        working-directory: statime-embassy-net/examples/stm32h743
+        run: cargo fmt --all -- --check
+
+      - name: Run Embassy host clippy
+        working-directory: statime-embassy-net
+        run: cargo clippy --target x86_64-unknown-linux-gnu --all-targets --features monitor -- -D warnings
+
+      - name: Run Embassy STM32 clippy
+        working-directory: statime-embassy-net/examples/stm32h743
+        run: cargo clippy -- -D warnings
 
       - name: Run clippy (fuzzers)
         uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505
