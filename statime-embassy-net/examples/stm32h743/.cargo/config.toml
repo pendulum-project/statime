@@ -1,0 +1,14 @@
+[build]
+target = "thumbv7em-none-eabihf"
+
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "probe-rs run --chip STM32H743ZITx"
+rustflags = [
+    "-C", "link-arg=--nmagic",
+    "-C", "target-cpu=cortex-m7",
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=-Tdefmt.x",
+]
+
+[env]
+DEFMT_LOG = "info"
