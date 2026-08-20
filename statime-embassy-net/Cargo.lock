@@ -302,12 +302,12 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 
 [[package]]
 name = "embassy-net"
 version = "0.9.1"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 dependencies = [
  "defmt",
  "document-features",
@@ -325,7 +325,15 @@ dependencies = [
 [[package]]
 name = "embassy-net-driver"
 version = "0.2.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+dependencies = [
+ "defmt",
+]
+
+[[package]]
+name = "embassy-ptp-driver"
+version = "0.1.0"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 dependencies = [
  "defmt",
 ]
@@ -333,7 +341,7 @@ dependencies = [
 [[package]]
 name = "embassy-sync"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -346,7 +354,7 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.1"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -362,7 +370,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#5a69e5132d18478b3378252a34b2041df42a1171"
+source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
 dependencies = [
  "document-features",
 ]
@@ -966,6 +974,7 @@ dependencies = [
  "defmt2log",
  "embassy-futures",
  "embassy-net",
+ "embassy-ptp-driver",
  "embassy-time",
  "rand_core",
  "rand_xorshift",

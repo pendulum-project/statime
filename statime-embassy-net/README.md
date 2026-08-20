@@ -12,7 +12,7 @@ This crate connects:
 
 The network driver must provide packet timestamps through `embassy-net` packet
 metadata and asynchronous transmit timestamp polling. `EmbassyClock` adapts
-any `embassy_net::driver::Clock` to Statime's clock interface. The example
+any `embassy_ptp_driver::Clock` to Statime's clock interface. The example
 uses Embassy STM32; applications using it must select their concrete
 `embassy-stm32` chip feature.
 

@@ -155,8 +155,6 @@ async fn net_task(mut runner: embassy_net::Runner<'static, Device>) -> ! {
 }
 
 #[embassy_executor::task]
-async fn ptp_task(
-    mut runner: PtpRunner<'static, EmbassyClock<embassy_stm32::eth::PtpClock<ETH>>>,
-) {
+async fn ptp_task(mut runner: PtpRunner<'static, EmbassyClock<embassy_stm32::eth::PtpClock<ETH>>>) {
     unwrap!(runner.run().await);
 }

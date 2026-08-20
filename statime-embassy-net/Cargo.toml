@@ -10,7 +10,7 @@ publish = false
 
 [features]
 default = []
-defmt = ["dep:defmt", "embassy-net/defmt", "embassy-time/defmt"]
+defmt = ["dep:defmt", "embassy-net/defmt", "embassy-ptp-driver/defmt", "embassy-time/defmt"]
 monitor = []
 
 [dependencies]
@@ -27,6 +27,7 @@ embassy-net = { version = "0.9.1", default-features = false, features = [
 	"proto-ipv4",
 	"udp",
 ] }
+embassy-ptp-driver = "0.1.0"
 embassy-time = { version = "0.5.1", default-features = false }
 
 [dev-dependencies]
@@ -36,6 +37,7 @@ defmt2log = "0.2.1"
 embassy-futures = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
 embassy-net = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
 embassy-net-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-ptp-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
 embassy-sync = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
 embassy-time = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
 embassy-time-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
