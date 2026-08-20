@@ -1,0 +1,72 @@
+[package]
+name = "statime-embassy-net-stm32h743"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+stabilizer = []
+
+[dependencies]
+statime = { path = "../../../statime", default-features = false }
+statime-embassy-net = { path = "../..", features = ["defmt"] }
+cortex-m = { version = "0.7.7", features = [
+	"inline-asm",
+	"critical-section-single-core",
+] }
+cortex-m-rt = "0.7"
+defmt = "1.0.1"
+defmt-rtt = "1.1.0"
+embassy-executor = { version = "0.10.0", features = [
+	"platform-cortex-m",
+	"executor-thread",
+	"defmt",
+] }
+embassy-net = { version = "0.9.1", default-features = false, features = [
+	"defmt",
+	"dhcpv4",
+	"medium-ethernet",
+	"multicast",
+	"packetmeta-id",
+	"packetmeta-timestamp",
+	"proto-ipv4",
+	"udp",
+] }
+embassy-stm32 = { version = "0.6.0", default-features = false, features = [
+	"defmt",
+	"ptp",
+	"rt",
+	"stm32h743zi",
+	"time-driver-tim12",
+	"unstable-pac",
+] }
+embassy-time = { version = "0.5.1", default-features = false, features = [
+	"defmt",
+	"generic-queue-8",
+] }
+panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+static_cell = "2.1.1"
+
+[patch.crates-io]
+embassy-embedded-hal = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-executor = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-futures = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-hal-internal = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-net = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-net-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-stm32 = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-sync = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-time = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-time-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-time-queue-utils = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-usb-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-usb-synopsys-otg = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = true
+lto = "fat"
+
+[workspace]
