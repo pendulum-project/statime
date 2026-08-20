@@ -20,6 +20,10 @@ type GeneralStorage = SocketStorage<
 >;
 
 /// Static packet and socket storage for one [`crate::Runner`].
+///
+/// Datagram storage is deliberately limited to 256 bytes. This covers the
+/// ordinary E2E messages emitted by the runner; larger, TLV-heavy messages are
+/// discarded as truncated.
 pub struct PtpStorage {
     pub(super) event: EventStorage,
     pub(super) general: GeneralStorage,
