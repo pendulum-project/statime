@@ -4,6 +4,7 @@ members = [
     "statime-linux",
 ]
 exclude = [
+    "statime-embassy-net",
     "statime-stm32"
 ]
 resolver = "2"

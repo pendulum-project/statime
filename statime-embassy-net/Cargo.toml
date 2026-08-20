@@ -1,0 +1,49 @@
+[package]
+name = "statime-embassy-net"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "PTP ordinary-clock runner for statime on embassy-net"
+repository = "https://github.com/pendulum-project/statime"
+readme = "README.md"
+publish = false
+
+[features]
+default = []
+defmt = ["dep:defmt", "embassy-net/defmt", "embassy-ptp-driver/defmt", "embassy-time/defmt"]
+monitor = []
+
+[dependencies]
+rand_core = "0.6"
+rand_xorshift = "0.3"
+statime = { path = "../statime", default-features = false }
+defmt = { version = "1.0.1", optional = true }
+embassy-futures = { version = "0.1.2", default-features = false }
+embassy-net = { version = "0.9.1", default-features = false, features = [
+	"medium-ethernet",
+	"multicast",
+	"packetmeta-id",
+	"packetmeta-timestamp",
+	"proto-ipv4",
+	"udp",
+] }
+embassy-ptp-driver = "0.1.0"
+embassy-time = { version = "0.5.1", default-features = false }
+
+[dev-dependencies]
+defmt2log = "0.2.1"
+
+[patch.crates-io]
+embassy-futures = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-net = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-net-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-ptp-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-sync = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-time = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-time-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = true
+lto = "fat"
