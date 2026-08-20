@@ -17,7 +17,13 @@ uses Embassy STM32; applications using it must select their concrete
 `embassy-stm32` chip feature.
 
 The runner is currently a single-port UDP/IPv4 ordinary clock using E2E delay
-measurement. It is slave-only by default.
+measurement. It is slave-only by default. To keep static packet storage small,
+it accepts PTP datagrams up to 256 bytes; larger, TLV-heavy messages are
+discarded as truncated.
+
+Runner startup reports multicast-membership and socket-binding errors. Once
+started, transient link or IP-configuration loss keeps the clock in holdover;
+the existing sockets and protocol state resume when connectivity returns.
 
 The default servo is Statime's `FixedWanderKalmanFilter`, intended for embedded
 systems whose oscillator wander is characterized or conservatively bounded.

@@ -10,7 +10,7 @@ mod storage;
 use core::num::NonZero;
 use embassy_futures::select::{Either3, select3};
 use embassy_net::{
-    IpAddress, IpEndpoint, Ipv4Address, Stack, TryError,
+    IpAddress, IpEndpoint, Ipv4Address, MulticastError, Stack, TryError,
     driver::{Timestamp, TxTimestamp},
     udp,
     udp::{UdpMetadata, UdpSocket},
@@ -70,6 +70,49 @@ const TX_PENDING: usize = 4;
 const MSG_DELAY_REQ: u8 = 0x1;
 const MSG_PDELAY_REQ: u8 = 0x2;
 const MSG_PDELAY_RESP: u8 = 0x3;
+
+/// Error encountered while starting a [`Runner`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
+pub enum RunError {
+    /// The network stack could not join a required PTP multicast group.
+    Multicast {
+        /// Multicast address the runner tried to join.
+        address: Ipv4Address,
+        /// Error reported by the network stack.
+        source: MulticastError,
+    },
+    /// A PTP UDP socket could not be bound.
+    Bind {
+        /// UDP port the runner tried to bind.
+        port: u16,
+        /// Error reported by the socket.
+        source: udp::BindError,
+    },
+}
+
+impl core::fmt::Display for RunError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Multicast { address, source } => {
+                write!(formatter, "joining PTP multicast group {address}: {source}")
+            }
+            Self::Bind { port, source } => {
+                write!(formatter, "binding PTP UDP port {port}: {source:?}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for RunError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Multicast { source, .. } => Some(source),
+            Self::Bind { .. } => None,
+        }
+    }
+}
 
 /// Configuration for one PTP ordinary-clock runner.
 #[non_exhaustive]
@@ -227,8 +270,12 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
         self
     }
 
-    /// Run the PTP service forever.
-    pub async fn run(&mut self) -> ! {
+    /// Run the PTP service until cancelled, or return an initialization error.
+    ///
+    /// Transient link or IP-configuration loss does not return an error. The
+    /// runner retains its sockets and protocol state and resumes when the
+    /// network stack becomes usable again.
+    pub async fn run(&mut self) -> Result<(), RunError> {
         let stack = self.stack;
         let clock = ClockRef {
             clock: &mut self.clock,
@@ -241,18 +288,20 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
 
         info!("ptp: waiting for network configuration");
         stack.wait_config_up().await;
-        match stack.join_multicast_group(PRIMARY_MULTICAST) {
-            Ok(()) => info!("ptp: joined primary multicast group"),
-            Err(error) => {
-                warn!("ptp: failed to join primary multicast group: {}", error)
-            }
-        }
-        match stack.join_multicast_group(LINK_LOCAL_MULTICAST) {
-            Ok(()) => info!("ptp: joined link-local multicast group"),
-            Err(error) => {
-                warn!("ptp: failed to join link-local multicast group: {}", error)
-            }
-        }
+        stack
+            .join_multicast_group(PRIMARY_MULTICAST)
+            .map_err(|source| RunError::Multicast {
+                address: PRIMARY_MULTICAST,
+                source,
+            })?;
+        info!("ptp: joined primary multicast group");
+        stack
+            .join_multicast_group(LINK_LOCAL_MULTICAST)
+            .map_err(|source| RunError::Multicast {
+                address: LINK_LOCAL_MULTICAST,
+                source,
+            })?;
+        info!("ptp: joined link-local multicast group");
 
         let event_socket = UdpSocket::new(
             stack,
@@ -268,7 +317,7 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
             &mut storage.general.tx_meta,
             &mut storage.general.tx_buffer,
         );
-        let mut io = PortIo::new(event_socket, general_socket, config.tx_timestamp_timeout);
+        let mut io = PortIo::new(event_socket, general_socket, config.tx_timestamp_timeout)?;
 
         let clock_identity = clock_identity_from_mac(config.mac_address);
         info!(
@@ -410,16 +459,24 @@ impl<'a> PortIo<'a> {
         mut event: UdpSocket<'a>,
         mut general: UdpSocket<'a>,
         tx_timestamp_timeout: EmbassyDuration,
-    ) -> Self {
-        event.bind(EVENT_PORT).unwrap();
-        general.bind(GENERAL_PORT).unwrap();
-        Self {
+    ) -> Result<Self, RunError> {
+        event.bind(EVENT_PORT).map_err(|source| RunError::Bind {
+            port: EVENT_PORT,
+            source,
+        })?;
+        general
+            .bind(GENERAL_PORT)
+            .map_err(|source| RunError::Bind {
+                port: GENERAL_PORT,
+                source,
+            })?;
+        Ok(Self {
             event,
             general,
             timers: Timers::default(),
             packet_id: PacketIdGenerator::new(),
             pending_tx: PendingTxQueue::new(tx_timestamp_timeout),
-        }
+        })
     }
 
     async fn handle(
