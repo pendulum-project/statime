@@ -158,9 +158,6 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, InBmca, 
 
         match recommended_state {
             RecommendedState::M1(defaultds) | RecommendedState::M2(defaultds) => {
-                // a slave-only PTP port should never end up in the master state
-                debug_assert!(!default_ds.slave_only);
-
                 current_ds.steps_removed = 0;
 
                 parent_ds.parent_port_identity.clock_identity = defaultds.clock_identity;
@@ -440,6 +437,47 @@ mod tests {
             Some(PortAction::ResetAnnounceReceiptTimer { .. })
         ));
         assert!(pending_action.next().is_none());
+    }
+
+    #[test]
+    /// Tests that a slave-only port recommended as master is put into the listening
+    /// state by `set_recommended_state`, and that the M1 dataset update still runs.
+    fn test_slave_only_recommended_master_via_set_recommended_state() {
+        let state = setup_test_state();
+        let mut port = setup_test_port(&state).start_bmca();
+
+        port.set_forced_port_state(PortState::Passive);
+        state.borrow_mut().default_ds.slave_only = true;
+
+        let default_ds = state.borrow().default_ds;
+        let mut path_trace_ds = PathTraceDS::new(false);
+        let mut time_properties_ds = Default::default();
+
+        // Seeded with values the M1 update has to overwrite, so that the dataset
+        // assertions below cannot pass vacuously.
+        let mut current_ds = InternalCurrentDS { steps_removed: 5 };
+        let mut parent_ds = InternalParentDS::new(default_ds);
+        parent_ds.grandmaster_identity = ClockIdentity([0xff; 8]);
+
+        port.set_recommended_state(
+            RecommendedState::M1(default_ds),
+            &mut path_trace_ds,
+            &mut time_properties_ds,
+            &mut current_ds,
+            &mut parent_ds,
+            &default_ds,
+        );
+
+        assert!(matches!(port.port_state, PortState::Listening));
+        let mut pending_action = port.lifecycle.pending_action;
+        assert!(matches!(
+            pending_action.next(),
+            Some(PortAction::ResetAnnounceReceiptTimer { .. })
+        ));
+        assert!(pending_action.next().is_none());
+
+        assert_eq!(current_ds.steps_removed, 0);
+        assert_eq!(parent_ds.grandmaster_identity, default_ds.clock_identity);
     }
 
     #[test]
