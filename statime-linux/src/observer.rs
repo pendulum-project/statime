@@ -123,17 +123,14 @@ fn create_unix_socket(path: &Path) -> std::io::Result<tokio::net::UnixListener> 
         if !parent.exists() {
             let msg = format!(
                 r"Could not create observe socket at {:?} because its parent directory does not exist",
-                &path
+                path
             );
             return other_error(msg);
         }
     }
 
     // otherwise, just forward the OS error
-    let msg = format!(
-        "Could not create observe socket at {:?}: {:?}",
-        &path, error
-    );
+    let msg = format!("Could not create observe socket at {:?}: {:?}", path, error);
 
     other_error(msg)
 }
