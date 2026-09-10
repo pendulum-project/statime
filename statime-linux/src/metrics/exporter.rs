@@ -74,7 +74,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "starting statime-metrics-exporter on {}",
-        &config.observability.metrics_exporter_listen
+        config.observability.metrics_exporter_listen
     );
 
     let listener = TcpListener::bind(&config.observability.metrics_exporter_listen).await?;

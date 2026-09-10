@@ -443,7 +443,7 @@ pub fn format_state(w: &mut impl std::fmt::Write, state: &ObservableState) -> st
 
     let labels = vec![(
         "clock_identity",
-        format!("{}", &state.instance.default_ds.clock_identity),
+        format!("{}", state.instance.default_ds.clock_identity),
     )];
 
     format_default_ds(w, &state.instance.default_ds, labels.clone())?;
