@@ -28,7 +28,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
                         self.config.minor_ptp_version.into(),
                     )
                 })
-                .serialize(&mut self.packet_buffer)
+                .serialize(self.packet_buffer.as_mut_slice())
             {
                 Ok(message) => message,
                 Err(error) => {
@@ -71,7 +71,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
                         self.config.minor_ptp_version.into(),
                     )
                 })
-                .serialize(&mut self.packet_buffer)
+                .serialize(self.packet_buffer.as_mut_slice())
             {
                 Ok(length) => length,
                 Err(error) => {
@@ -92,6 +92,10 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
         }
     }
 
+    /// Not inlined: its TLV scratch is `MAX_DATA_LEN` bytes twice over,
+    /// and a port that is never master (slave-only) should not carry that
+    /// in the frame of every poll.
+    #[inline(never)]
     pub(super) fn send_announce(
         &mut self,
         tlv_provider: &mut impl ForwardedTLVProvider,
@@ -163,7 +167,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
 
             message.suffix = tlv_builder.build();
 
-            let packet_length = match message.serialize(&mut self.packet_buffer) {
+            let packet_length = match message.serialize(self.packet_buffer.as_mut_slice()) {
                 Ok(length) => length,
                 Err(error) => {
                     log::error!(
@@ -204,7 +208,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
                 timestamp,
             );
 
-            let packet_length = match delay_resp_message.serialize(&mut self.packet_buffer) {
+            let packet_length = match delay_resp_message.serialize(self.packet_buffer.as_mut_slice()) {
                 Ok(length) => length,
                 Err(error) => {
                     log::error!("Could not serialize delay response: {:?}", error);
@@ -237,7 +241,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
             )
         });
 
-        let packet_length = match pdelay_resp_message.serialize(&mut self.packet_buffer) {
+        let packet_length = match pdelay_resp_message.serialize(self.packet_buffer.as_mut_slice()) {
             Ok(length) => length,
             Err(error) => {
                 log::error!("Could not serialize pdelay response: {:?}", error);
@@ -274,7 +278,7 @@ impl<A, C, F: Filter, R, S: PtpInstanceStateMutex> Port<'_, Running, A, R, C, F,
             )
         });
 
-        let packet_length = match pdelay_resp_follow_up_messgae.serialize(&mut self.packet_buffer) {
+        let packet_length = match pdelay_resp_follow_up_messgae.serialize(self.packet_buffer.as_mut_slice()) {
             Ok(length) => length,
             Err(error) => {
                 log::error!("Could not serialize pdelay_response_followup: {:?}", error);

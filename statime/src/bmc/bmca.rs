@@ -31,23 +31,25 @@ use crate::{
 /// - Then to get the recommended state for each port,
 ///   [Bmca::calculate_recommended_state] needs to be called
 #[derive(Debug)]
-pub(crate) struct Bmca<A> {
-    foreign_master_list: ForeignMasterList,
+pub(crate) struct Bmca<'a, A> {
+    /// Borrowed from the port's [`PortStorage`](crate::port::PortStorage):
+    /// by far the largest piece of a port, kept out of the value that the
+    /// port's typestate transitions move.
+    foreign_master_list: &'a mut ForeignMasterList,
     acceptable_master_list: A,
     own_port_identity: PortIdentity,
 }
 
-impl<A> Bmca<A> {
+impl<'a, A> Bmca<'a, A> {
     pub(crate) fn new(
+        foreign_master_list: &'a mut ForeignMasterList,
         acceptable_master_list: A,
         own_port_announce_interval: TimeInterval,
         own_port_identity: PortIdentity,
     ) -> Self {
+        foreign_master_list.reset(own_port_announce_interval, own_port_identity);
         Self {
-            foreign_master_list: ForeignMasterList::new(
-                own_port_announce_interval,
-                own_port_identity,
-            ),
+            foreign_master_list,
             acceptable_master_list,
             own_port_identity,
         }
@@ -186,7 +188,7 @@ impl<A> Bmca<A> {
     }
 }
 
-impl<A: AcceptableMasterList> Bmca<A> {
+impl<A: AcceptableMasterList> Bmca<'_, A> {
     /// Register a received announce message to the BMC algorithm
     pub(crate) fn register_announce_message(
         &mut self,
@@ -360,7 +362,9 @@ mod tests {
 
     #[test]
     fn test_master_registration() {
+        let mut list = ForeignMasterList::empty();
         let mut bmca = Bmca::new(
+            &mut list,
             AcceptAnyMaster,
             TimeInterval(100.into()),
             PortIdentity::default(),
@@ -378,7 +382,9 @@ mod tests {
 
     #[test]
     fn test_master_registration_rollover() {
+        let mut list = ForeignMasterList::empty();
         let mut bmca = Bmca::new(
+            &mut list,
             AcceptAnyMaster,
             TimeInterval(100.into()),
             PortIdentity::default(),
@@ -424,7 +430,9 @@ mod tests {
 
     #[test]
     fn test_acceptable_master_filter() {
+        let mut list = ForeignMasterList::empty();
         let mut bmca = Bmca::new(
+            &mut list,
             std::vec![],
             TimeInterval(100.into()),
             PortIdentity::default(),

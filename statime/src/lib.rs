@@ -99,6 +99,7 @@ pub mod time;
 
 pub use clock::Clock;
 pub use overlay_clock::OverlayClock;
+pub use port::PortStorage;
 pub use ptp_instance::{PtpInstance, PtpInstanceState, PtpInstanceStateMutex};
 #[cfg(feature = "std")]
 pub use shared_clock::SharedClock;

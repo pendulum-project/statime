@@ -369,7 +369,10 @@ async fn actual_main() {
         };
 
         let rng = StdRng::from_entropy();
+        // Ports live for the process; so does their storage.
+        let storage = Box::leak(Box::new(statime::PortStorage::new()));
         let port = instance.add_port(
+            storage,
             port_config.into(),
             KalmanConfiguration::default(),
             port_clock.clone_box(),

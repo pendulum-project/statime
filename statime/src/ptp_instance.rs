@@ -10,6 +10,7 @@ use rand::Rng;
 use crate::float_polyfill::FloatPolyfill;
 use crate::{
     bmc::{acceptable_master::AcceptableMasterList, bmca::Bmca},
+    port::PortStorage,
     clock::Clock,
     config::{ClockQuality, InstanceConfig, PortConfig},
     datastructures::{
@@ -78,7 +79,8 @@ use crate::{
 ///     time_properties_ds,
 /// );
 ///
-/// let mut port = instance.add_port(port_config, filter_config, clock, rng);
+/// let storage = Box::leak(Box::new(statime::PortStorage::new()));
+/// let mut port = instance.add_port(storage, port_config, filter_config, clock, rng);
 ///
 /// // Send of port to its own thread/task to do its work
 ///
@@ -208,13 +210,17 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
     /// the caller is responsible for propagating any property changes to this
     /// clock, and for synchronizing this clock with the instance clock as
     /// appropriate based on the ports state.
-    pub fn add_port<A, C, R: Rng>(
-        &self,
+    ///
+    /// `storage` holds the port's large state for the port's lifetime; see
+    /// [`PortStorage`].
+    pub fn add_port<'a, A, C, R: Rng>(
+        &'a self,
+        storage: &'a mut PortStorage,
         config: PortConfig<A>,
         filter_config: F::Config,
         clock: C,
         rng: R,
-    ) -> Port<'_, InBmca, A, R, C, F, S> {
+    ) -> Port<'a, InBmca, A, R, C, F, S> {
         self.log_bmca_interval
             .fetch_min(config.announce_interval.as_log_2(), Ordering::Relaxed);
         let port_identity = self.state.with_mut(|state| {
@@ -227,6 +233,7 @@ impl<F: Filter, S: PtpInstanceStateMutex> PtpInstance<F, S> {
 
         Port::new(
             &self.state,
+            storage,
             config,
             filter_config,
             clock,

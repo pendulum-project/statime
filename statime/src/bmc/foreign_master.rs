@@ -18,11 +18,17 @@ const FOREIGN_MASTER_TIME_WINDOW: u16 = 4;
 /// the time window for a foreign master to be valid
 const FOREIGN_MASTER_THRESHOLD: usize = 2;
 
-/// The maximum amount of announce message to store within the time window
-const MAX_ANNOUNCE_MESSAGES: usize = 8;
+/// The maximum amount of announce message to store within the time window.
+///
+/// The threshold itself: qualification only counts messages up to
+/// [`FOREIGN_MASTER_THRESHOLD`], and registration evicts the oldest once
+/// full, so more slots would hold messages nothing reads. Every slot is a
+/// stored `Header` plus `AnnounceMessage`, and the list is most of a port.
+const MAX_ANNOUNCE_MESSAGES: usize = FOREIGN_MASTER_THRESHOLD;
 
-/// The maximum amount of foreign masters to store at the same time
-const MAX_FOREIGN_MASTERS: usize = 8;
+/// The maximum amount of foreign masters to store at the same time:
+/// the minimum IEEE 1588-2019 9.3.2.4.4 asks for.
+const MAX_FOREIGN_MASTERS: usize = 5;
 
 #[derive(Debug)]
 pub struct ForeignMaster {
@@ -110,19 +116,35 @@ pub(crate) struct ForeignMasterList {
 }
 
 impl ForeignMasterList {
-    /// - `port_announce_interval`: The time interval derived from the
-    ///   PortDS.log_announce_interval
-    /// - `port_identity`: The identity of the port for which this list is used
-    pub(crate) fn new(
-        own_port_announce_interval: TimeInterval,
-        own_port_identity: PortIdentity,
-    ) -> Self {
+    /// A list for no port yet, so it can be placed before the port exists;
+    /// [`reset`](Self::reset) binds it to one.
+    pub(crate) const fn empty() -> Self {
         Self {
-            foreign_masters: ArrayVec::<ForeignMaster, MAX_FOREIGN_MASTERS>::new(),
-            own_port_announce_interval,
-            own_port_identity,
+            foreign_masters: ArrayVec::new_const(),
+            own_port_announce_interval: TimeInterval(fixed::types::I48F16::ZERO),
+            own_port_identity: PortIdentity {
+                clock_identity: crate::datastructures::common::ClockIdentity([0; 8]),
+                port_number: 0,
+            },
         }
     }
+
+    /// Forgets every foreign master and binds the list to a port.
+    ///
+    /// - `own_port_announce_interval`: The time interval derived from the
+    ///   PortDS.log_announce_interval
+    /// - `own_port_identity`: The identity of the port for which this list is used
+    pub(crate) fn reset(
+        &mut self,
+        own_port_announce_interval: TimeInterval,
+        own_port_identity: PortIdentity,
+    ) {
+        self.foreign_masters.clear();
+        self.own_port_announce_interval = own_port_announce_interval;
+        self.own_port_identity = own_port_identity;
+    }
+
+
 
     pub(crate) fn step_age(&mut self, step: Duration) {
         for i in (0..self.foreign_masters.len()).rev() {

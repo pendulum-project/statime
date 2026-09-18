@@ -307,7 +307,9 @@ pub fn setup_statime(
         minor_ptp_version: PtpMinorVersion::One,
     };
 
-    let ptp_port = ptp_instance.add_port(port_config, Default::default(), ptp_clock, rng);
+    static PORT_STORAGE: StaticCell<statime::PortStorage> = StaticCell::new();
+    let storage = PORT_STORAGE.init(statime::PortStorage::new());
+    let ptp_port = ptp_instance.add_port(storage, port_config, Default::default(), ptp_clock, rng);
 
     (ptp_instance, ptp_port)
 }

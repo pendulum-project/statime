@@ -22,6 +22,7 @@ use crate::{
     bmc::{
         acceptable_master::AcceptableMasterList,
         bmca::{BestAnnounceMessage, Bmca},
+        foreign_master::ForeignMasterList,
     },
     clock::Clock,
     config::PortConfig,
@@ -142,7 +143,9 @@ pub(crate) mod state;
 /// let clock = system::Clock {};
 /// let rng = thread_rng();
 ///
-/// let port_in_bmca = instance.add_port(port_config, filter_config, clock, rng);
+/// // The port's large state, placed where the caller wants it.
+/// let storage = Box::leak(Box::new(statime::PortStorage::new()));
+/// let port_in_bmca = instance.add_port(storage, port_config, filter_config, clock, rng);
 ///
 /// // To handle events for the port it needs to change to running mode
 /// let (running_port, actions) = port_in_bmca.end_bmca();
@@ -281,8 +284,8 @@ pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
     // Corresponds with PortDS port_state and enabled
     port_state: PortState,
     instance_state: &'a S,
-    bmca: Bmca<A>,
-    packet_buffer: [u8; MAX_DATA_LEN],
+    bmca: Bmca<'a, A>,
+    packet_buffer: &'a mut [u8; MAX_DATA_LEN],
     lifecycle: L,
     rng: R,
     // Age of the last announce message that triggered
@@ -301,6 +304,38 @@ pub struct Port<'a, L, A, R, C, F: Filter, S = RefCell<PtpInstanceState>> {
     /// or `mean_link_delay` when DelayMechanism is P2P.
     mean_delay: Option<Duration>,
     peer_delay_state: PeerDelayState,
+}
+
+/// The large, fixed-size state of one [`Port`], placed by the caller.
+///
+/// A port's typestate transitions ([`Port::start_bmca`], [`Port::end_bmca`])
+/// pass the port by value. The foreign master list and the packet buffer are
+/// most of a port, so they live here, where the caller chooses their placement
+/// (a `static`, an arena, a `Box`), and the port only borrows them. The port
+/// that moves is then small enough for a target with a few kilobytes of stack.
+///
+/// One storage serves one port: [`PtpInstance::add_port`] binds it for the
+/// port's lifetime.
+#[derive(Debug)]
+pub struct PortStorage {
+    foreign_masters: ForeignMasterList,
+    packet_buffer: [u8; MAX_DATA_LEN],
+}
+
+impl PortStorage {
+    /// Storage for a port that does not exist yet.
+    pub const fn new() -> Self {
+        Self {
+            foreign_masters: ForeignMasterList::empty(),
+            packet_buffer: [0; MAX_DATA_LEN],
+        }
+    }
+}
+
+impl Default for PortStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -435,7 +470,7 @@ impl<'a, A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceSta
             bmca: self.bmca,
             rng: self.rng,
             multiport_disable: self.multiport_disable,
-            packet_buffer: [0; MAX_DATA_LEN],
+            packet_buffer: self.packet_buffer,
             lifecycle: InBmca {
                 pending_action: actions![],
                 local_best: None,
@@ -553,7 +588,7 @@ impl<'a, A, C, F: Filter, R, S> Port<'a, InBmca, A, R, C, F, S> {
                 bmca: self.bmca,
                 rng: self.rng,
                 multiport_disable: self.multiport_disable,
-                packet_buffer: [0; MAX_DATA_LEN],
+                packet_buffer: self.packet_buffer,
                 lifecycle: Running,
                 announce_seq_ids: self.announce_seq_ids,
                 sync_seq_ids: self.sync_seq_ids,
@@ -655,6 +690,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
     /// Create a new port from a port dataset on a given interface.
     pub(crate) fn new(
         instance_state: &'a S,
+        storage: &'a mut PortStorage,
         config: PortConfig<A>,
         filter_config: F::Config,
         clock: C,
@@ -662,7 +698,12 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
         mut rng: R,
     ) -> Self {
         let duration = config.announce_duration(&mut rng);
+        let PortStorage {
+            foreign_masters,
+            packet_buffer,
+        } = storage;
         let bmca = Bmca::new(
+            foreign_masters,
             config.acceptable_master_list,
             config.announce_interval.as_duration().into(),
             port_identity,
@@ -689,7 +730,7 @@ impl<'a, A, C, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'a, InBmca, A, 
             bmca,
             rng,
             multiport_disable: None,
-            packet_buffer: [0; MAX_DATA_LEN],
+            packet_buffer,
             lifecycle: InBmca {
                 pending_action: actions![PortAction::ResetAnnounceReceiptTimer { duration }],
                 local_best: None,
@@ -752,6 +793,7 @@ mod tests {
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             state,
+            std::boxed::Box::leak(std::boxed::Box::new(PortStorage::new())),
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
@@ -780,6 +822,7 @@ mod tests {
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, BasicFilter> {
         let port = Port::<_, _, _, _, BasicFilter>::new(
             state,
+            std::boxed::Box::leak(std::boxed::Box::new(PortStorage::new())),
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {
@@ -808,6 +851,7 @@ mod tests {
     ) -> Port<'_, Running, AcceptAnyMaster, rand::rngs::mock::StepRng, TestClock, F> {
         let port = Port::<_, _, _, _, F>::new(
             state,
+            std::boxed::Box::leak(std::boxed::Box::new(PortStorage::new())),
             PortConfig {
                 acceptable_master_list: AcceptAnyMaster,
                 delay_mechanism: DelayMechanism::E2E {

@@ -478,7 +478,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
                 self.config.minor_ptp_version.into(),
             )
         });
-        let message_length = match pdelay_req.serialize(&mut self.packet_buffer) {
+        let message_length = match pdelay_req.serialize(self.packet_buffer.as_mut_slice()) {
             Ok(length) => length,
             Err(error) => {
                 log::error!("Could not serialize pdelay request: {:?}", error);
@@ -531,7 +531,7 @@ impl<A, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMutex> Port<'_, Running,
                     )
                 });
 
-                let message_length = match delay_req.serialize(&mut self.packet_buffer) {
+                let message_length = match delay_req.serialize(self.packet_buffer.as_mut_slice()) {
                     Ok(length) => length,
                     Err(error) => {
                         log::error!("Could not serialize delay request: {:?}", error);
