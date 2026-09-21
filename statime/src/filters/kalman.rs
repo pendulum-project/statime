@@ -1,7 +1,4 @@
-use super::{
-    matrix::{Matrix, Vector},
-    FilterEstimate,
-};
+use super::FilterEstimate;
 #[allow(unused_imports)]
 use crate::float_polyfill::FloatPolyfill;
 use crate::{
@@ -236,26 +233,47 @@ impl MeasurementErrorEstimator {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct State {
+    offset: f64,
+    frequency: f64,
+    delay: f64,
+}
+
+/// Symmetric covariance of offset, fractional frequency, and path delay.
+#[derive(Clone, Copy, Debug)]
+struct Covariance {
+    offset: f64,
+    offset_frequency: f64,
+    offset_delay: f64,
+    frequency: f64,
+    frequency_delay: f64,
+    delay: f64,
+}
+
 #[derive(Clone, Debug)]
 struct InnerFilter {
-    state: Vector<3>,
-    uncertainty: Matrix<3, 3>,
+    state: State,
+    uncertainty: Covariance,
     filter_time: Time,
 }
 
 impl InnerFilter {
-    const MEASUREMENT_SYNC: Matrix<1, 3> = Matrix::new([[1.0, 0.0, 1.0]]);
-    const MEASUREMENT_DELAY: Matrix<1, 3> = Matrix::new([[1.0, 0.0, -1.0]]);
-    const MEASUREMENT_PEER_DELAY: Matrix<1, 3> = Matrix::new([[0.0, 0.0, 1.0]]);
-
     fn new(initial_offset: f64, time: Time, config: &KalmanConfiguration) -> Self {
         Self {
-            state: Vector::new_vector([initial_offset, 0.0, 0.0]),
-            uncertainty: Matrix::new([
-                [sqr(config.step_threshold.seconds()), 0.0, 0.0],
-                [0.0, sqr(config.initial_frequency_uncertainty), 0.0],
-                [0.0, 0.0, sqr(config.step_threshold.seconds())],
-            ]),
+            state: State {
+                offset: initial_offset,
+                frequency: 0.0,
+                delay: 0.0,
+            },
+            uncertainty: Covariance {
+                offset: sqr(config.step_threshold.seconds()),
+                offset_frequency: 0.0,
+                offset_delay: 0.0,
+                frequency: sqr(config.initial_frequency_uncertainty),
+                frequency_delay: 0.0,
+                delay: sqr(config.step_threshold.seconds()),
+            },
             filter_time: time,
         }
     }
@@ -267,64 +285,81 @@ impl InnerFilter {
         }
 
         let delta_t = (time - self.filter_time).seconds();
-        let update = Matrix::new([[1.0, delta_t, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
-        let process_noise = Matrix::new([
-            [
-                wander * delta_t * delta_t * delta_t / 3.,
-                wander * delta_t * delta_t / 2.,
-                0.,
-            ],
-            [wander * delta_t * delta_t / 2., wander * delta_t, 0.],
-            [
-                0.,
-                0.,
-                config.delay_wander * delta_t * sqr(self.state.ventry(2)),
-            ],
-        ]);
+        let delta_t2 = delta_t * delta_t;
 
-        self.state = update * self.state;
-        self.uncertainty = update * self.uncertainty * update.transpose() + process_noise;
+        self.state.offset += delta_t * self.state.frequency;
+        self.uncertainty.offset += 2.0 * delta_t * self.uncertainty.offset_frequency
+            + delta_t2 * self.uncertainty.frequency
+            + wander * delta_t2 * delta_t / 3.0;
+        self.uncertainty.offset_frequency +=
+            delta_t * self.uncertainty.frequency + wander * delta_t2 / 2.0;
+        self.uncertainty.offset_delay += delta_t * self.uncertainty.frequency_delay;
+        self.uncertainty.frequency += wander * delta_t;
+        self.uncertainty.delay += config.delay_wander * delta_t * sqr(self.state.delay);
         self.filter_time = time;
     }
 
     fn absorb_sync_offset(&mut self, sync_offset: f64, variance: f64) {
-        let measurement_vec = Vector::new_vector([sync_offset]);
-        let measurement_noise = Matrix::new([[variance]]);
-        self.absorb_measurement(measurement_vec, Self::MEASUREMENT_SYNC, measurement_noise);
+        // h = [1, 0, 1].
+        let projected = [
+            self.uncertainty.offset + self.uncertainty.offset_delay,
+            self.uncertainty.offset_frequency + self.uncertainty.frequency_delay,
+            self.uncertainty.offset_delay + self.uncertainty.delay,
+        ];
+        self.absorb_measurement(
+            sync_offset - self.state.offset - self.state.delay,
+            variance + projected[0] + projected[2],
+            projected,
+        );
     }
 
     fn absorb_delay_offset(&mut self, delay_offset: f64, variance: f64) {
-        let measurement_vec = Vector::new_vector([delay_offset]);
-        let measurement_noise = Matrix::new([[variance]]);
-        self.absorb_measurement(measurement_vec, Self::MEASUREMENT_DELAY, measurement_noise);
+        // h = [1, 0, -1].
+        let projected = [
+            self.uncertainty.offset - self.uncertainty.offset_delay,
+            self.uncertainty.offset_frequency - self.uncertainty.frequency_delay,
+            self.uncertainty.offset_delay - self.uncertainty.delay,
+        ];
+        self.absorb_measurement(
+            delay_offset - self.state.offset + self.state.delay,
+            variance + projected[0] - projected[2],
+            projected,
+        );
     }
 
     fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
-        let measurement_vec = Vector::new_vector([peer_delay]);
-        let measurement_noise = Matrix::new([[variance]]);
+        // h = [0, 0, 1].
+        let projected = [
+            self.uncertainty.offset_delay,
+            self.uncertainty.frequency_delay,
+            self.uncertainty.delay,
+        ];
         self.absorb_measurement(
-            measurement_vec,
-            Self::MEASUREMENT_PEER_DELAY,
-            measurement_noise,
-        )
+            peer_delay - self.state.delay,
+            variance + projected[2],
+            projected,
+        );
     }
 
     fn absorb_measurement(
         &mut self,
-        measurement_vec: Vector<1>,
-        measurement_transform: Matrix<1, 3>,
-        measurement_noise: Matrix<1, 1>,
+        innovation: f64,
+        innovation_variance: f64,
+        projected: [f64; 3],
     ) {
-        let (prediction, uncertainty) = self.predict(measurement_transform);
+        // projected = P h^T. The scalar Kalman gain is projected divided by
+        // the innovation variance.
+        let scale = 1.0 / innovation_variance;
+        self.state.offset += projected[0] * innovation * scale;
+        self.state.frequency += projected[1] * innovation * scale;
+        self.state.delay += projected[2] * innovation * scale;
 
-        let difference = measurement_vec - prediction;
-        let difference_covariance = uncertainty + measurement_noise;
-        let update_strength =
-            self.uncertainty * measurement_transform.transpose() * difference_covariance.inverse();
-        self.state = self.state + update_strength * difference;
-        self.uncertainty = ((Matrix::unit() - update_strength * measurement_transform)
-            * self.uncertainty)
-            .symmetrize();
+        self.uncertainty.offset -= projected[0] * projected[0] * scale;
+        self.uncertainty.offset_frequency -= projected[0] * projected[1] * scale;
+        self.uncertainty.offset_delay -= projected[0] * projected[2] * scale;
+        self.uncertainty.frequency -= projected[1] * projected[1] * scale;
+        self.uncertainty.frequency_delay -= projected[1] * projected[2] * scale;
+        self.uncertainty.delay -= projected[2] * projected[2] * scale;
     }
 
     fn absorb_frequency_steer(
@@ -335,32 +370,26 @@ impl InnerFilter {
         config: &KalmanConfiguration,
     ) {
         self.progress_filtertime(time, wander, config);
-        self.state = self.state + Vector::new_vector([0., steer * 1e-6, 0.]);
+        self.state.frequency += steer * 1e-6;
     }
 
     fn absorb_offset_steer(&mut self, steer: f64) {
-        self.state = self.state + Vector::new_vector([steer, 0., 0.]);
+        self.state.offset += steer;
         self.filter_time += Duration::from_seconds(steer);
     }
 
-    fn predict<const N: usize>(
-        &self,
-        measurement_transform: Matrix<N, 3>,
-    ) -> (Vector<N>, Matrix<N, N>) {
-        let prediction = measurement_transform * self.state;
-        let uncertainty =
-            measurement_transform * self.uncertainty * measurement_transform.transpose();
-        (prediction, uncertainty)
-    }
-
     fn predict_sync_offset(&self) -> (f64, f64) {
-        let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_SYNC);
-        (prediction.entry(0, 0), uncertainty.entry(0, 0))
+        (
+            self.state.offset + self.state.delay,
+            self.uncertainty.offset + 2.0 * self.uncertainty.offset_delay + self.uncertainty.delay,
+        )
     }
 
     fn predict_delay_offset(&self) -> (f64, f64) {
-        let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_DELAY);
-        (prediction.entry(0, 0), uncertainty.entry(0, 0))
+        (
+            self.state.offset - self.state.delay,
+            self.uncertainty.offset - 2.0 * self.uncertainty.offset_delay + self.uncertainty.delay,
+        )
     }
 }
 
@@ -386,7 +415,7 @@ impl BaseFilter {
         config: &KalmanConfiguration,
     ) {
         if let Some(inner) = &mut self.0 {
-            if (sync_offset - inner.state.ventry(0)).abs() > config.step_threshold.seconds() {
+            if (sync_offset - inner.state.offset).abs() > config.step_threshold.seconds() {
                 log::info!("Measurement too far from state, resetting");
                 *inner = InnerFilter::new(sync_offset, inner.filter_time, config);
             } else {
@@ -402,7 +431,7 @@ impl BaseFilter {
         config: &KalmanConfiguration,
     ) {
         if let Some(inner) = &mut self.0 {
-            if (delay_offset - inner.state.ventry(0)).abs() > config.step_threshold.seconds() {
+            if (delay_offset - inner.state.offset).abs() > config.step_threshold.seconds() {
                 log::info!("Measurement too far from state, resetting");
                 *inner = InnerFilter::new(delay_offset, inner.filter_time, config);
             } else {
@@ -439,42 +468,42 @@ impl BaseFilter {
     fn offset(&self) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.state.ventry(0))
+            .map(|inner| inner.state.offset)
             .unwrap_or(0.0)
     }
 
     fn offset_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(0, 0).sqrt())
+            .map(|inner| inner.uncertainty.offset.sqrt())
             .unwrap_or(config.step_threshold.seconds())
     }
 
     fn freq_offset(&self) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.state.ventry(1))
+            .map(|inner| inner.state.frequency)
             .unwrap_or(0.0)
     }
 
     fn freq_offset_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(1, 1).sqrt())
+            .map(|inner| inner.uncertainty.frequency.sqrt())
             .unwrap_or(config.initial_frequency_uncertainty)
     }
 
     fn mean_delay(&self) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.state.ventry(2))
+            .map(|inner| inner.state.delay)
             .unwrap_or(0.0)
     }
 
     fn mean_delay_uncertainty(&self, config: &KalmanConfiguration) -> f64 {
         self.0
             .as_ref()
-            .map(|inner| inner.uncertainty.entry(2, 2).sqrt())
+            .map(|inner| inner.uncertainty.delay.sqrt())
             .unwrap_or(config.step_threshold.seconds())
     }
 
@@ -791,9 +820,322 @@ impl KalmanFilter {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
+mod dense_reference {
+    use super::*;
+    use crate::filters::matrix::{Matrix, Vector};
+
+    // This is the previous matrix implementation, retained verbatim as the
+    // executable reference for the specialized scalar algebra.
+    #[derive(Clone, Debug)]
+    struct InnerFilter {
+        state: Vector<3>,
+        uncertainty: Matrix<3, 3>,
+        filter_time: Time,
+    }
+
+    impl InnerFilter {
+        const MEASUREMENT_SYNC: Matrix<1, 3> = Matrix::new([[1.0, 0.0, 1.0]]);
+        const MEASUREMENT_DELAY: Matrix<1, 3> = Matrix::new([[1.0, 0.0, -1.0]]);
+        const MEASUREMENT_PEER_DELAY: Matrix<1, 3> = Matrix::new([[0.0, 0.0, 1.0]]);
+
+        fn new(initial_offset: f64, time: Time, config: &KalmanConfiguration) -> Self {
+            Self {
+                state: Vector::new_vector([initial_offset, 0.0, 0.0]),
+                uncertainty: Matrix::new([
+                    [sqr(config.step_threshold.seconds()), 0.0, 0.0],
+                    [0.0, sqr(config.initial_frequency_uncertainty), 0.0],
+                    [0.0, 0.0, sqr(config.step_threshold.seconds())],
+                ]),
+                filter_time: time,
+            }
+        }
+
+        fn progress_filtertime(&mut self, time: Time, wander: f64, config: &KalmanConfiguration) {
+            debug_assert!(time >= self.filter_time);
+            if time < self.filter_time {
+                return;
+            }
+
+            let delta_t = (time - self.filter_time).seconds();
+            let update = Matrix::new([[1.0, delta_t, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
+            let process_noise = Matrix::new([
+                [
+                    wander * delta_t * delta_t * delta_t / 3.,
+                    wander * delta_t * delta_t / 2.,
+                    0.,
+                ],
+                [wander * delta_t * delta_t / 2., wander * delta_t, 0.],
+                [
+                    0.,
+                    0.,
+                    config.delay_wander * delta_t * sqr(self.state.ventry(2)),
+                ],
+            ]);
+
+            self.state = update * self.state;
+            self.uncertainty = update * self.uncertainty * update.transpose() + process_noise;
+            self.filter_time = time;
+        }
+
+        fn absorb_sync_offset(&mut self, sync_offset: f64, variance: f64) {
+            let measurement_vec = Vector::new_vector([sync_offset]);
+            let measurement_noise = Matrix::new([[variance]]);
+            self.absorb_measurement(measurement_vec, Self::MEASUREMENT_SYNC, measurement_noise);
+        }
+
+        fn absorb_delay_offset(&mut self, delay_offset: f64, variance: f64) {
+            let measurement_vec = Vector::new_vector([delay_offset]);
+            let measurement_noise = Matrix::new([[variance]]);
+            self.absorb_measurement(measurement_vec, Self::MEASUREMENT_DELAY, measurement_noise);
+        }
+
+        fn absorb_peer_delay(&mut self, peer_delay: f64, variance: f64) {
+            let measurement_vec = Vector::new_vector([peer_delay]);
+            let measurement_noise = Matrix::new([[variance]]);
+            self.absorb_measurement(
+                measurement_vec,
+                Self::MEASUREMENT_PEER_DELAY,
+                measurement_noise,
+            )
+        }
+
+        fn absorb_measurement(
+            &mut self,
+            measurement_vec: Vector<1>,
+            measurement_transform: Matrix<1, 3>,
+            measurement_noise: Matrix<1, 1>,
+        ) {
+            let (prediction, uncertainty) = self.predict(measurement_transform);
+
+            let difference = measurement_vec - prediction;
+            let difference_covariance = uncertainty + measurement_noise;
+            let update_strength =
+                self.uncertainty * measurement_transform.transpose() * difference_covariance.inverse();
+            self.state = self.state + update_strength * difference;
+            self.uncertainty = ((Matrix::unit() - update_strength * measurement_transform)
+                * self.uncertainty)
+                .symmetrize();
+        }
+
+        fn absorb_frequency_steer(
+            &mut self,
+            steer: f64,
+            time: Time,
+            wander: f64,
+            config: &KalmanConfiguration,
+        ) {
+            self.progress_filtertime(time, wander, config);
+            self.state = self.state + Vector::new_vector([0., steer * 1e-6, 0.]);
+        }
+
+        fn absorb_offset_steer(&mut self, steer: f64) {
+            self.state = self.state + Vector::new_vector([steer, 0., 0.]);
+            self.filter_time += Duration::from_seconds(steer);
+        }
+
+        fn predict<const N: usize>(
+            &self,
+            measurement_transform: Matrix<N, 3>,
+        ) -> (Vector<N>, Matrix<N, N>) {
+            let prediction = measurement_transform * self.state;
+            let uncertainty =
+                measurement_transform * self.uncertainty * measurement_transform.transpose();
+            (prediction, uncertainty)
+        }
+
+        fn predict_sync_offset(&self) -> (f64, f64) {
+            let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_SYNC);
+            (prediction.entry(0, 0), uncertainty.entry(0, 0))
+        }
+
+        fn predict_delay_offset(&self) -> (f64, f64) {
+            let (prediction, uncertainty) = self.predict(Self::MEASUREMENT_DELAY);
+            (prediction.entry(0, 0), uncertainty.entry(0, 0))
+        }
+    }
+
+    struct TestRng(u64);
+
+    impl TestRng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+
+        fn unit(&mut self) -> f64 {
+            (self.next() >> 11) as f64 / (1_u64 << 53) as f64
+        }
+
+        fn signed(&mut self) -> f64 {
+            2.0 * self.unit() - 1.0
+        }
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        let scale = actual.abs().max(expected.abs()).max(1.0);
+        assert!(
+            (actual - expected).abs() <= 1e-12 * scale,
+            "actual {actual:e}, expected {expected:e}"
+        );
+    }
+
+    fn assert_equivalent(actual: &super::InnerFilter, expected: &InnerFilter) {
+        let actual_state = [
+            actual.state.offset,
+            actual.state.frequency,
+            actual.state.delay,
+        ];
+        let actual_covariance = [
+            [
+                actual.uncertainty.offset,
+                actual.uncertainty.offset_frequency,
+                actual.uncertainty.offset_delay,
+            ],
+            [
+                actual.uncertainty.offset_frequency,
+                actual.uncertainty.frequency,
+                actual.uncertainty.frequency_delay,
+            ],
+            [
+                actual.uncertainty.offset_delay,
+                actual.uncertainty.frequency_delay,
+                actual.uncertainty.delay,
+            ],
+        ];
+
+        for (i, (actual_state, actual_covariance)) in
+            actual_state.iter().zip(&actual_covariance).enumerate()
+        {
+            assert_close(*actual_state, expected.state.ventry(i));
+            for (j, actual_covariance) in actual_covariance.iter().enumerate() {
+                assert_close(*actual_covariance, expected.uncertainty.entry(i, j));
+            }
+        }
+        assert_eq!(actual.filter_time, expected.filter_time);
+    }
+
+    #[test]
+    fn scalar_algebra_matches_previous_matrix_implementation() {
+        let mut rng = TestRng(0x4d59_5df4_d0f3_3173);
+
+        for _ in 0..128 {
+            let state = [rng.signed(), rng.signed() * 1e-3, rng.signed()];
+            let factor: [[f64; 3]; 3] =
+                core::array::from_fn(|_| core::array::from_fn(|_| rng.signed()));
+            let covariance = core::array::from_fn::<_, 3, _>(|i| {
+                core::array::from_fn::<_, 3, _>(|j| {
+                    (0..3).map(|k| factor[i][k] * factor[j][k]).sum::<f64>()
+                        + if i == j { 0.1 } else { 0.0 }
+                })
+            });
+            let timebase = Time::from_nanos(0);
+            let mut actual = super::InnerFilter {
+                state: State {
+                    offset: state[0],
+                    frequency: state[1],
+                    delay: state[2],
+                },
+                uncertainty: Covariance {
+                    offset: covariance[0][0],
+                    offset_frequency: covariance[0][1],
+                    offset_delay: covariance[0][2],
+                    frequency: covariance[1][1],
+                    frequency_delay: covariance[1][2],
+                    delay: covariance[2][2],
+                },
+                filter_time: timebase,
+            };
+            let mut expected = InnerFilter {
+                state: Vector::new_vector(state),
+                uncertainty: Matrix::new(covariance),
+                filter_time: timebase,
+            };
+            let config = KalmanConfiguration {
+                delay_wander: rng.unit() * 1e-3,
+                ..Default::default()
+            };
+            let wander = rng.unit() * 1e-6;
+            let time = Time::from_nanos(1 + rng.next() % 10_000_000_000);
+
+            actual.progress_filtertime(time, wander, &config);
+            expected.progress_filtertime(time, wander, &config);
+            assert_equivalent(&actual, &expected);
+
+            for (actual_prediction, expected_prediction) in [
+                (actual.predict_sync_offset(), expected.predict_sync_offset()),
+                (
+                    actual.predict_delay_offset(),
+                    expected.predict_delay_offset(),
+                ),
+            ] {
+                assert_close(actual_prediction.0, expected_prediction.0);
+                assert_close(actual_prediction.1, expected_prediction.1);
+            }
+
+            let value = rng.signed();
+            let variance = 0.1 + rng.unit();
+            actual.absorb_sync_offset(value, variance);
+            expected.absorb_sync_offset(value, variance);
+            assert_equivalent(&actual, &expected);
+
+            let value = rng.signed();
+            let variance = 0.1 + rng.unit();
+            actual.absorb_delay_offset(value, variance);
+            expected.absorb_delay_offset(value, variance);
+            assert_equivalent(&actual, &expected);
+
+            let value = rng.signed();
+            let variance = 0.1 + rng.unit();
+            actual.absorb_peer_delay(value, variance);
+            expected.absorb_peer_delay(value, variance);
+            assert_equivalent(&actual, &expected);
+
+            let next_time = time + Duration::from_fixed_nanos(rng.unit() * 1e9);
+            let steer = rng.signed() * 100.0;
+            actual.absorb_frequency_steer(steer, next_time, wander, &config);
+            expected.absorb_frequency_steer(steer, next_time, wander, &config);
+            assert_equivalent(&actual, &expected);
+
+            let steer = rng.signed() * 1e-3;
+            actual.absorb_offset_steer(steer);
+            expected.absorb_offset_steer(steer);
+            assert_equivalent(&actual, &expected);
+        }
+
+        // Keep the constructor in the reference coverage as well.
+        let config = KalmanConfiguration::default();
+        let actual = super::InnerFilter::new(0.25, Time::from_nanos(42), &config);
+        let expected = InnerFilter::new(0.25, Time::from_nanos(42), &config);
+        assert_equivalent(&actual, &expected);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::Clock;
+
+    fn inner_filter(time: Time) -> InnerFilter {
+        InnerFilter {
+            state: State {
+                offset: 0.0,
+                frequency: 0.0,
+                delay: 0.0,
+            },
+            uncertainty: Covariance {
+                offset: 1e-17,
+                offset_frequency: 0.0,
+                offset_delay: 0.0,
+                frequency: 1e-16,
+                frequency_delay: 0.0,
+                delay: 1e-18,
+            },
+            filter_time: time,
+        }
+    }
 
     #[derive(Default)]
     struct TestClock {
@@ -832,11 +1174,7 @@ mod tests {
                 max_freq_offset: 10.0,
                 ..Default::default()
             },
-            running_filter: BaseFilter(Some(InnerFilter {
-                state: Vector::new_vector([0.0, 0.0, 0.0]),
-                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
-                filter_time: timebase,
-            })),
+            running_filter: BaseFilter(Some(inner_filter(timebase))),
             wander_filter: BaseFilter(None),
             wander_score: 0,
             wander: KalmanConfiguration::default().initial_wander,
@@ -858,11 +1196,7 @@ mod tests {
                 max_freq_offset: 10.0,
                 ..Default::default()
             },
-            running_filter: BaseFilter(Some(InnerFilter {
-                state: Vector::new_vector([0.0, 0.0, 0.0]),
-                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
-                filter_time: timebase,
-            })),
+            running_filter: BaseFilter(Some(inner_filter(timebase))),
             wander_filter: BaseFilter(None),
             wander_score: 0,
             wander: KalmanConfiguration::default().initial_wander,
@@ -884,11 +1218,7 @@ mod tests {
                 max_freq_offset: 10.0,
                 ..Default::default()
             },
-            running_filter: BaseFilter(Some(InnerFilter {
-                state: Vector::new_vector([0.0, 0.0, 0.0]),
-                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
-                filter_time: timebase,
-            })),
+            running_filter: BaseFilter(Some(inner_filter(timebase))),
             wander_filter: BaseFilter(None),
             wander_score: 0,
             wander: KalmanConfiguration::default().initial_wander,
@@ -906,11 +1236,7 @@ mod tests {
                 max_freq_offset: 10.0,
                 ..Default::default()
             },
-            running_filter: BaseFilter(Some(InnerFilter {
-                state: Vector::new_vector([0.0, 0.0, 0.0]),
-                uncertainty: Matrix::new([[1e-17, 0.0, 0.0], [0.0, 1e-16, 0.0], [0.0, 0.0, 1e-18]]),
-                filter_time: timebase,
-            })),
+            running_filter: BaseFilter(Some(inner_filter(timebase))),
             wander_filter: BaseFilter(None),
             wander_score: 0,
             wander: KalmanConfiguration::default().initial_wander,
