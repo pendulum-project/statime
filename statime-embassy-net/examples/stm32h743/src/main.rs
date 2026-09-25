@@ -5,7 +5,7 @@ use core::mem::MaybeUninit;
 
 use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_net::{Config as NetConfig, StackResources};
+use embassy_net::{Stack, StackStorage};
 use embassy_stm32::{
     bind_interrupts,
     eth::{Ethernet, GenericPhy, InterruptHandler, PacketQueue, PtpClockConfig, Sma},
@@ -15,7 +15,7 @@ use embassy_stm32::{
 };
 use static_cell::StaticCell;
 use statime::filters::{FixedWanderKalmanConfig, FixedWanderKalmanFilter};
-use statime_embassy_net::{Config as PtpConfig, EmbassyClock, PtpStorage, Runner as PtpRunner};
+use statime_embassy_net::{Config as PtpConfig, EmbassyClock, Runner as PtpRunner};
 
 use {defmt_rtt as _, panic_probe as _};
 
@@ -28,7 +28,6 @@ fn defmt_panic() -> ! {
 
 const ETH_TX_PACKETS: usize = 4;
 const ETH_RX_PACKETS: usize = 4;
-const STACK_SOCKETS: usize = 4;
 
 type Device = Ethernet<'static, ETH, GenericPhy<Sma<'static, ETH_SMA>>>;
 
@@ -39,8 +38,8 @@ bind_interrupts!(struct Irqs {
 #[unsafe(link_section = ".sram3.eth")]
 static mut PACKETS: MaybeUninit<PacketQueue<ETH_TX_PACKETS, ETH_RX_PACKETS>> =
     MaybeUninit::uninit();
-static PTP_STORAGE: StaticCell<PtpStorage> = StaticCell::new();
-static STACK_RESOURCES: StaticCell<StackResources<STACK_SOCKETS>> = StaticCell::new();
+static DEVICE: StaticCell<Device> = StaticCell::new();
+static STACK_STORAGE: StaticCell<StackStorage<'static>> = StaticCell::new();
 
 mod board {
     use embassy_stm32::{
@@ -88,8 +87,7 @@ mod board {
 async fn main(spawner: Spawner) -> ! {
     let p = embassy_stm32::init(board::stm32_config());
 
-    // Ethernet DMA buffers are placed in SRAM3 by this example linker
-    // script, so enable that RAM before initializing the packet queue.
+    // Enable SRAM3 before initializing the Ethernet descriptor rings.
     pac::RCC.ahb2enr().modify(|w| w.set_sram3en(true));
 
     // ETH wakes the network runner; TIM12 drives embassy-time deadlines.
@@ -118,7 +116,6 @@ async fn main(spawner: Spawner) -> ! {
     let mut device = Ethernet::new_with_phy(
         queue,
         p.ETH,
-        Irqs,
         p.PA1,
         p.PA7,
         p.PC4,
@@ -126,20 +123,17 @@ async fn main(spawner: Spawner) -> ! {
         p.PB12,
         p.PG14,
         p.PB11,
+        Irqs,
         board::MAC_ADDRESS,
         phy,
     );
     let ptp_clock = EmbassyClock::new(device.start_ptp(PtpClockConfig::default()));
-    let (stack, runner) = embassy_net::new(
-        device,
-        NetConfig::dhcpv4(Default::default()),
-        STACK_RESOURCES.init(StackResources::new()),
-        board::SEED,
-    );
+    let (stack, runner) = Stack::new(STACK_STORAGE.init(StackStorage::new()), board::SEED);
+    let iface = unwrap!(stack.add_iface_borrowed(DEVICE.init(device)));
+    unwrap!(iface.set_dhcpv4(Some(Default::default())));
     let ptp_runner = PtpRunner::<_, FixedWanderKalmanFilter>::new(
-        stack,
+        iface,
         ptp_clock,
-        PTP_STORAGE.init(PtpStorage::new()),
         PtpConfig::new(board::MAC_ADDRESS, board::SEED),
         FixedWanderKalmanConfig::default(),
     );
@@ -150,7 +144,7 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 #[embassy_executor::task]
-async fn net_task(mut runner: embassy_net::Runner<'static, Device>) -> ! {
+async fn net_task(mut runner: embassy_net::Runner<'static>) -> ! {
     runner.run().await
 }
 

@@ -30,7 +30,7 @@ embassy-net = { version = "0.9.1", default-features = false, features = [
 	"multicast",
 	"packetmeta-id",
 	"packetmeta-timestamp",
-	"proto-ipv4",
+	"ipv4",
 	"udp",
 ] }
 embassy-stm32 = { version = "0.6.0", default-features = false, features = [
@@ -49,20 +49,19 @@ panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 static_cell = "2.1.1"
 
 [patch.crates-io]
-embassy-embedded-hal = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-executor = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-futures = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-hal-internal = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-net = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-net-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-ptp-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-stm32 = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-sync = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-time = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-time-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-time-queue-utils = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-usb-driver = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
-embassy-usb-synopsys-otg = { git = "https://github.com/quartiq/embassy.git", branch = "pr/network-clock" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-ptp-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-usb-synopsys-otg = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
 
 [profile.release]
 codegen-units = 1

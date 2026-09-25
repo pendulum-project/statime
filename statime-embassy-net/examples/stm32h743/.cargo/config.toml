@@ -12,3 +12,6 @@ rustflags = [
 
 [env]
 DEFMT_LOG = "info"
+# Four RX and four TX descriptors, eight queued PTP receives, four spare buffers.
+XARXA_PACKET_BUF_COUNT = "20"
+XARXA_UDP_SOCKET_COUNT = "2"

@@ -1,7 +1,8 @@
 MEMORY
 {
   FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 2048K
-  RAM   (rwx) : ORIGIN = 0x20000000, LENGTH = 128K
+  /* Includes Xarxa's packet pool: Ethernet DMA cannot access DTCM. */
+  RAM   (rwx) : ORIGIN = 0x24000000, LENGTH = 512K
   SRAM3 (rwx) : ORIGIN = 0x30040000, LENGTH = 32K
 }
 

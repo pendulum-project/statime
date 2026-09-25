@@ -5,17 +5,14 @@
 mod embassy_clock;
 #[cfg(feature = "monitor")]
 mod monitor;
-mod storage;
 
-use core::num::NonZero;
-use embassy_futures::select::{Either3, select3};
 use embassy_net::{
-    IpAddress, IpEndpoint, Ipv4Address, MulticastError, Stack, TryError,
     driver::{Timestamp, TxTimestamp},
+    iface::{Iface, MulticastError},
     udp,
-    udp::{UdpMetadata, UdpSocket},
+    wire::Ipv4Addr,
 };
-use embassy_time::{Duration as EmbassyDuration, Instant, with_deadline};
+use embassy_time::{Duration as EmbassyDuration, Instant};
 use rand_core::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use statime::{
@@ -26,7 +23,7 @@ use statime::{
     },
     filters::{Filter, FixedWanderKalmanFilter},
     observability::port::PortState,
-    port::{NoForwardedTLVs, PortAction, PortActionIterator, TimestampContext},
+    port::{NoForwardedTLVs, PortActionIterator},
     time::{Duration, Interval, Time},
 };
 
@@ -59,27 +56,26 @@ macro_rules! warn {
 pub use embassy_clock::{EmbassyClock, EmbassyClockError};
 #[cfg(feature = "monitor")]
 pub use monitor::{ClockState, PtpMonitor};
-pub use storage::PtpStorage;
 
-const EVENT_PORT: u16 = 319;
-const GENERAL_PORT: u16 = 320;
-const PRIMARY_MULTICAST: Ipv4Address = Ipv4Address::new(224, 0, 1, 129);
-const LINK_LOCAL_MULTICAST: Ipv4Address = Ipv4Address::new(224, 0, 0, 107);
+mod transport;
+use transport::{Incoming, PacketIdGenerator, PortIo, StatimeTimer};
+
 const TX_TIMESTAMP_TIMEOUT: EmbassyDuration = EmbassyDuration::from_millis(100);
-const TX_PENDING: usize = 4;
-const MSG_DELAY_REQ: u8 = 0x1;
-const MSG_PDELAY_REQ: u8 = 0x2;
-const MSG_PDELAY_RESP: u8 = 0x3;
 
 /// Error encountered while starting a [`Runner`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[non_exhaustive]
 pub enum RunError {
+    /// The stack has no free UDP socket slot.
+    Socket {
+        /// PTP port requiring a socket.
+        port: u16,
+    },
     /// The network stack could not join a required PTP multicast group.
     Multicast {
         /// Multicast address the runner tried to join.
-        address: Ipv4Address,
+        address: Ipv4Addr,
         /// Error reported by the network stack.
         source: MulticastError,
     },
@@ -95,6 +91,9 @@ pub enum RunError {
 impl core::fmt::Display for RunError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::Socket { port } => {
+                write!(formatter, "no UDP socket available for PTP port {port}")
+            }
             Self::Multicast { address, source } => {
                 write!(formatter, "joining PTP multicast group {address}: {source}")
             }
@@ -109,7 +108,7 @@ impl core::error::Error for RunError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Multicast { source, .. } => Some(source),
-            Self::Bind { .. } => None,
+            _ => None,
         }
     }
 }
@@ -147,6 +146,7 @@ pub struct Config {
     /// Time properties advertised by this clock when it becomes master.
     pub time_properties: TimePropertiesDS,
     /// Maximum time to wait for a hardware transmit timestamp.
+    /// Also bounds waiting for send capacity; protocol deadlines may shorten it.
     pub tx_timestamp_timeout: EmbassyDuration,
 }
 
@@ -193,11 +193,11 @@ impl Config {
 /// The clock must control the same hardware time domain used for packet
 /// timestamps by the underlying network driver.
 pub struct Runner<'a, C, F: Filter = FixedWanderKalmanFilter> {
-    stack: Stack<'a>,
+    iface: Iface<'a>,
     clock: C,
-    storage: &'a mut PtpStorage,
     config: Config,
     filter_config: F::Config,
+    packet_id: PacketIdGenerator,
     #[cfg(feature = "monitor")]
     monitor: Option<&'a PtpMonitor>,
 }
@@ -243,21 +243,15 @@ impl<C: Clock> Clock for ClockRef<'_, C> {
 }
 
 impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
-    /// Bind the PTP service to an Embassy network stack, PTP clock, socket
-    /// storage, protocol configuration, and filter configuration.
-    pub fn new(
-        stack: Stack<'a>,
-        clock: C,
-        storage: &'a mut PtpStorage,
-        config: Config,
-        filter_config: F::Config,
-    ) -> Self {
+    /// Construct the service for an interface, its PTP clock, and protocol/filter configuration.
+    /// Socket binding and multicast setup happen in [`run`](Self::run).
+    pub fn new(iface: Iface<'a>, clock: C, config: Config, filter_config: F::Config) -> Self {
         Self {
-            stack,
+            iface,
             clock,
-            storage,
             config,
             filter_config,
+            packet_id: PacketIdGenerator::new(),
             #[cfg(feature = "monitor")]
             monitor: None,
         }
@@ -272,52 +266,28 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
 
     /// Run the PTP service until cancelled, or return an initialization error.
     ///
+    /// Run the Embassy network runner concurrently. This service must be the
+    /// stack's only TX timestamp requester and consumer. PTP sockets remain
+    /// bound to the selected interface and its clock.
+    ///
     /// Transient link or IP-configuration loss does not return an error. The
     /// runner retains its sockets and protocol state and resumes when the
     /// network stack becomes usable again.
+    /// Reuse this runner after cancellation to preserve packet IDs. Replacing it
+    /// requires that no TX timestamps from the old runner can arrive.
     pub async fn run(&mut self) -> Result<(), RunError> {
-        let stack = self.stack;
+        let iface = self.iface;
         let clock = ClockRef {
             clock: &mut self.clock,
             #[cfg(feature = "monitor")]
             monitor: self.monitor,
         };
-        let storage = &mut *self.storage;
         let config = self.config;
         let filter_config = self.filter_config.clone();
 
         info!("ptp: waiting for network configuration");
-        stack.wait_config_up().await;
-        stack
-            .join_multicast_group(PRIMARY_MULTICAST)
-            .map_err(|source| RunError::Multicast {
-                address: PRIMARY_MULTICAST,
-                source,
-            })?;
-        info!("ptp: joined primary multicast group");
-        stack
-            .join_multicast_group(LINK_LOCAL_MULTICAST)
-            .map_err(|source| RunError::Multicast {
-                address: LINK_LOCAL_MULTICAST,
-                source,
-            })?;
-        info!("ptp: joined link-local multicast group");
-
-        let event_socket = UdpSocket::new(
-            stack,
-            &mut storage.event.rx_meta,
-            &mut storage.event.rx_buffer,
-            &mut storage.event.tx_meta,
-            &mut storage.event.tx_buffer,
-        );
-        let general_socket = UdpSocket::new(
-            stack,
-            &mut storage.general.rx_meta,
-            &mut storage.general.rx_buffer,
-            &mut storage.general.tx_meta,
-            &mut storage.general.tx_buffer,
-        );
-        let mut io = PortIo::new(event_socket, general_socket, config.tx_timestamp_timeout)?;
+        iface.wait_config_v4_up().await;
+        let mut io = PortIo::new(iface, config.tx_timestamp_timeout)?;
 
         let clock_identity = clock_identity_from_mac(config.mac_address);
         info!(
@@ -363,6 +333,8 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
 
         io.handle(
             actions,
+            bmca,
+            &mut self.packet_id,
             #[cfg(feature = "monitor")]
             self.monitor,
         )
@@ -393,6 +365,8 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
                 }
                 io.handle(
                     actions,
+                    bmca,
+                    &mut self.packet_id,
                     #[cfg(feature = "monitor")]
                     self.monitor,
                 )
@@ -400,6 +374,9 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
                 continue;
             }
 
+            io.pending_tx.expire();
+            // Keep the owned packet alive only through this action batch.
+            let mut incoming = Incoming::None;
             let actions = if let Some(timestamp) = tx_timestamp.take() {
                 match io.pending_tx.take(timestamp.id) {
                     Some(context) => {
@@ -423,319 +400,28 @@ impl<'a, C: Clock, F: Filter> Runner<'a, C, F> {
                 }
             } else {
                 let receive_delay_requests = port.port_ds().port_state == PortState::Master;
-                match io.receive(&mut storage.packet, receive_delay_requests) {
+                incoming = io.receive(receive_delay_requests);
+                match &incoming {
                     Incoming::Event(packet, timestamp) => {
-                        port.handle_event_receive(packet, time_from(timestamp))
+                        port.handle_event_receive(packet.payload(), time_from(*timestamp))
                     }
-                    Incoming::General(packet) => port.handle_general_receive(packet),
+                    Incoming::General(packet) => port.handle_general_receive(packet.payload()),
                     Incoming::None => PortActionIterator::empty(),
                 }
             };
-            io.pending_tx.expire();
-
             io.handle(
                 actions,
+                bmca,
+                &mut self.packet_id,
                 #[cfg(feature = "monitor")]
                 self.monitor,
             )
             .await;
 
+            drop(incoming);
             let next = io.next_deadline(bmca);
-            tx_timestamp = io.wait(stack, next).await;
+            tx_timestamp = io.wait(next).await;
         }
-    }
-}
-
-struct PortIo<'a> {
-    event: UdpSocket<'a>,
-    general: UdpSocket<'a>,
-    timers: Timers,
-    packet_id: PacketIdGenerator,
-    pending_tx: PendingTxQueue,
-}
-
-impl<'a> PortIo<'a> {
-    fn new(
-        mut event: UdpSocket<'a>,
-        mut general: UdpSocket<'a>,
-        tx_timestamp_timeout: EmbassyDuration,
-    ) -> Result<Self, RunError> {
-        event.bind(EVENT_PORT).map_err(|source| RunError::Bind {
-            port: EVENT_PORT,
-            source,
-        })?;
-        general
-            .bind(GENERAL_PORT)
-            .map_err(|source| RunError::Bind {
-                port: GENERAL_PORT,
-                source,
-            })?;
-        Ok(Self {
-            event,
-            general,
-            timers: Timers::default(),
-            packet_id: PacketIdGenerator::new(),
-            pending_tx: PendingTxQueue::new(tx_timestamp_timeout),
-        })
-    }
-
-    async fn handle(
-        &mut self,
-        actions: PortActionIterator<'_>,
-        #[cfg(feature = "monitor")] monitor: Option<&PtpMonitor>,
-    ) {
-        for action in actions {
-            match action {
-                PortAction::SendEvent {
-                    context,
-                    data,
-                    link_local,
-                } => {
-                    let metadata = UdpMetadata {
-                        endpoint: multicast_endpoint(EVENT_PORT, link_local),
-                        meta: self.packet_id.next(),
-                        local_address: None,
-                    };
-                    match self.event.send_to(data, metadata).await {
-                        Ok(()) => self.pending_tx.push(context, metadata.meta.id),
-                        Err(error) => warn!("ptp: event send failed: {}", &error),
-                    }
-                }
-                PortAction::SendGeneral { data, link_local } => {
-                    let metadata = UdpMetadata {
-                        endpoint: multicast_endpoint(GENERAL_PORT, link_local),
-                        meta: udp::PacketMeta::default(),
-                        local_address: None,
-                    };
-                    if let Err(error) = self.general.send_to(data, metadata).await {
-                        warn!("ptp: general send failed: {}", error);
-                    }
-                }
-                PortAction::ResetAnnounceTimer { duration } => {
-                    self.timers.reset(StatimeTimer::Announce, duration)
-                }
-                PortAction::ResetSyncTimer { duration } => {
-                    self.timers.reset(StatimeTimer::Sync, duration)
-                }
-                PortAction::ResetDelayRequestTimer { duration } => {
-                    self.timers.reset(StatimeTimer::DelayRequest, duration)
-                }
-                PortAction::ResetAnnounceReceiptTimer { duration } => {
-                    self.timers.reset(StatimeTimer::AnnounceReceipt, duration)
-                }
-                PortAction::ResetFilterUpdateTimer { duration } => {
-                    #[cfg(feature = "monitor")]
-                    if let Some(monitor) = monitor {
-                        monitor.tracking();
-                    }
-                    self.timers.reset(StatimeTimer::FilterUpdate, duration)
-                }
-                PortAction::ForwardTLV { .. } => {}
-            }
-        }
-    }
-
-    fn receive<'b>(&self, packet: &'b mut [u8], receive_delay_requests: bool) -> Incoming<'b> {
-        match self.event.try_recv_from(packet) {
-            Ok((n, meta)) => {
-                let packet = &packet[..n];
-                return rx_event_timestamp(packet, meta.meta, receive_delay_requests)
-                    .map_or(Incoming::None, |timestamp| {
-                        Incoming::Event(packet, timestamp)
-                    });
-            }
-            Err(TryError::Other(udp::RecvError::Truncated)) => {
-                warn!("ptp: truncated event packet");
-                return Incoming::None;
-            }
-            Err(TryError::WouldBlock) => {}
-        }
-
-        match self.general.try_recv_from(packet) {
-            Ok((n, _)) if ptp_message_type(&packet[..n]).is_some() => {
-                Incoming::General(&packet[..n])
-            }
-            Ok(_) | Err(TryError::WouldBlock) => Incoming::None,
-            Err(TryError::Other(udp::RecvError::Truncated)) => {
-                warn!("ptp: truncated general packet");
-                Incoming::None
-            }
-        }
-    }
-
-    fn next_deadline(&self, deadline: Instant) -> Instant {
-        [
-            self.timers.next_deadline(),
-            self.pending_tx.next_timeout_deadline(),
-        ]
-        .into_iter()
-        .flatten()
-        .fold(deadline, Ord::min)
-    }
-
-    async fn wait(&self, stack: Stack<'_>, deadline: Instant) -> Option<TxTimestamp> {
-        match with_deadline(
-            deadline,
-            select3(
-                stack.poll_tx_timestamps(),
-                self.event.wait_recv_ready(),
-                self.general.wait_recv_ready(),
-            ),
-        )
-        .await
-        {
-            Ok(Either3::First(timestamp)) => Some(timestamp),
-            _ => None,
-        }
-    }
-}
-
-enum Incoming<'a> {
-    Event(&'a [u8], Timestamp),
-    General(&'a [u8]),
-    None,
-}
-
-fn rx_event_timestamp(
-    packet: &[u8],
-    meta: udp::PacketMeta,
-    receive_delay_requests: bool,
-) -> Option<Timestamp> {
-    let message_type = ptp_message_type(packet)?;
-    if matches!(message_type, MSG_PDELAY_REQ | MSG_PDELAY_RESP)
-        || message_type == MSG_DELAY_REQ && !receive_delay_requests
-    {
-        return None;
-    }
-    let timestamp = meta.timestamp;
-    if timestamp.is_none() {
-        warn!(
-            "ptp: missing rx timestamp packet_id={=u32} message_type={=u8}",
-            meta.id, message_type
-        );
-    }
-    timestamp
-}
-
-fn ptp_message_type(packet: &[u8]) -> Option<u8> {
-    packet.get(..34)?;
-    Some(packet[0] & 0x0f)
-}
-
-#[derive(Default)]
-struct Timers([Option<Instant>; StatimeTimer::ALL.len()]);
-
-impl Timers {
-    fn reset(&mut self, timer: StatimeTimer, duration: core::time::Duration) {
-        self.0[timer as usize] = Some(deadline_from_now(duration));
-    }
-
-    fn take_due(&mut self) -> Option<StatimeTimer> {
-        let now = Instant::now();
-        StatimeTimer::ALL.into_iter().find(|&timer| {
-            self.0[timer as usize]
-                .take_if(|deadline| now >= *deadline)
-                .is_some()
-        })
-    }
-
-    fn next_deadline(&self) -> Option<Instant> {
-        self.0.into_iter().flatten().min()
-    }
-}
-
-#[repr(usize)]
-#[derive(Clone, Copy)]
-enum StatimeTimer {
-    Announce,
-    Sync,
-    DelayRequest,
-    AnnounceReceipt,
-    FilterUpdate,
-}
-
-impl StatimeTimer {
-    const ALL: [Self; 5] = [
-        Self::Announce,
-        Self::Sync,
-        Self::DelayRequest,
-        Self::AnnounceReceipt,
-        Self::FilterUpdate,
-    ];
-}
-
-struct PendingTx {
-    context: TimestampContext,
-    packet_id: u32,
-    started: Instant,
-}
-
-struct PendingTxQueue {
-    slots: [Option<PendingTx>; TX_PENDING],
-    timeout: EmbassyDuration,
-}
-
-impl PendingTxQueue {
-    fn new(timeout: EmbassyDuration) -> Self {
-        Self {
-            slots: Default::default(),
-            timeout,
-        }
-    }
-
-    fn push(&mut self, context: TimestampContext, packet_id: u32) {
-        if let Some(slot) = self.slots.iter_mut().find(|slot| slot.is_none()) {
-            *slot = Some(PendingTx {
-                context,
-                packet_id,
-                started: Instant::now(),
-            });
-        } else {
-            warn!("ptp: tx timestamp queue full packet_id={=u32}", packet_id);
-        }
-    }
-
-    fn take(&mut self, packet_id: u32) -> Option<TimestampContext> {
-        self.slots
-            .iter_mut()
-            .find_map(|slot| slot.take_if(|pending| pending.packet_id == packet_id))
-            .map(|pending| pending.context)
-    }
-
-    fn expire(&mut self) {
-        for slot in self.slots.iter_mut() {
-            if let Some(pending) = slot.take_if(|pending| pending.started.elapsed() >= self.timeout)
-            {
-                warn!(
-                    "ptp: missing tx timestamp packet_id={=u32}",
-                    pending.packet_id
-                );
-            }
-        }
-    }
-
-    fn next_timeout_deadline(&self) -> Option<Instant> {
-        self.slots
-            .iter()
-            .filter_map(|slot| slot.as_ref().map(|pending| pending.started + self.timeout))
-            .min()
-    }
-}
-
-struct PacketIdGenerator(NonZero<u32>);
-
-impl PacketIdGenerator {
-    const fn new() -> Self {
-        Self(NonZero::<u32>::MIN)
-    }
-
-    fn next(&mut self) -> udp::PacketMeta {
-        let id = self.0;
-        self.0 = self.0.checked_add(1).unwrap_or(NonZero::<u32>::MIN);
-        let mut meta = udp::PacketMeta::default();
-        meta.id = id.get();
-        meta.request_timestamp = true;
-        meta
     }
 }
 
@@ -753,15 +439,6 @@ pub(crate) fn time_from(timestamp: Timestamp) -> Time {
 pub(crate) fn time_from_parts(seconds: u32, quarter_nanos: u32) -> Time {
     let nanos = u64::from(seconds) * 1_000_000_000 + u64::from(quarter_nanos >> 2);
     Time::from_nanos_subnanos(nanos, (quarter_nanos & 3) << 30)
-}
-
-fn multicast_endpoint(port: u16, link_local: bool) -> IpEndpoint {
-    let address = if link_local {
-        LINK_LOCAL_MULTICAST
-    } else {
-        PRIMARY_MULTICAST
-    };
-    IpEndpoint::new(IpAddress::Ipv4(address), port)
 }
 
 fn deadline_from_now(duration: core::time::Duration) -> Instant {
@@ -787,7 +464,7 @@ fn state_name(state: PortState) -> &'static str {
 mod tests {
     use super::*;
 
-    fn init_logging() {
+    pub(crate) fn init_logging() {
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(defmt2log::init_from_current_exe);
     }
@@ -803,33 +480,6 @@ mod tests {
                 }),
                 Time::from_nanos_subnanos(2_000_000_010, subnanos),
             );
-        }
-    }
-
-    #[test]
-    fn accepts_delay_requests_only_for_a_master() {
-        init_logging();
-        let mut packet = [0; 34];
-        packet[0] = MSG_DELAY_REQ;
-        let timestamp = Timestamp::from_seconds_and_nanos(2, 10);
-        let mut meta = udp::PacketMeta::default();
-        meta.timestamp = Some(timestamp);
-
-        assert_eq!(rx_event_timestamp(&packet, meta, false), None);
-        assert_eq!(rx_event_timestamp(&packet, meta, true), Some(timestamp));
-    }
-
-    #[test]
-    fn ignores_peer_delay_messages() {
-        init_logging();
-        let timestamp = Timestamp::from_seconds_and_nanos(2, 10);
-        let mut meta = udp::PacketMeta::default();
-        meta.timestamp = Some(timestamp);
-
-        for message_type in [MSG_PDELAY_REQ, MSG_PDELAY_RESP] {
-            let mut packet = [0; 34];
-            packet[0] = message_type;
-            assert_eq!(rx_event_timestamp(&packet, meta, true), None);
         }
     }
 }

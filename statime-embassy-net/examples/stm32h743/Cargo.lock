@@ -280,13 +280,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-crypto"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
+dependencies = [
+ "defmt",
+ "unitrait",
+]
+
+[[package]]
 name = "embassy-embedded-hal"
 version = "0.6.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "defmt",
  "embassy-futures",
- "embassy-hal-internal",
  "embassy-sync",
  "embassy-time",
  "embedded-hal 0.2.7",
@@ -300,7 +308,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor"
 version = "0.10.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "cordyceps",
  "cortex-m",
@@ -315,7 +323,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor-macros"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -326,7 +334,7 @@ dependencies = [
 [[package]]
 name = "embassy-executor-timer-queue"
 version = "0.1.1"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "unitrait",
 ]
@@ -334,12 +342,12 @@ dependencies = [
 [[package]]
 name = "embassy-futures"
 version = "0.1.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 
 [[package]]
 name = "embassy-hal-internal"
 version = "0.5.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -350,33 +358,23 @@ dependencies = [
 [[package]]
 name = "embassy-net"
 version = "0.9.1"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "defmt",
  "document-features",
  "embassy-futures",
- "embassy-net-driver",
  "embassy-sync",
  "embassy-time",
  "embedded-io-async 0.7.0",
- "embedded-nal-async",
  "heapless",
- "managed",
  "xarxa",
-]
-
-[[package]]
-name = "embassy-net-driver"
-version = "0.2.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
-dependencies = [
- "defmt",
+ "xarxa-driver",
 ]
 
 [[package]]
 name = "embassy-ptp-driver"
 version = "0.1.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "defmt",
 ]
@@ -384,7 +382,7 @@ dependencies = [
 [[package]]
 name = "embassy-stm32"
 version = "0.6.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "aligned",
  "bit_field",
@@ -397,10 +395,10 @@ dependencies = [
  "defmt",
  "document-features",
  "dsp-fixedpoint",
+ "embassy-crypto",
  "embassy-embedded-hal",
  "embassy-futures",
  "embassy-hal-internal",
- "embassy-net-driver",
  "embassy-ptp-driver",
  "embassy-sync",
  "embassy-time",
@@ -435,12 +433,13 @@ dependencies = [
  "stm32-metapac",
  "trait-set",
  "vcell",
+ "xarxa-driver",
 ]
 
 [[package]]
 name = "embassy-sync"
 version = "0.8.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -454,7 +453,7 @@ dependencies = [
 [[package]]
 name = "embassy-time"
 version = "0.5.1"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "cfg-if",
  "critical-section",
@@ -471,7 +470,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-driver"
 version = "0.2.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "document-features",
 ]
@@ -479,7 +478,7 @@ dependencies = [
 [[package]]
 name = "embassy-time-queue-utils"
 version = "0.3.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "embassy-executor-timer-queue",
  "heapless",
@@ -488,7 +487,7 @@ dependencies = [
 [[package]]
 name = "embassy-usb-driver"
 version = "0.2.2"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "defmt",
  "embedded-io-async 0.6.1",
@@ -498,7 +497,7 @@ dependencies = [
 [[package]]
 name = "embassy-usb-synopsys-otg"
 version = "0.4.0"
-source = "git+https://github.com/quartiq/embassy.git?branch=pr%2Fnetwork-clock#2773ab550a08e98ec39953c66e00a10bc9268dcd"
+source = "git+https://github.com/embassy-rs/embassy?rev=8ba7a9c1f110f5b1834630ac2b6cfab436e33022#8ba7a9c1f110f5b1834630ac2b6cfab436e33022"
 dependencies = [
  "defmt",
  "document-features",
@@ -583,25 +582,6 @@ checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
 dependencies = [
  "defmt",
  "embedded-io 0.7.1",
-]
-
-[[package]]
-name = "embedded-nal"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c56a28be191a992f28f178ec338a0bf02f63d7803244add736d026a471e6ed77"
-dependencies = [
- "nb 1.1.0",
-]
-
-[[package]]
-name = "embedded-nal-async"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5a1bd585135d302f8f6d7de329310938093da6271b37a6c94b8798795c0c6d"
-dependencies = [
- "embedded-io-async 0.7.0",
- "embedded-nal",
 ]
 
 [[package]]
@@ -781,12 +761,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
 ]
-
-[[package]]
-name = "managed"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
 
 [[package]]
 name = "matchers"
@@ -1114,7 +1088,7 @@ dependencies = [
 [[package]]
 name = "stm32-metapac"
 version = "21.0.0"
-source = "git+https://github.com/embassy-rs/stm32-data-generated?tag=stm32-data-7a8bb7113f8548e09dca4ed214af3acb7925aa31#dd153dd8afdd2029cac5733d3cb5c819df2a8836"
+source = "git+https://github.com/embassy-rs/stm32-data-generated?tag=stm32-data-3b1e9bcf7cd6a04e2ccb74182b22ded50d264723#a19c9d360feee606167002e5047455c23ec5a8f8"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1285,9 +1259,21 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
 name = "unitrait"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66b59b4e118746027256db08772826e9e0765e93b0bf15d2714a0ac0f940fbe"
+version = "2.0.0"
+source = "git+https://github.com/embassy-rs/unitrait?rev=bb96601b3d293fa27d1ca2891f6ea148e534e433#bb96601b3d293fa27d1ca2891f6ea148e534e433"
+dependencies = [
+ "unitrait-macros",
+]
+
+[[package]]
+name = "unitrait-macros"
+version = "2.0.0"
+source = "git+https://github.com/embassy-rs/unitrait?rev=bb96601b3d293fa27d1ca2891f6ea148e534e433#bb96601b3d293fa27d1ca2891f6ea148e534e433"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "valuable"
@@ -1342,24 +1328,25 @@ dependencies = [
 
 [[package]]
 name = "xarxa"
-version = "0.13.1"
-source = "git+https://github.com/embassy-rs/xarxa?rev=1f332ac32cc33d86aefc8e1c1a9749b93234a6de#1f332ac32cc33d86aefc8e1c1a9749b93234a6de"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/xarxa?rev=7dd74474e337a7175c3ec48dabb0504a32e255dc#7dd74474e337a7175c3ec48dabb0504a32e255dc"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.13.1",
  "byteorder",
- "cfg-if",
  "defmt",
+ "document-features",
  "heapless",
- "managed",
  "xarxa-driver",
 ]
 
 [[package]]
 name = "xarxa-driver"
 version = "0.1.0"
-source = "git+https://github.com/embassy-rs/xarxa?rev=1f332ac32cc33d86aefc8e1c1a9749b93234a6de#1f332ac32cc33d86aefc8e1c1a9749b93234a6de"
+source = "git+https://github.com/embassy-rs/xarxa?rev=7dd74474e337a7175c3ec48dabb0504a32e255dc#7dd74474e337a7175c3ec48dabb0504a32e255dc"
 dependencies = [
+ "critical-section",
  "defmt",
+ "document-features",
 ]
 
 [[package]]

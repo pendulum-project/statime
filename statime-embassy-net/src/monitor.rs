@@ -1,15 +1,17 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 
-/// Quality of the PHC's relation to its selected PTP master.
+/// Protocol/filter activity observed by the runner on the PTP timescale.
+///
+/// These indicators do not establish clock accuracy or successful discipline.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ClockState {
-    /// No successful servo update has established the clock relation yet.
+    /// No tracking indication, no PTP timescale, or the clock has stepped.
     Unavailable,
-    /// The servo is receiving measurements and disciplining the PHC.
+    /// The filter scheduled an update timer while using the PTP timescale.
     Tracking,
-    /// Measurements stopped; the PHC retains its last applied rate.
+    /// The update timer expired or the port left slave state after tracking.
     Holdover,
 }
 
@@ -29,7 +31,7 @@ impl PtpMonitor {
         }
     }
 
-    /// Read the current TAI clock-relation state.
+    /// Read the current activity indication, unavailable outside the PTP timescale.
     pub fn state(&self) -> ClockState {
         let state = self.state.load(Ordering::Relaxed);
         if state & Self::PTP_TIMESCALE == 0 {

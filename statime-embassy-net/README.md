@@ -3,36 +3,29 @@
 PTP ordinary-clock runner for `statime` on timestamp-capable `embassy-net`
 Ethernet drivers.
 
-This crate connects:
+Construct `Runner::new(iface, clock, config, filter_config)` for an IPv4
+Ethernet interface and run it alongside the Embassy network runner. It must
+be the stack's only TX timestamp requester and consumer. PTP sockets remain
+bound to the selected interface and its clock. Reserve two UDP sockets for
+PTP ports 319 and 320.
 
-- `statime` for the PTP protocol and servo,
-- `embassy-net` for UDP multicast transport,
-- a `statime::Clock` implementation controlling the same hardware clock used
-  for packet timestamps.
+The clock must control the hardware time domain used for packet timestamps.
+`EmbassyClock` adapts an initialized `embassy_ptp_driver::Clock` to Statime's
+clock interface. Clock configuration and network interface setup belong to
+the application.
 
-The network driver must provide packet timestamps through `embassy-net` packet
-metadata and asynchronous transmit timestamp polling. `EmbassyClock` adapts
-any `embassy_ptp_driver::Clock` to Statime's clock interface. The example
-uses Embassy STM32; applications using it must select their concrete
-`embassy-stm32` chip feature.
+The runner supports single-port UDP/IPv4 with E2E delay measurement and is
+slave-only by default. See `Config` and `Runner::run` for configuration and
+lifecycle behavior.
 
-The runner is currently a single-port UDP/IPv4 ordinary clock using E2E delay
-measurement. It is slave-only by default. To keep static packet storage small,
-it accepts PTP datagrams up to 256 bytes; larger, TLV-heavy messages are
-discarded as truncated.
-
-Runner startup reports multicast-membership and socket-binding errors. Once
-started, transient link or IP-configuration loss keeps the clock in holdover;
-the existing sockets and protocol state resume when connectivity returns.
-
-The default servo is Statime's `FixedWanderKalmanFilter`, intended for embedded
-systems whose oscillator wander is characterized or conservatively bounded.
-
-The default feature set has no logging backend. Enable `defmt` for diagnostics
-and `monitor` to expose lock-free tracking and holdover state. Enabling
-`monitor` does not change `Runner::new`; attach a monitor with
-`Runner::with_monitor` where needed.
+Enable `defmt` for diagnostics or `monitor` with `Runner::with_monitor` for
+protocol/filter activity indicators. These indicators do not establish clock
+accuracy or lock.
 
 See the [`examples/stm32h743`](examples/stm32h743) package for a complete
-STM32H743 Embassy application. Its target, linker, probe, and board dependencies
-are kept outside the reusable library package.
+STM32H743 Embassy application.
+
+The Cargo patches pin an upstream Embassy main revision that includes the TX
+timestamp queue. Embassy pins the matching Xarxa revision. For STM32, enable
+`embassy-stm32/ptp`; this crate enables the required Embassy network timestamp
+features.
