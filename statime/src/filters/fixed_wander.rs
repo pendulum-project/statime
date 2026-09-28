@@ -23,6 +23,19 @@ use crate::{
 
 const ERROR_SAMPLES: usize = 32;
 
+// Match f64::clamp without pulling float formatting into embedded panic paths.
+#[allow(clippy::manual_clamp)]
+fn clamp(mut value: f64, min: f64, max: f64) -> f64 {
+    assert!(min <= max, "invalid clamp bounds");
+    if value < min {
+        value = min;
+    }
+    if value > max {
+        value = max;
+    }
+    value
+}
+
 fn sqr(value: f64) -> f64 {
     value * value
 }
@@ -296,8 +309,11 @@ impl FixedWanderKalmanFilter {
             return;
         };
         let requested = target - estimate.frequency() * 1e6;
-        let next =
-            (current + requested).clamp(-self.config.max_frequency, self.config.max_frequency);
+        let next = clamp(
+            current + requested,
+            -self.config.max_frequency,
+            self.config.max_frequency,
+        );
         let applied = next - current;
         if let Ok(time) = clock.set_frequency(next) {
             self.frequency = Some(next);
@@ -316,8 +332,11 @@ impl FixedWanderKalmanFilter {
         };
         let offset = estimate.offset();
         if offset.abs() < self.config.step_threshold.seconds() {
-            let target = (-offset * 1e6 / self.config.steer_time.seconds())
-                .clamp(-self.config.max_steer, self.config.max_steer);
+            let target = clamp(
+                -offset * 1e6 / self.config.steer_time.seconds(),
+                -self.config.max_steer,
+                self.config.max_steer,
+            );
             self.change_frequency(target, clock);
             FilterUpdate {
                 next_update: Some(core::time::Duration::from_secs_f64(
@@ -397,6 +416,52 @@ mod tests {
 
     fn assert_close(actual: f64, expected: f64) {
         assert!((actual - expected).abs() < 1e-12 * expected.abs().max(1.0));
+    }
+
+    #[test]
+    fn clamp_matches_float_contract() {
+        for (min, max) in [
+            (-200.0, 200.0),
+            (0.0, 0.0),
+            (-0.0, 0.0),
+            (0.0, -0.0),
+            (f64::NEG_INFINITY, f64::INFINITY),
+        ] {
+            for value in [
+                f64::NEG_INFINITY,
+                -400.0,
+                -200.0,
+                -0.0,
+                0.0,
+                200.0,
+                400.0,
+                f64::INFINITY,
+                f64::from_bits(0x7ff8_0000_0000_0042),
+            ] {
+                assert_eq!(
+                    clamp(value, min, max).to_bits(),
+                    value.clamp(min, max).to_bits()
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid clamp bounds")]
+    fn clamp_rejects_reversed_bounds() {
+        clamp(0.0, 1.0, -1.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid clamp bounds")]
+    fn clamp_rejects_nan_lower_bound() {
+        clamp(0.0, f64::NAN, 1.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid clamp bounds")]
+    fn clamp_rejects_nan_upper_bound() {
+        clamp(0.0, -1.0, f64::NAN);
     }
 
     #[test]
