@@ -701,4 +701,49 @@ mod tests {
         };
         assert!(actions.next().is_none());
     }
+
+    #[test]
+    fn path_trace_oversized_tlv_does_not_panic() {
+        let state = setup_test_state();
+
+        let mut state_ref = state.borrow_mut();
+        state_ref.parent_ds.parent_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
+        state_ref.path_trace_ds = PathTraceDS::new(true);
+        drop(state_ref);
+
+        let mut port = setup_test_port(&state);
+        port.set_forced_port_state(PortState::Slave(SlaveState::new(Default::default())));
+
+        let mut announce = default_announce_message();
+        announce.header.source_port_identity.clock_identity.0 = [1, 2, 3, 4, 5, 6, 7, 8];
+
+        // 129 ClockIdentity entries (129 * 8 = 1032 bytes). None equals the
+        // local clock identity ([0; 8]) so loop-detection does not trigger.
+        // 129 > capacity 128 => ArrayVec collect panics.
+        let payload = [0xaau8; 129 * 8];
+
+        let mut suffix = [0u8; 2048];
+        let mut tlv_builder = TlvSetBuilder::new(&mut suffix);
+        tlv_builder
+            .add(Tlv {
+                tlv_type: TlvType::PathTrace,
+                value: payload.as_ref().into(),
+            })
+            .unwrap();
+
+        let announce_message = Message {
+            header: announce.header,
+            body: MessageBody::Announce(announce),
+            suffix: tlv_builder.build(),
+        };
+
+        // 34 (header) + 30 (announce body) + 4 + 1032 (TLV) = 1100 bytes,
+        // well within statime-linux's 2048-byte general receive buffer.
+        let mut packet = [0u8; 2048];
+        let packet_len = announce_message.serialize(&mut packet).unwrap();
+        let packet = &packet[..packet_len];
+
+        // This call panics (ArrayVec capacity overflow) => daemon crash / DoS.
+        let _ = port.handle_general_receive(packet);
+    }
 }
