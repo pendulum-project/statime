@@ -57,17 +57,22 @@ impl<A: AcceptableMasterList, C: Clock, F: Filter, R: Rng, S: PtpInstanceStateMu
                         .find(|tlv| tlv.tlv_type == TlvType::PathTrace)
                     {
                         let clock_identity = state.default_ds.clock_identity;
-                        if tlv.value.chunks_exact(8).any(|ci| ci == clock_identity.0) {
-                            log::warn!("Clock loop detected");
-                            return true;
+
+                        let mut list = arrayvec::ArrayVec::default();
+                        for ci in tlv.value.chunks_exact(8) {
+                            if ci == clock_identity.0 {
+                                log::warn!("Clock loop detected");
+                                return true;
+                            }
+
+                            let identity = ClockIdentity(<[u8; 8]>::try_from(ci).unwrap());
+                            if list.try_push(identity).is_err() {
+                                log::warn!("PathTrace TLV too long, ignoring");
+                                return false;
+                            }
                         }
 
-                        // Cannot panic as `list` is large enough to contain up to a whole message
-                        path_trace_ds.list = tlv
-                            .value
-                            .chunks_exact(8)
-                            .map(|ci| ClockIdentity(<[u8; 8]>::try_from(ci).unwrap()))
-                            .collect();
+                        path_trace_ds.list = list;
                     }
                 }
 
