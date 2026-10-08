@@ -5,7 +5,7 @@ use core::mem::MaybeUninit;
 
 use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_net::{Stack, StackStorage};
+use embassy_net::{Stack, StackStorage, StaticPool};
 use embassy_stm32::{
     bind_interrupts,
     eth::{Ethernet, GenericPhy, InterruptHandler, PacketQueue, PtpClockConfig, Sma},
@@ -40,6 +40,9 @@ static mut PACKETS: MaybeUninit<PacketQueue<ETH_TX_PACKETS, ETH_RX_PACKETS>> =
     MaybeUninit::uninit();
 static DEVICE: StaticCell<Device> = StaticCell::new();
 static STACK_STORAGE: StaticCell<StackStorage<'static>> = StaticCell::new();
+// Four RX and four TX descriptors, eight queued PTP receives, four spare buffers.
+// Normal .bss is in DMA-accessible AXI SRAM; startup clears it.
+static PACKET_POOL: StaticPool<1536, 20, 32> = StaticPool::new();
 
 mod board {
     use embassy_stm32::{
@@ -128,7 +131,11 @@ async fn main(spawner: Spawner) -> ! {
         phy,
     );
     let ptp_clock = EmbassyClock::new(device.start_ptp(PtpClockConfig::default()));
-    let (stack, runner) = Stack::new(STACK_STORAGE.init(StackStorage::new()), board::SEED);
+    let (stack, runner) = Stack::new(
+        STACK_STORAGE.init(StackStorage::new()),
+        &PACKET_POOL,
+        board::SEED,
+    );
     let iface = unwrap!(stack.add_iface_borrowed(DEVICE.init(device)));
     unwrap!(iface.set_dhcpv4(Some(Default::default())));
     let ptp_runner = PtpRunner::<_, FixedWanderKalmanFilter>::new(
