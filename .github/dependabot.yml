@@ -10,7 +10,7 @@ updates:
       patterns: ["*"]
 
 - package-ecosystem: cargo
-  directories: ["/", "/fuzz/", "/statime-stm32/"]
+  directories: ["/", "/fuzz/", "/statime-embassy-net/", "/statime-embassy-net/examples/stm32h743/", "/statime-stm32/"]
   allow:
     - dependency-type: all
   schedule:
