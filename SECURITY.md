@@ -44,4 +44,4 @@ possibly through other channels.
 
 [our security page]: https://github.com/pendulum-project/ntpd-rs/security
 [coordinated vulnerability disclosure]: https://vuls.cert.org/confluence/display/CVD/Executive+Summary
-[github advisories page]: https://github.com/pendulum-project/ntpd-rs/security/advisories
+[github advisories page]: https://github.com/pendulum-project/statime/security/advisories
