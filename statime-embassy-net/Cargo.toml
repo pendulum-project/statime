@@ -1,0 +1,49 @@
+[package]
+name = "statime-embassy-net"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "PTP ordinary-clock runner for statime on embassy-net"
+repository = "https://github.com/pendulum-project/statime"
+readme = "README.md"
+publish = false
+
+[features]
+default = []
+defmt = ["dep:defmt", "embassy-net/defmt", "embassy-ptp-driver/defmt", "embassy-time/defmt"]
+monitor = []
+
+[dependencies]
+rand_core = "0.6"
+rand_xorshift = "0.3"
+statime = { path = "../statime", default-features = false }
+defmt = { version = "1.0.1", optional = true }
+embassy-futures = { version = "0.1.2", default-features = false }
+embassy-net = { version = "0.9.1", default-features = false, features = [
+	"medium-ethernet",
+	"multicast",
+	"packetmeta-id",
+	"packetmeta-timestamp",
+	"ipv4",
+	"iface-bind",
+	"udp",
+] }
+embassy-ptp-driver = "0.1.0"
+embassy-time = { version = "0.5.1", default-features = false }
+
+[dev-dependencies]
+defmt2log = "0.2.1"
+
+[patch.crates-io]
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-ptp-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "8ba7a9c1f110f5b1834630ac2b6cfab436e33022" }
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+debug = true
+lto = "fat"

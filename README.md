@@ -10,7 +10,9 @@ It is designed to be able to work with many different underlying platforms, incl
 
 On modern Linux kernels, the `statime-linux` crate provides a ready to use PTP daemon. See our [getting started guide](https://docs.statime.pendulum-project.org/guide/getting-started/).
 
-If you want to use Statime on platforms other than Linux, you will need to implement a suitable binary yourself. The `statime-stm32` crate gives an example of how to do this on an embedded target.
+For Embassy-based embedded systems, `statime-embassy-net` provides a reusable
+single-port ordinary-clock runner and an STM32H743 example. The `statime-stm32`
+crate is a separate RTIC-based STM32F7 example.
 
 <p align="center">
 <img width="216px" alt="Statime - PTP in Rust" src="https://tweedegolf.nl/images/statime.jpg" />
@@ -52,5 +54,4 @@ For all past and present funders and supporters, see the [Statime page](https://
 <img style="margin: 1rem 5% 1rem 5%;" src="https://nlnet.nl/logo/banner.svg" alt="Logo NLnet"  width="150px" />
 <img style="margin: 1rem 5% 1rem 5%;" src="https://nlnet.nl/image/logos/NGIAssure_tag.svg" alt="Logo NGI Assure" width="150px" />
 <img style="margin: 1rem 5% 1rem 5%;" src="https://tweedegolf.nl/images/logo-stf-blank.png" alt="Logo STF" width="250px" />
-
 
