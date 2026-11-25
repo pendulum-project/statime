@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0] - 2026-11-26
+
+### Added
+- Added support for configuring the clock quality of a ptp instance in the library
+- Added support for dynamically changing the clock quality or port's slave only status in the library
+
+### Fixed
+- Fixed bug in slave only mode triggering a debug assertion in debug builds
+- Fixed bug in handling large path-trace tlvs.
+
 ## [0.4.0] - 2025-03-13
 
 ### Added
@@ -72,6 +82,7 @@
 ### Fixed
 - Fixed race condition during startup
 
+[0.5.0]: https://github.com/pendulum-project/statime/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/pendulum-project/statime/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/pendulum-project/statime/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/pendulum-project/statime/compare/v0.2.1...v0.2.2
